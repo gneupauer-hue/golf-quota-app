@@ -10,7 +10,9 @@ import { SectionCard } from "@/components/section-card";
 import { TeamSummaryMini } from "@/components/team-summary-mini";
 import {
   buildBalancedTeams,
+  evaluateTeamFormat,
   formatCapacitySummary,
+  type EvaluatedTeamFormat,
   getTeamCapacities,
   getTeamFormats,
   validateTeamAssignments
@@ -250,9 +252,63 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       });
   }, [isLocked, players, search, selectedIds]);
 
-  const setupFormatOptions = useMemo(
-    () => (isSkinsOnly ? [] : getTeamFormats(rows.length)),
-    [isSkinsOnly, rows.length]
+  const setupPlayersForBalancing = useMemo(
+    () =>
+      rows
+        .map((row) => {
+          const player = playersById.get(row.playerId);
+          if (!player) return null;
+          return {
+            playerId: player.id,
+            playerName: player.name,
+            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
+            conflictIds: player.conflictIds
+          };
+        })
+        .filter(Boolean) as Array<{
+        playerId: string;
+        playerName: string;
+        quota: number;
+        conflictIds: string[];
+      }>,
+    [playersById, quotaSnapshot, rows]
+  );
+
+  const setupFormatOptions = useMemo<EvaluatedTeamFormat[]>(
+    () => {
+      if (isSkinsOnly) {
+        return [];
+      }
+
+      const formats = getTeamFormats(rows.length);
+      if (!setupPlayersForBalancing.length) {
+        return formats.map((format) => ({ ...format, estimatedSpread: 0 }));
+      }
+
+      return formats
+        .map((format) => evaluateTeamFormat(setupPlayersForBalancing, format))
+        .sort((left, right) => {
+          if (left.estimatedSpread !== right.estimatedSpread) {
+            return left.estimatedSpread - right.estimatedSpread;
+          }
+
+          if (left.isEqual !== right.isEqual) {
+            return left.isEqual ? -1 : 1;
+          }
+
+          const leftAverage =
+            left.capacities.reduce((sum, value) => sum + value, 0) / left.capacities.length;
+          const rightAverage =
+            right.capacities.reduce((sum, value) => sum + value, 0) / right.capacities.length;
+
+          if (rightAverage !== leftAverage) {
+            return rightAverage - leftAverage;
+          }
+
+          return left.teamCount - right.teamCount;
+        });
+    },
+    [isSkinsOnly, rows.length, setupPlayersForBalancing]
   );
   const selectedFormat = useMemo(
     () =>
@@ -1217,41 +1273,82 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   </div>
                 ) : setupFormatOptions.length === 1 ? (
                   <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
-                    <p className="text-sm font-semibold text-pine">{setupFormatOptions[0].label}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-pine">{setupFormatOptions[0].label}</p>
+                      <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-pine">
+                        Best fit
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-ink">{`Estimated fairness gap ${setupFormatOptions[0].estimatedSpread}`}</p>
                     <p className="mt-1 text-xs text-ink/65">Only one clean format fits this player count, so it is selected automatically.</p>
                   </div>
                 ) : (
                   <div className="grid gap-2">
-                    {setupFormatOptions.map((format) => (
-                      <button
-                        key={format.label}
-                        type="button"
-                        className={classNames(
-                          "min-h-14 rounded-2xl border px-4 py-3 text-left",
-                          selectedFormatTeamCount === String(format.teamCount)
-                            ? "border-pine bg-pine text-white"
-                            : "border-ink/10 bg-canvas text-ink"
-                        )}
-                        onClick={() => {
-                          setSelectedFormatTeamCount(String(format.teamCount));
-                          setSelectedSetupPlayerId(null);
-                        }}
-                      >
-                        <span className="block text-base font-semibold">{format.label}</span>
-                        <span
+                    {setupFormatOptions.map((format, index) => {
+                      const isSelected = selectedFormatTeamCount === String(format.teamCount);
+                      const isRecommended = index === 0;
+
+                      return (
+                        <button
+                          key={format.label}
+                          type="button"
                           className={classNames(
-                            "mt-1 block text-xs",
-                            selectedFormatTeamCount === String(format.teamCount)
-                              ? "text-white/80"
-                              : "text-ink/60"
+                            "rounded-2xl border px-4 py-3 text-left",
+                            isSelected
+                              ? "border-pine bg-pine text-white"
+                              : "border-ink/10 bg-canvas text-ink"
                           )}
+                          onClick={() => {
+                            setSelectedFormatTeamCount(String(format.teamCount));
+                            setSelectedSetupPlayerId(null);
+                          }}
                         >
-                          {format.isEqual
-                            ? "Equal teams"
-                            : `Exact split ${format.capacities.join("/")}`}
-                        </span>
-                      </button>
-                    ))}
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <span className="block text-base font-semibold">{format.label}</span>
+                              <span
+                                className={classNames(
+                                  "mt-1 block text-xs",
+                                  isSelected ? "text-white/80" : "text-ink/60"
+                                )}
+                              >
+                                {format.isEqual
+                                  ? "Equal teams"
+                                  : `Exact split ${format.capacities.join("/")}`}
+                              </span>
+                            </div>
+                            {isRecommended ? (
+                              <span
+                                className={classNames(
+                                  "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
+                                  isSelected ? "bg-white/15 text-white" : "bg-[#E2F4E6] text-pine"
+                                )}
+                              >
+                                Recommended
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <span
+                              className={classNames(
+                                "text-sm font-medium",
+                                isSelected ? "text-white" : "text-ink"
+                              )}
+                            >
+                              {`Estimated fairness gap ${format.estimatedSpread}`}
+                            </span>
+                            <span
+                              className={classNames(
+                                "text-xs",
+                                isSelected ? "text-white/75" : "text-ink/55"
+                              )}
+                            >
+                              Smaller is fairer
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1301,6 +1398,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   <p className="mt-1 text-sm font-semibold text-ink">
                     {selectedFormat?.label ?? "Choose a format"}
                   </p>
+                  {selectedFormat ? (
+                    <p className="mt-1 text-xs text-ink/55">{`Estimated fairness gap ${selectedFormat.estimatedSpread}`}</p>
+                  ) : null}
                 </div>
               </div>
               <div className="space-y-3">

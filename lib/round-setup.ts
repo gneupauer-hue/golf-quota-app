@@ -30,6 +30,10 @@ export type TeamFormat = {
   isEqual: boolean;
 };
 
+export type EvaluatedTeamFormat = TeamFormat & {
+  estimatedSpread: number;
+};
+
 function buildSnakeSequence(teamCodes: TeamCode[], capacities: Map<TeamCode, number>) {
   const sequence: TeamCode[] = [];
   let direction: 1 | -1 = 1;
@@ -263,6 +267,14 @@ function teamBalanceSpread(teamState: Map<TeamCode, TeamState>) {
   return Math.max(...totals) - Math.min(...totals);
 }
 
+function calculateAssignmentSpread(
+  assignments: TeamAssignment[],
+  players: SetupPlayer[],
+  teamCodes: TeamCode[]
+) {
+  return teamBalanceSpread(hydrateTeamState(assignments, players, teamCodes));
+}
+
 function optimizeAssignments(
   assignments: TeamAssignment[],
   players: SetupPlayer[],
@@ -409,6 +421,19 @@ export function buildBalancedTeams(
   }
 
   return optimizedAssignments;
+}
+
+export function evaluateTeamFormat(players: SetupPlayer[], format: TeamFormat) {
+  const teamCodes = teamOptions.slice(0, format.teamCount) as TeamCode[];
+  const capacities = new Map<TeamCode, number>(
+    teamCodes.map((team, index) => [team, format.capacities[index] ?? 0])
+  );
+  const assignments = buildBalancedTeams(players, teamCodes, capacities);
+
+  return {
+    ...format,
+    estimatedSpread: calculateAssignmentSpread(assignments, players, teamCodes)
+  } satisfies EvaluatedTeamFormat;
 }
 
 function buildGroupCapacities(playerCount: number, groupCount: number) {
