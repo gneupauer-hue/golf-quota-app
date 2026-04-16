@@ -254,6 +254,22 @@ function calculateAssignmentSpread(
   return teamBalanceSpread(hydrateTeamState(assignments, players, teamCodes));
 }
 
+function buildCapacitySafeAssignments(
+  players: SetupPlayer[],
+  teamCodes: TeamCode[],
+  teamCapacities: Map<TeamCode, number>
+) {
+  const sortedPlayers = [...players].sort(
+    (a, b) => b.quota - a.quota || a.playerName.localeCompare(b.playerName)
+  );
+  const snakeSequence = buildSnakeSequence(teamCodes, teamCapacities);
+
+  return sortedPlayers.map((player, index) => ({
+    playerId: player.playerId,
+    team: snakeSequence[index] ?? teamCodes[teamCodes.length - 1]
+  }));
+}
+
 function optimizeAssignments(
   assignments: TeamAssignment[],
   players: SetupPlayer[],
@@ -361,6 +377,7 @@ export function buildBalancedTeams(
   const conflictMap = buildConflictMap(sortedPlayers);
   const teamState = createTeamState(teamCodes);
   const assignments: TeamAssignment[] = [];
+  const fallbackAssignments = buildCapacitySafeAssignments(players, teamCodes, teamCapacities);
   console.info("[team-builder] initial-capacities", {
     teamCodes,
     capacities: teamCodes.map((team) => ({
@@ -413,7 +430,19 @@ export function buildBalancedTeams(
 
   const initialValidation = validateTeamAssignments(assignments, teamCodes, teamCapacities);
   if (!initialValidation.valid) {
-    throw new Error("Could not build evenly sized teams for this round.");
+    const fallbackValidation = validateTeamAssignments(fallbackAssignments, teamCodes, teamCapacities);
+    if (!fallbackValidation.valid) {
+      throw new Error("Could not build evenly sized teams for this round.");
+    }
+    console.warn("[team-builder] falling-back-to-default-assignment", {
+      reason: "initial-assignment-invalid",
+      sizes: teamCodes.map((team) => ({
+        team,
+        size: fallbackValidation.sizes.get(team) ?? 0,
+        capacity: teamCapacities.get(team) ?? 0
+      }))
+    });
+    return fallbackAssignments;
   }
   console.info("[team-builder] initial-valid-teams", {
     sizes: teamCodes.map((team) => ({
@@ -423,27 +452,41 @@ export function buildBalancedTeams(
     }))
   });
 
-  const optimizedAssignments = optimizeAssignments(
-    assignments,
-    sortedPlayers,
-    teamCodes,
-    conflictMap,
-    teamCapacities
-  );
-  const validation = validateTeamAssignments(optimizedAssignments, teamCodes, teamCapacities);
+  try {
+    const optimizedAssignments = optimizeAssignments(
+      assignments,
+      sortedPlayers,
+      teamCodes,
+      conflictMap,
+      teamCapacities
+    );
+    const validation = validateTeamAssignments(optimizedAssignments, teamCodes, teamCapacities);
 
-  if (!validation.valid) {
-    throw new Error("Team balancing produced an invalid team size.");
+    if (!validation.valid) {
+      console.warn("[team-builder] optimization-invalid-using-default", {
+        sizes: teamCodes.map((team) => ({
+          team,
+          optimizedSize: validation.sizes.get(team) ?? 0,
+          capacity: teamCapacities.get(team) ?? 0
+        }))
+      });
+      return assignments;
+    }
+    console.info("[team-builder] final-valid-teams", {
+      sizes: teamCodes.map((team) => ({
+        team,
+        size: validation.sizes.get(team) ?? 0,
+        capacity: teamCapacities.get(team) ?? 0
+      }))
+    });
+
+    return optimizedAssignments;
+  } catch (error) {
+    console.warn("[team-builder] optimization-failed-using-default", {
+      error: error instanceof Error ? error.message : "Unknown optimization error"
+    });
+    return assignments;
   }
-  console.info("[team-builder] final-valid-teams", {
-    sizes: teamCodes.map((team) => ({
-      team,
-      size: validation.sizes.get(team) ?? 0,
-      capacity: teamCapacities.get(team) ?? 0
-    }))
-  });
-
-  return optimizedAssignments;
 }
 
 export function evaluateTeamFormat(players: SetupPlayer[], format: TeamFormat) {
