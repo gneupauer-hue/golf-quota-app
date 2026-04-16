@@ -7,6 +7,7 @@ type RoundSummary = {
   id: string;
   roundName: string;
   roundDate: Date | string;
+  isTestRound?: boolean;
   notes: string | null;
   completedAt: Date | string | null;
   entryCount: number;
@@ -51,6 +52,11 @@ export function PastRounds({
                   <span className="rounded-full bg-canvas px-2.5 py-1 text-xs font-semibold text-ink/70">
                     {formatDisplayDate(round.roundDate)}
                   </span>
+                  {round.isTestRound ? (
+                    <span className="rounded-full bg-[#FFF1BF] px-2.5 py-1 text-xs font-semibold text-ink">
+                      Test Round
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-2 text-sm text-ink/70">
                   {round.entryCount} {round.entryCount === 1 ? "player" : "players"}

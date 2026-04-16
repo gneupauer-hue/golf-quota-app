@@ -71,6 +71,7 @@ type EditorProps = {
     roundName: string;
     roundDate: string;
     roundMode: RoundMode;
+    isTestRound: boolean;
     notes: string;
     teamCount: number | null;
     lockedAt: string | null;
@@ -117,6 +118,20 @@ function formatPlace(place: number) {
   if (place === 2) return "2nd";
   if (place === 3) return "3rd";
   return `${place}th`;
+}
+
+function TestRoundBadge({ subtle = false }: { subtle?: boolean }) {
+  return (
+    <div
+      className={classNames(
+        "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em]",
+        subtle ? "bg-[#FFF1BF] text-ink" : "bg-[#FCE0D2] text-[#A53B2A]"
+      )}
+    >
+      <span className="inline-block h-2 w-2 rounded-full bg-current" />
+      Test Round
+    </div>
+  );
 }
 
 function getSkinResultLabel(score: number | null | undefined) {
@@ -188,6 +203,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const router = useRouter();
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
   const [notes, setNotes] = useState(round.notes);
+  const [isTestRound, setIsTestRound] = useState(Boolean(round.isTestRound));
   const [rows, setRows] = useState<RowState[]>(
     round.entries.map((entry) => ({
       playerId: entry.playerId,
@@ -629,6 +645,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       roundName: nextRoundName,
       roundDate: nextRoundDate,
       roundMode: gameMode,
+      isTestRound,
       notes: nextNotes,
       teamCount: gameMode === "SKINS_ONLY" ? null : nextLockedAt ? Number(nextTeamCount) : null,
       lockedAt: nextLockedAt,
@@ -902,7 +919,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     });
   }
 
-  function saveRound(messageText = completedRound ? "Round completed and quotas updated." : "Round saved.") {
+  function saveRound(
+    messageText = completedRound
+      ? isTestRound
+        ? "Test round completed. Player quotas were not updated."
+        : "Round completed and quotas updated."
+      : "Round saved."
+  ) {
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
       return;
@@ -940,7 +963,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         if (!response.ok) {
           throw new Error(result.error ?? "Could not complete round.");
         }
-        setMessage("Round completed.");
+        setMessage(
+          isTestRound
+            ? "Test round completed. Player quotas were not updated."
+            : "Round completed."
+        );
         router.push(`/rounds/${round.id}/results`);
         router.refresh();
       } catch (error) {
@@ -1164,6 +1191,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     return (
       <SkinsOnlyScoreEntry
+        isTestRound={isTestRound}
         activeHole={skinsActiveHole}
         rows={calculatedRows}
         message={message}
@@ -1193,6 +1221,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     return (
       <TeamScoreEntry
         team={selectedTeam}
+        isTestRound={isTestRound}
         activeHole={activeHole}
         rows={teamRows}
         teamStanding={teamStanding}
@@ -1231,6 +1260,17 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             ) : null
           }
         />
+      ) : null}
+
+      {isTestRound ? (
+        <div className="px-1">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#F2C5B8] bg-[#FFF4F1] px-4 py-3">
+            <TestRoundBadge />
+            <p className="text-sm font-medium text-ink/70">
+              Scores, leaders, skins, and results work normally, but player quotas will not update when this round is completed.
+            </p>
+          </div>
+        </div>
       ) : null}
 
       {!isLocked ? (
@@ -1272,6 +1312,31 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
               <input type="date" className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none" value={roundDate} onChange={(event) => setRoundDate(event.target.value)} />
             </label>
             <p className="text-sm text-ink/65">{`Round name will be ${derivedRoundName}`}</p>
+            <label className="flex items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-canvas px-4 py-3">
+              <span>
+                <span className="block text-sm font-semibold">Test Round</span>
+                <span className="mt-1 block text-xs text-ink/60">
+                  Play a full round without changing player quotas when it finishes.
+                </span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isTestRound}
+                onClick={() => setIsTestRound((current) => !current)}
+                className={classNames(
+                  "relative h-8 w-14 rounded-full transition",
+                  isTestRound ? "bg-pine" : "bg-ink/15"
+                )}
+              >
+                <span
+                  className={classNames(
+                    "absolute top-1 h-6 w-6 rounded-full bg-white transition",
+                    isTestRound ? "left-7" : "left-1"
+                  )}
+                />
+              </button>
+            </label>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold">Notes</span>
               <textarea rows={2} className="w-full rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-base outline-none" value={notes} onChange={(event) => setNotes(event.target.value)} />
@@ -1553,7 +1618,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             )
           ) : null}
           {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} mode={gameMode} /> : null}
-          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} sideGames={sideGames} isPending={isPending} isStarted={Boolean(startedAt || lockedAt)} hasSavedScores={hasSavedScores} onSave={saveSettings} onCompleteRound={completeRound} onDeleteRound={deleteRound} onForceDeleteRound={forceDeleteRound} /> : null}
+          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} isTestRound={isTestRound} setRoundDate={setRoundDate} setNotes={setNotes} setIsTestRound={setIsTestRound} sideGames={sideGames} isPending={isPending} isStarted={Boolean(startedAt || lockedAt)} hasSavedScores={hasSavedScores} onSave={saveSettings} onCompleteRound={completeRound} onDeleteRound={deleteRound} onForceDeleteRound={forceDeleteRound} /> : null}
         </>
       )}
 
@@ -1564,6 +1629,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
 function TeamScoreEntry({
   team,
+  isTestRound,
   activeHole,
   rows,
   teamStanding,
@@ -1583,6 +1649,7 @@ function TeamScoreEntry({
   onBackToTeams
 }: {
   team: TeamCode;
+  isTestRound: boolean;
   activeHole: number;
   rows: CalculatedRoundRow[];
   teamStanding: TeamStanding | null;
@@ -1607,13 +1674,19 @@ function TeamScoreEntry({
     <div className="space-y-4 pb-32">
       <PageTitle
         title={`Team ${team} Score Entry`}
-        subtitle={`Hole ${activeHole} of 18`}
+        subtitle={isTestRound ? `Hole ${activeHole} of 18 · Test round` : `Hole ${activeHole} of 18`}
         action={
           <button type="button" onClick={onBackToTeams} className="rounded-2xl bg-canvas px-4 py-3 text-sm font-semibold text-ink">
             Back To Teams
           </button>
         }
       />
+
+      {isTestRound ? (
+        <div className="px-1">
+          <TestRoundBadge subtle />
+        </div>
+      ) : null}
 
       <SectionCard className="space-y-3">
         <div className="flex items-end justify-between gap-3">
@@ -2081,6 +2154,7 @@ function SkinsOnlyRoundTab({
 }
 
 function SkinsOnlyScoreEntry({
+  isTestRound,
   activeHole,
   rows,
   message,
@@ -2095,6 +2169,7 @@ function SkinsOnlyScoreEntry({
   onSelectHole,
   onBackToRound
 }: {
+  isTestRound: boolean;
   activeHole: number;
   rows: CalculatedRoundRow[];
   message: string;
@@ -2115,13 +2190,19 @@ function SkinsOnlyScoreEntry({
     <div className="space-y-4 pb-32">
       <PageTitle
         title="Skins Score Entry"
-        subtitle={`Hole ${activeHole} of 18`}
+        subtitle={isTestRound ? `Hole ${activeHole} of 18 · Test round` : `Hole ${activeHole} of 18`}
         action={
           <button type="button" onClick={onBackToRound} className="rounded-2xl bg-canvas px-4 py-3 text-sm font-semibold text-ink">
             Back To Round
           </button>
         }
       />
+
+      {isTestRound ? (
+        <div className="px-1">
+          <TestRoundBadge subtle />
+        </div>
+      ) : null}
 
       <SectionCard className="space-y-3">
         <div className="flex items-end justify-between gap-3">
@@ -2362,8 +2443,10 @@ function SettingsTab({
   roundName,
   roundDate,
   notes,
+  isTestRound,
   setRoundDate,
   setNotes,
+  setIsTestRound,
   sideGames,
   isPending,
   isStarted,
@@ -2377,8 +2460,10 @@ function SettingsTab({
   roundName: string;
   roundDate: string;
   notes: string;
+  isTestRound: boolean;
   setRoundDate: (value: string) => void;
   setNotes: (value: string) => void;
+  setIsTestRound: (value: boolean | ((current: boolean) => boolean)) => void;
   sideGames: SideGameResults;
   isPending: boolean;
   isStarted: boolean;
@@ -2400,6 +2485,31 @@ function SettingsTab({
           <input type="date" className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none" value={roundDate} onChange={(event) => setRoundDate(event.target.value)} />
         </label>
         <p className="text-sm text-ink/65">{`Round name will be ${roundName}`}</p>
+        <label className="flex items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-canvas px-4 py-3">
+          <span>
+            <span className="block text-sm font-semibold">Test Round</span>
+            <span className="mt-1 block text-xs text-ink/60">
+              Skip player quota updates when this round is completed.
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isTestRound}
+            onClick={() => setIsTestRound((current) => !current)}
+            className={classNames(
+              "relative h-8 w-14 rounded-full transition",
+              isTestRound ? "bg-pine" : "bg-ink/15"
+            )}
+          >
+            <span
+              className={classNames(
+                "absolute top-1 h-6 w-6 rounded-full bg-white transition",
+                isTestRound ? "left-7" : "left-1"
+              )}
+            />
+          </button>
+        </label>
         <label className="block">
           <span className="mb-2 block text-sm font-semibold">Notes</span>
           <textarea rows={3} className="w-full rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-base outline-none" value={notes} onChange={(event) => setNotes(event.target.value)} />

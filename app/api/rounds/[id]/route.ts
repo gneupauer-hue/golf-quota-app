@@ -16,6 +16,7 @@ export async function PUT(
     const notes = String(body.notes ?? "");
     const roundMode =
       body.roundMode === "SKINS_ONLY" ? ("SKINS_ONLY" as RoundMode) : ("MATCH_QUOTA" as RoundMode);
+    const isTestRound = Boolean(body.isTestRound);
     const teamCount =
       body.teamCount == null || body.teamCount === "" ? null : Number(body.teamCount);
     const lockedAt =
@@ -98,6 +99,7 @@ export async function PUT(
         roundName: resolvedRoundName,
         roundDate: new Date(roundDate),
         roundMode,
+        isTestRound,
         notes,
         teamCount: roundMode === "SKINS_ONLY" ? null : teamCount,
         lockedAt,

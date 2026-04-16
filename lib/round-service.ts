@@ -116,6 +116,13 @@ async function persistRoundSummaries(
   });
 }
 
+export function shouldSkipQuotaProgression(round: {
+  roundMode: string;
+  isTestRound?: boolean | null;
+}) {
+  return round.roundMode === "SKINS_ONLY" || Boolean(round.isTestRound);
+}
+
 async function syncRoundComputedState(tx: Tx, roundId: string) {
   const round = await tx.round.findUnique({
     where: { id: roundId },
@@ -259,7 +266,7 @@ export async function recomputeHistoricalState(tx: Tx) {
         }
       });
 
-      if (round.roundMode !== "SKINS_ONLY") {
+      if (!shouldSkipQuotaProgression(round)) {
         quotaMap.set(row.playerId, row.nextQuota);
       }
     }
@@ -343,7 +350,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     );
 
     for (const row of recalculated) {
-      if (round.roundMode !== "SKINS_ONLY") {
+      if (!shouldSkipQuotaProgression(round)) {
         quotaMap.set(row.playerId, row.nextQuota);
       }
     }
@@ -359,6 +366,7 @@ export async function createOrReplaceRoundEntries(
     roundName: string;
     roundDate: Date;
     roundMode: RoundMode;
+    isTestRound?: boolean;
     notes?: string | null;
     teamCount?: number | null;
     lockedAt?: Date | null;
@@ -381,6 +389,7 @@ export async function createOrReplaceRoundEntries(
       roundName: input.roundName,
       roundDate: input.roundDate,
       roundMode: input.roundMode,
+      isTestRound: Boolean(input.isTestRound),
       notes: input.notes?.trim() ? input.notes.trim() : null,
       teamCount: input.roundMode === "SKINS_ONLY" ? null : input.teamCount ?? null,
       lockedAt: input.lockedAt ?? null,

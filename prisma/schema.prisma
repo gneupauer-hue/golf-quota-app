@@ -26,6 +26,7 @@ model Round {
   roundName      String
   roundDate      DateTime
   roundMode      String             @default("MATCH_QUOTA")
+  isTestRound    Boolean            @default(false)
   notes          String?
   teamCount      Int?
   lockedAt       DateTime?

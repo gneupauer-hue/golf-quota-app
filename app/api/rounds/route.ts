@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     const notes = String(body.notes ?? "");
     const roundMode =
       body.roundMode === "SKINS_ONLY" ? ("SKINS_ONLY" as RoundMode) : ("MATCH_QUOTA" as RoundMode);
+    const isTestRound = Boolean(body.isTestRound);
 
     if (!roundDate) {
       return NextResponse.json({ error: "Round date is required." }, { status: 400 });
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
         roundName: resolvedRoundName,
         roundDate: new Date(roundDate),
         roundMode,
+        isTestRound,
         notes: notes.trim() ? notes.trim() : null
       }
     });
