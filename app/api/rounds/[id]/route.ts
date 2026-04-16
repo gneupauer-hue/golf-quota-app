@@ -142,9 +142,45 @@ export async function DELETE(
       return NextResponse.json({ error: "Round not found." }, { status: 404 });
     }
 
-    if (round.lockedAt || round.startedAt || round.completedAt) {
+    if (round.completedAt) {
       return NextResponse.json(
-        { error: "Only unstarted rounds can be deleted." },
+        { error: "Completed rounds cannot be deleted from the live flow." },
+        { status: 400 }
+      );
+    }
+
+    const savedScoreCount = await prisma.roundEntry.count({
+      where: {
+        roundId: id,
+        OR: [
+          { hole1: { not: null } },
+          { hole2: { not: null } },
+          { hole3: { not: null } },
+          { hole4: { not: null } },
+          { hole5: { not: null } },
+          { hole6: { not: null } },
+          { hole7: { not: null } },
+          { hole8: { not: null } },
+          { hole9: { not: null } },
+          { hole10: { not: null } },
+          { hole11: { not: null } },
+          { hole12: { not: null } },
+          { hole13: { not: null } },
+          { hole14: { not: null } },
+          { hole15: { not: null } },
+          { hole16: { not: null } },
+          { hole17: { not: null } },
+          { hole18: { not: null } }
+        ]
+      }
+    });
+
+    if (savedScoreCount > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This round already has saved scores. Complete it instead of deleting it."
+        },
         { status: 400 }
       );
     }

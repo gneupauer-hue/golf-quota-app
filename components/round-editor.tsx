@@ -303,6 +303,10 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const savedSideGames = useMemo(() => calculateSideGameResults(savedCalculatedRows), [savedCalculatedRows]);
   const invalidSequence = rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
   const completedRound = rows.length > 0 && rows.every((row) => isRoundRowComplete(row.holeScores));
+  const hasSavedScores = useMemo(
+    () => rows.some((row) => row.holeScores.some((score) => score != null)),
+    [rows]
+  );
 
   const setupValidation = useMemo(() => {
     const assignedRows = rows.filter(
@@ -614,7 +618,19 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   function deleteRound() {
-    if (!window.confirm("Delete this unstarted round?")) {
+    const confirmationMessage =
+      isLocked || startedAt
+        ? hasSavedScores
+          ? "This round already has saved scores and cannot be deleted here."
+          : "Cancel the current round and remove it completely?"
+        : "Delete this unstarted round?";
+
+    if (hasSavedScores && (isLocked || startedAt)) {
+      setMessage("This round already has saved scores. Complete it instead of deleting it.");
+      return;
+    }
+
+    if (!window.confirm(confirmationMessage)) {
       return;
     }
 
@@ -630,7 +646,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           throw new Error(result.error ?? "Could not delete round.");
         }
 
-        router.push("/");
+        router.push("/current-round");
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not delete round.");
@@ -1081,7 +1097,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           {activeTab === "round" ? <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} onOpenTeam={openTeam} /> : null}
           {activeTab === "leaders" ? <LeadersTab rows={calculatedRows} leaders={liveLeaders} projections={liveProjections} teamStandings={teamStandings} sideGames={sideGames} onOpenRound={() => setActiveTab("round")} /> : null}
           {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} /> : null}
-          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} sideGames={sideGames} isPending={isPending} onSave={saveSettings} onCompleteRound={completeRound} /> : null}
+          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} sideGames={sideGames} isPending={isPending} isStarted={Boolean(startedAt || lockedAt)} hasSavedScores={hasSavedScores} onSave={saveSettings} onCompleteRound={completeRound} onDeleteRound={deleteRound} /> : null}
         </>
       )}
 
@@ -1581,8 +1597,11 @@ function SettingsTab({
   setNotes,
   sideGames,
   isPending,
+  isStarted,
+  hasSavedScores,
   onSave,
-  onCompleteRound
+  onCompleteRound,
+  onDeleteRound
 }: {
   roundId: string;
   roundName: string;
@@ -1592,8 +1611,11 @@ function SettingsTab({
   setNotes: (value: string) => void;
   sideGames: SideGameResults;
   isPending: boolean;
+  isStarted: boolean;
+  hasSavedScores: boolean;
   onSave: () => void;
   onCompleteRound: () => void;
+  onDeleteRound: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -1617,6 +1639,21 @@ function SettingsTab({
         <button type="button" onClick={onCompleteRound} disabled={isPending} className="min-h-14 w-full rounded-[24px] bg-pine px-5 text-base font-semibold text-white disabled:opacity-45">
           {isPending ? "Working..." : "Complete Round"}
         </button>
+        <button
+          type="button"
+          onClick={onDeleteRound}
+          disabled={isPending || hasSavedScores}
+          className="min-h-14 w-full rounded-[24px] border border-danger/25 bg-danger/10 px-5 text-base font-semibold text-danger disabled:opacity-45"
+        >
+          {isStarted ? "Cancel Current Round" : "Delete Round"}
+        </button>
+        <p className="text-sm text-ink/65">
+          {hasSavedScores
+            ? "Saved scores were already entered, so this round can no longer be deleted here."
+            : isStarted
+              ? "Use this only for mistaken live rounds that have not recorded any scores yet."
+              : "Delete an unstarted round if this setup should be discarded."}
+        </p>
       </SectionCard>
 
       <SectionCard className="space-y-3">
