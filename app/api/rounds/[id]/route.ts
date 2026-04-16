@@ -123,11 +123,13 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const forceDelete = url.searchParams.get("force") === "1";
     const round = await prisma.round.findUnique({
       where: { id },
       select: {
@@ -175,12 +177,19 @@ export async function DELETE(
       }
     });
 
-    if (savedScoreCount > 0) {
+    if (savedScoreCount > 0 && !forceDelete) {
       return NextResponse.json(
         {
           error:
             "This round already has saved scores. Complete it instead of deleting it."
         },
+        { status: 400 }
+      );
+    }
+
+    if (forceDelete && round.completedAt) {
+      return NextResponse.json(
+        { error: "Completed rounds cannot be force-cleared from the live flow." },
         { status: 400 }
       );
     }

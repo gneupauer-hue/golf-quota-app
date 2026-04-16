@@ -654,6 +654,36 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     });
   }
 
+  function forceDeleteRound() {
+    const confirmation = window.prompt(
+      "Force clear this active round? This permanently deletes the unfinished round and all of its live scoring data. Type DELETE to confirm."
+    );
+
+    if (confirmation !== "DELETE") {
+      setMessage("Force clear canceled.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setMessage("");
+        const response = await fetch(`/api/rounds/${round.id}?force=1`, {
+          method: "DELETE"
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not force clear round.");
+        }
+
+        router.push("/current-round");
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not force clear round.");
+      }
+    });
+  }
+
   function saveRound(messageText = completedRound ? "Round completed and quotas updated." : "Round saved.") {
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
@@ -1097,7 +1127,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           {activeTab === "round" ? <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} onOpenTeam={openTeam} /> : null}
           {activeTab === "leaders" ? <LeadersTab rows={calculatedRows} leaders={liveLeaders} projections={liveProjections} teamStandings={teamStandings} sideGames={sideGames} onOpenRound={() => setActiveTab("round")} /> : null}
           {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} /> : null}
-          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} sideGames={sideGames} isPending={isPending} isStarted={Boolean(startedAt || lockedAt)} hasSavedScores={hasSavedScores} onSave={saveSettings} onCompleteRound={completeRound} onDeleteRound={deleteRound} /> : null}
+          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} sideGames={sideGames} isPending={isPending} isStarted={Boolean(startedAt || lockedAt)} hasSavedScores={hasSavedScores} onSave={saveSettings} onCompleteRound={completeRound} onDeleteRound={deleteRound} onForceDeleteRound={forceDeleteRound} /> : null}
         </>
       )}
 
@@ -1601,7 +1631,8 @@ function SettingsTab({
   hasSavedScores,
   onSave,
   onCompleteRound,
-  onDeleteRound
+  onDeleteRound,
+  onForceDeleteRound
 }: {
   roundId: string;
   roundName: string;
@@ -1616,6 +1647,7 @@ function SettingsTab({
   onSave: () => void;
   onCompleteRound: () => void;
   onDeleteRound: () => void;
+  onForceDeleteRound: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -1654,6 +1686,24 @@ function SettingsTab({
               ? "Use this only for mistaken live rounds that have not recorded any scores yet."
               : "Delete an unstarted round if this setup should be discarded."}
         </p>
+        {hasSavedScores ? (
+          <div className="rounded-2xl border border-danger/20 bg-danger/5 px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-danger/80">
+              Admin Only
+            </p>
+            <p className="mt-2 text-sm text-ink/70">
+              Force clear removes this active round and all unfinished live scoring data. Use it only if the round was created by mistake.
+            </p>
+            <button
+              type="button"
+              onClick={onForceDeleteRound}
+              disabled={isPending}
+              className="mt-3 min-h-12 w-full rounded-[20px] border border-danger/30 bg-white px-4 py-3 text-sm font-semibold text-danger disabled:opacity-45"
+            >
+              {isPending ? "Working..." : "Force Clear Active Round"}
+            </button>
+          </div>
+        ) : null}
       </SectionCard>
 
       <SectionCard className="space-y-3">

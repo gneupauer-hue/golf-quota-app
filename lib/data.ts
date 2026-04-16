@@ -389,7 +389,7 @@ export async function getRoundResultsData(roundId: string) {
 }
 
 export async function getHomePageData() {
-  const [playersCount, activeCount, roundCount, latestRound, currentRound] = await Promise.all([
+  const [playersCount, activeCount, roundCount, latestRound, activeRound] = await Promise.all([
     prisma.player.count(),
     prisma.player.count({ where: { isActive: true } }),
     prisma.round.count(),
@@ -402,20 +402,21 @@ export async function getHomePageData() {
         completedAt: true
       }
     }),
-    prisma.round.findFirst({
-      where: {
-        completedAt: null
-      },
-      orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        roundName: true,
-        roundDate: true,
-        teamCount: true,
-        startedAt: true
-      }
-    })
+    resolveActiveRound(prisma)
   ]);
+
+  const currentRound = activeRound
+    ? await prisma.round.findUnique({
+        where: { id: activeRound.id },
+        select: {
+          id: true,
+          roundName: true,
+          roundDate: true,
+          teamCount: true,
+          startedAt: true
+        }
+      })
+    : null;
 
   return {
     playersCount,
