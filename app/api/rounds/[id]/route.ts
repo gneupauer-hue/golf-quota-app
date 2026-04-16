@@ -146,6 +146,7 @@ export async function DELETE(
       where: { id },
       select: {
         id: true,
+        isTestRound: true,
         lockedAt: true,
         startedAt: true,
         completedAt: true,
@@ -194,7 +195,7 @@ export async function DELETE(
       }
     });
 
-    if (savedScoreCount > 0 && !forceDelete) {
+    if (savedScoreCount > 0 && !forceDelete && !round.isTestRound) {
       return NextResponse.json(
         {
           error:
@@ -211,7 +212,11 @@ export async function DELETE(
       );
     }
 
-    if (savedScoreCount > 0 && forceDelete) {
+    if (round.isTestRound) {
+      await prisma.round.delete({
+        where: { id }
+      });
+    } else if (savedScoreCount > 0 && forceDelete) {
       await prisma.round.update({
         where: { id },
         data: {

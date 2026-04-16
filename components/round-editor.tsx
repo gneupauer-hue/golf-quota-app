@@ -847,14 +847,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   function deleteRound() {
-    const confirmationMessage =
-      isLocked || startedAt
+    const isLiveRound = Boolean(isLocked || startedAt);
+    const confirmationMessage = isTestRound
+      ? hasSavedScores
+        ? "Are you sure you want to delete this test round? All saved scores for this test round will be removed."
+        : "Are you sure you want to delete this test round?"
+      : isLiveRound
         ? hasSavedScores
           ? "This round already has saved scores and cannot be deleted here."
-          : "Cancel the current round and remove it completely?"
-        : "Delete this unstarted round?";
+          : "Are you sure you want to delete this round?"
+        : "Are you sure you want to delete this round?";
 
-    if (hasSavedScores && (isLocked || startedAt)) {
+    if (hasSavedScores && isLiveRound && !isTestRound) {
       setMessage("This round already has saved scores. Complete it instead of deleting it.");
       return;
     }
@@ -875,7 +879,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           throw new Error(result.error ?? "Could not delete round.");
         }
 
-        router.push("/current-round");
+        router.push("/current-round?deleted=1");
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not delete round.");
@@ -1455,12 +1459,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   type="button"
                   disabled={isPending}
                   className={classNames(
-                    "min-h-12 rounded-2xl bg-[#FCE5E2] px-4 text-sm font-semibold text-[#A53B2A] disabled:opacity-60",
+                    "min-h-12 rounded-2xl bg-danger/12 px-4 text-sm font-semibold text-danger disabled:opacity-60",
                     isSkinsOnly ? "w-full" : ""
                   )}
                   onClick={deleteRound}
                 >
-                  Delete Round
+                  {isTestRound ? "Delete Test Round" : "Delete Round"}
                 </button>
               </div>
               {!isSkinsOnly ? (
@@ -1605,9 +1609,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
           {activeTab === "round" ? (
             isSkinsOnly ? (
-              <SkinsOnlyRoundTab rows={calculatedRows} sideGames={sideGames} onOpenEntry={openSkinsEntry} />
+              <SkinsOnlyRoundTab rows={calculatedRows} sideGames={sideGames} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenEntry={openSkinsEntry} />
             ) : (
-              <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} onOpenTeam={openTeam} />
+              <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenTeam={openTeam} />
             )
           ) : null}
           {activeTab === "leaders" ? (
@@ -1978,12 +1982,16 @@ function RoundTabView({
   teamStandings,
   teamRowsByCode,
   sideGames,
+  isTestRound,
+  onDeleteRound,
   onOpenTeam
 }: {
   rows: CalculatedRoundRow[];
   teamStandings: TeamStanding[];
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
   sideGames: SideGameResults;
+  isTestRound: boolean;
+  onDeleteRound: () => void;
   onOpenTeam: (team: TeamCode) => void;
 }) {
   const awardedSkins = sideGames.skins.holes
@@ -2002,6 +2010,32 @@ function RoundTabView({
 
   return (
     <div className="space-y-4">
+      <SectionCard className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+              Current Round
+            </p>
+            <h3 className="mt-1 text-lg font-semibold">
+              {isTestRound ? "Test Round Controls" : "Round Controls"}
+            </h3>
+            <p className="mt-1 text-sm text-ink/75">
+              {isTestRound
+                ? "Safe testing is on. This round will not change player quotas and can be deleted anytime."
+                : "Use cancel only if this live round was created by mistake before real scoring should continue."}
+            </p>
+          </div>
+          {isTestRound ? <TestRoundBadge subtle /> : null}
+        </div>
+        <button
+          type="button"
+          onClick={onDeleteRound}
+          className="min-h-12 w-full rounded-[22px] bg-danger/12 px-4 text-sm font-semibold text-danger"
+        >
+          {isTestRound ? "Delete Test Round" : "Cancel Current Round"}
+        </button>
+      </SectionCard>
+
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Good Skins</p>
         <div className="space-y-1">
@@ -2067,10 +2101,14 @@ function RoundTabView({
 function SkinsOnlyRoundTab({
   rows,
   sideGames,
+  isTestRound,
+  onDeleteRound,
   onOpenEntry
 }: {
   rows: CalculatedRoundRow[];
   sideGames: SideGameResults;
+  isTestRound: boolean;
+  onDeleteRound: () => void;
   onOpenEntry: () => void;
 }) {
   const awardedSkins = sideGames.skins.holes
@@ -2089,6 +2127,32 @@ function SkinsOnlyRoundTab({
 
   return (
     <div className="space-y-4">
+      <SectionCard className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+              Current Round
+            </p>
+            <h3 className="mt-1 text-lg font-semibold">
+              {isTestRound ? "Test Round Controls" : "Round Controls"}
+            </h3>
+            <p className="mt-1 text-sm text-ink/75">
+              {isTestRound
+                ? "Safe testing is on. This skins round will not change player quotas and can be deleted anytime."
+                : "Use cancel only if this skins round was created by mistake before play continues."}
+            </p>
+          </div>
+          {isTestRound ? <TestRoundBadge subtle /> : null}
+        </div>
+        <button
+          type="button"
+          onClick={onDeleteRound}
+          className="min-h-12 w-full rounded-[22px] bg-danger/12 px-4 text-sm font-semibold text-danger"
+        >
+          {isTestRound ? "Delete Test Round" : "Cancel Current Round"}
+        </button>
+      </SectionCard>
+
       <SectionCard className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -2523,13 +2587,15 @@ function SettingsTab({
         <button
           type="button"
           onClick={onDeleteRound}
-          disabled={isPending || hasSavedScores}
+          disabled={isPending || (hasSavedScores && !isTestRound)}
           className="min-h-14 w-full rounded-[24px] border border-danger/25 bg-danger/10 px-5 text-base font-semibold text-danger disabled:opacity-45"
         >
-          {isStarted ? "Cancel Current Round" : "Delete Round"}
+          {isTestRound ? "Delete Test Round" : isStarted ? "Cancel Current Round" : "Delete Round"}
         </button>
         <p className="text-sm text-ink/65">
-          {hasSavedScores
+          {isTestRound
+            ? "Test rounds are safe to remove and do not affect real player quotas."
+            : hasSavedScores
             ? "Saved scores were already entered, so this round can no longer be deleted here."
             : isStarted
               ? "Use this only for mistaken live rounds that have not recorded any scores yet."
