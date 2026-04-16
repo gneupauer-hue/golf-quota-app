@@ -8,7 +8,7 @@ import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
 import { SectionCard } from "@/components/section-card";
 import { TeamSummaryMini } from "@/components/team-summary-mini";
-import { buildBalancedTeams, buildGroups } from "@/lib/round-setup";
+import { buildBalancedTeams } from "@/lib/round-setup";
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
@@ -207,9 +207,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [isPending, startTransition] = useTransition();
   const [showSetup, setShowSetup] = useState(!round.lockedAt && rows.length > 0);
   const [teamCount, setTeamCount] = useState(String(round.teamCount ?? 2));
-  const [teeTimesText, setTeeTimesText] = useState(
-    initialGroups.length ? initialGroups.map((group) => group.teeTime).join("\n") : ""
-  );
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [activeTab, setActiveTab] = useState<RoundTab>(round.lockedAt ? "round" : "settings");
@@ -290,27 +287,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     );
   }, [playersById, quotaSnapshot, savedRows]);
   const savedSideGames = useMemo(() => calculateSideGameResults(savedCalculatedRows), [savedCalculatedRows]);
-  const groups = useMemo(() => {
-    return rows
-      .filter((row) => row.groupNumber && row.teeTime)
-      .reduce(
-        (acc, row) => {
-          const player = playersById.get(row.playerId);
-          if (!player) return acc;
-          const key = `${row.groupNumber}`;
-          const current = acc.get(key) ?? {
-            groupNumber: row.groupNumber!,
-            teeTime: row.teeTime!,
-            players: [] as string[]
-          };
-          current.players.push(player.name);
-          acc.set(key, current);
-          return acc;
-        },
-        new Map<string, { groupNumber: number; teeTime: string; players: string[] }>()
-      );
-  }, [playersById, rows]);
-
   const invalidSequence = rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
   const completedRound = rows.length > 0 && rows.every((row) => isRoundRowComplete(row.holeScores));
 
@@ -442,10 +418,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
   function startGame() {
     const count = Number(teamCount);
-    const teeTimes = teeTimesText
-      .split(/\r?\n/)
-      .map((value) => value.trim())
-      .filter(Boolean);
 
     if (rows.length === 0) {
       setMessage("Add players before starting the game.");
@@ -453,10 +425,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }
     if (Number.isNaN(count) || count < 2 || count > 5) {
       setMessage("Choose between 2 and 5 teams.");
-      return;
-    }
-    if (!teeTimes.length) {
-      setMessage("Enter at least one tee time.");
       return;
     }
 
@@ -479,37 +447,29 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }>;
 
     const teamAssignments = buildBalancedTeams(setupPlayers, count);
-    const groupAssignments = buildGroups(
-      setupPlayers.map((player) => ({
-        ...player,
-        team:
-          teamAssignments.find((assignment) => assignment.playerId === player.playerId)?.team ?? "A"
-      })),
-      teeTimes
-    );
 
     const nextRows = rows.map((row) => ({
       ...row,
       team: teamAssignments.find((assignment) => assignment.playerId === row.playerId)?.team ?? null,
-      groupNumber:
-        groupAssignments.find((assignment) => assignment.playerId === row.playerId)?.groupNumber ?? null,
-      teeTime:
-        groupAssignments.find((assignment) => assignment.playerId === row.playerId)?.teeTime ?? null
+      groupNumber: null,
+      teeTime: null
     }));
     const now = new Date().toISOString();
 
-    setRows(nextRows);
-    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-    setLockedAt(now);
-    setStartedAt(now);
-    setShowSetup(false);
-    setActiveTab("round");
-    setMessage("Round locked. Teams built. Start scoring from the Teams tab.");
-
     startTransition(async () => {
       try {
+        setMessage("");
         await persistRound(nextRows, now, now, String(count));
+        setRows(nextRows);
+        setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        setLockedAt(now);
+        setStartedAt(now);
+        setShowSetup(false);
+        setSelectedTeam(null);
+        setActiveTab("round");
         setMessage("Round locked and ready for live scoring.");
+        router.push("/current-round");
+        router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not lock round.");
       }
@@ -652,7 +612,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       {!isLocked ? (
         <PageTitle
           title={round.completedAt ? "Round Review" : "Round Setup"}
-          subtitle="Pick the field, lock the round, build teams, add tee times, then start scoring."
+          subtitle="Pick the field, lock the round, build teams, then start scoring."
           action={
             round.completedAt ? (
               <Link
@@ -734,7 +694,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             <SectionCard className="space-y-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Lock Round</p>
-                <h3 className="mt-1 text-lg font-semibold">Build teams and groups</h3>
+                <h3 className="mt-1 text-lg font-semibold">Build teams and start the round</h3>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {[2, 3, 4, 5].map((count) => (
@@ -743,12 +703,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   </button>
                 ))}
               </div>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Tee times</span>
-                <textarea rows={4} className="w-full rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-base outline-none" value={teeTimesText} onChange={(event) => setTeeTimesText(event.target.value)} placeholder={"10:00\n10:08\n10:16"} />
-              </label>
-              <button type="button" className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white" onClick={startGame}>
-                Lock Round And Start Game
+              <p className="text-sm text-ink/65">
+                Teams will be balanced automatically from current quotas. Tap once to lock the round and jump into live scoring.
+              </p>
+              {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
+              <button type="button" disabled={isPending} className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white disabled:opacity-60" onClick={startGame}>
+                {isPending ? "Starting round..." : "Lock Round And Start Game"}
               </button>
             </SectionCard>
           ) : null}
@@ -765,14 +725,14 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             </div>
           </nav>
 
-          {activeTab === "round" ? <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} groups={Array.from(groups.values()).sort((left, right) => left.groupNumber - right.groupNumber)} sideGames={sideGames} onOpenTeam={openTeam} /> : null}
+          {activeTab === "round" ? <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} onOpenTeam={openTeam} /> : null}
           {activeTab === "leaders" ? <LeadersTab rows={calculatedRows} leaders={liveLeaders} projections={liveProjections} teamStandings={teamStandings} sideGames={sideGames} onOpenRound={() => setActiveTab("round")} /> : null}
           {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} /> : null}
-          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} groups={Array.from(groups.values()).sort((left, right) => left.groupNumber - right.groupNumber)} sideGames={sideGames} isPending={isPending} onSave={saveSettings} onCompleteRound={completeRound} /> : null}
+          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} sideGames={sideGames} isPending={isPending} onSave={saveSettings} onCompleteRound={completeRound} /> : null}
         </>
       )}
 
-      {message && !selectedTeam ? <p className="px-2 text-center text-sm font-medium text-pine">{message}</p> : null}
+      {message && !selectedTeam && !showSetup ? <p className="px-2 text-center text-sm font-medium text-pine">{message}</p> : null}
     </div>
   );
 }
@@ -1119,14 +1079,12 @@ function RoundTabView({
   rows,
   teamStandings,
   teamRowsByCode,
-  groups,
   sideGames,
   onOpenTeam
 }: {
   rows: CalculatedRoundRow[];
   teamStandings: TeamStanding[];
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
-  groups: Array<{ groupNumber: number; teeTime: string; players: string[] }>;
   sideGames: SideGameResults;
   onOpenTeam: (team: TeamCode) => void;
 }) {
@@ -1204,22 +1162,6 @@ function RoundTabView({
         })}
       </div>
 
-      {groups.length ? (
-        <SectionCard className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Tee Time Groups</p>
-          <div className="space-y-2">
-            {groups.map((group) => (
-              <div key={group.groupNumber} className="rounded-[22px] bg-canvas px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-base font-semibold">{`Group ${group.groupNumber}`}</p>
-                  <span className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink/70">{group.teeTime}</span>
-                </div>
-                <p className="mt-2 text-sm text-ink/60">{group.players.join(", ")}</p>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      ) : null}
     </div>
   );
 }
@@ -1284,7 +1226,6 @@ function SettingsTab({
   notes,
   setRoundDate,
   setNotes,
-  groups,
   sideGames,
   isPending,
   onSave,
@@ -1296,7 +1237,6 @@ function SettingsTab({
   notes: string;
   setRoundDate: (value: string) => void;
   setNotes: (value: string) => void;
-  groups: Array<{ groupNumber: number; teeTime: string; players: string[] }>;
   sideGames: SideGameResults;
   isPending: boolean;
   onSave: () => void;
@@ -1353,22 +1293,6 @@ function SettingsTab({
         </div>
       </SectionCard>
 
-      {groups.length ? (
-        <SectionCard className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Tee Time Groups</p>
-          <div className="space-y-2">
-            {groups.map((group) => (
-              <div key={group.groupNumber} className="rounded-[22px] bg-canvas px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-base font-semibold">{`Group ${group.groupNumber}`}</p>
-                  <span className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink/70">{group.teeTime}</span>
-                </div>
-                <p className="mt-2 text-sm text-ink/60">{group.players.join(", ")}</p>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      ) : null}
     </div>
   );
 }
