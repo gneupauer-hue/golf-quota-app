@@ -728,6 +728,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
+    if (selectedFormat?.isEqual) {
+      setMessage("Equal-size team formats only allow swaps. Tap a player on another team to swap.");
+      return;
+    }
+
     const currentSizes = new Map(
       setupTeams.map((team) => [team.team, team.players.length])
     );

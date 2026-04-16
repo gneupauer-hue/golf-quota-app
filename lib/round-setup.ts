@@ -333,12 +333,29 @@ function optimizeAssignments(
 
         const trialValidation = validateTeamAssignments(trialAssignments, teamCodes, capacities);
         if (!trialValidation.valid) {
+          console.info("[team-builder] rejected-swap", {
+            leftPlayerId: left.playerId,
+            leftTeam: left.team,
+            rightPlayerId: right.playerId,
+            rightTeam: right.team,
+            reason: "capacity"
+          });
           continue;
         }
 
         const trialState = hydrateTeamState(trialAssignments, players, teamCodes);
         const nextConflicts = teamConflictCount(trialState, conflictMap);
         const nextSpread = teamBalanceSpread(trialState);
+        console.info("[team-builder] trial-swap", {
+          leftPlayerId: left.playerId,
+          leftTeam: left.team,
+          rightPlayerId: right.playerId,
+          rightTeam: right.team,
+          currentSpread,
+          nextSpread,
+          currentConflicts,
+          nextConflicts
+        });
 
         if (
           nextConflicts < currentConflicts ||
@@ -346,6 +363,12 @@ function optimizeAssignments(
         ) {
           assignments[leftIndex].team = right.team;
           assignments[rightIndex].team = left.team;
+          console.info("[team-builder] accepted-swap", {
+            leftPlayerId: left.playerId,
+            rightPlayerId: right.playerId,
+            nextSpread,
+            nextConflicts
+          });
           changed = true;
           break outer;
         }
@@ -369,6 +392,13 @@ export function buildBalancedTeams(
   const conflictMap = buildConflictMap(sortedPlayers);
   const teamState = createTeamState(teamCodes);
   const assignments: TeamAssignment[] = [];
+  console.info("[team-builder] initial-capacities", {
+    teamCodes,
+    capacities: teamCodes.map((team) => ({
+      team,
+      capacity: teamCapacities.get(team) ?? 0
+    }))
+  });
 
   sortedPlayers.forEach((player, index) => {
     const preferredTeam = snakeSequence[index];
@@ -416,6 +446,13 @@ export function buildBalancedTeams(
   if (!initialValidation.valid) {
     throw new Error("Could not build evenly sized teams for this round.");
   }
+  console.info("[team-builder] initial-valid-teams", {
+    sizes: teamCodes.map((team) => ({
+      team,
+      size: initialValidation.sizes.get(team) ?? 0,
+      capacity: teamCapacities.get(team) ?? 0
+    }))
+  });
 
   const optimizedAssignments = optimizeAssignments(
     assignments,
@@ -427,8 +464,15 @@ export function buildBalancedTeams(
   const validation = validateTeamAssignments(optimizedAssignments, teamCodes, teamCapacities);
 
   if (!validation.valid) {
-    return assignments;
+    throw new Error("Team balancing produced an invalid team size.");
   }
+  console.info("[team-builder] final-valid-teams", {
+    sizes: teamCodes.map((team) => ({
+      team,
+      size: validation.sizes.get(team) ?? 0,
+      capacity: teamCapacities.get(team) ?? 0
+    }))
+  });
 
   return optimizedAssignments;
 }
