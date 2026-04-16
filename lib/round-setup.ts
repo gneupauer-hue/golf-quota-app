@@ -34,6 +34,16 @@ export type EvaluatedTeamFormat = TeamFormat & {
   estimatedSpread: number;
 };
 
+export function getTeamFormatKey(format: Pick<TeamFormat, "teamCount" | "capacities">) {
+  return `${format.teamCount}:${format.capacities.join("-")}`;
+}
+
+export function capacitiesToMap(teamCodes: TeamCode[], capacities: number[]) {
+  return new Map<TeamCode, number>(
+    teamCodes.map((team, index) => [team, capacities[index] ?? 0])
+  );
+}
+
 function buildSnakeSequence(teamCodes: TeamCode[], capacities: Map<TeamCode, number>) {
   const sequence: TeamCode[] = [];
   let direction: 1 | -1 = 1;
@@ -425,9 +435,7 @@ export function buildBalancedTeams(
 
 export function evaluateTeamFormat(players: SetupPlayer[], format: TeamFormat) {
   const teamCodes = teamOptions.slice(0, format.teamCount) as TeamCode[];
-  const capacities = new Map<TeamCode, number>(
-    teamCodes.map((team, index) => [team, format.capacities[index] ?? 0])
-  );
+  const capacities = capacitiesToMap(teamCodes, format.capacities);
   const assignments = buildBalancedTeams(players, teamCodes, capacities);
 
   return {

@@ -10,10 +10,11 @@ import { SectionCard } from "@/components/section-card";
 import { TeamSummaryMini } from "@/components/team-summary-mini";
 import {
   buildBalancedTeams,
+  capacitiesToMap,
   evaluateTeamFormat,
   formatCapacitySummary,
+  getTeamFormatKey,
   type EvaluatedTeamFormat,
-  getTeamCapacities,
   getTeamFormats,
   validateTeamAssignments
 } from "@/lib/round-setup";
@@ -217,9 +218,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [isPending, startTransition] = useTransition();
   const [showSetup, setShowSetup] = useState(!round.lockedAt && rows.length > 0);
   const [gameMode, setGameMode] = useState<RoundMode>(round.roundMode ?? "MATCH_QUOTA");
-  const [selectedFormatTeamCount, setSelectedFormatTeamCount] = useState(
-    round.teamCount ? String(round.teamCount) : ""
-  );
+  const [selectedFormatKey, setSelectedFormatKey] = useState("");
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [activeTab, setActiveTab] = useState<RoundTab>(round.lockedAt ? "round" : "settings");
@@ -312,17 +311,17 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   );
   const selectedFormat = useMemo(
     () =>
-      setupFormatOptions.find((format) => String(format.teamCount) === selectedFormatTeamCount) ??
+      setupFormatOptions.find((format) => getTeamFormatKey(format) === selectedFormatKey) ??
       null,
-    [selectedFormatTeamCount, setupFormatOptions]
+    [selectedFormatKey, setupFormatOptions]
   );
   const setupTeamCodes = useMemo(
     () => (isSkinsOnly ? [] : teamOptions.slice(0, selectedFormat?.teamCount ?? 0)),
     [isSkinsOnly, selectedFormat]
   );
   const setupTeamCapacities = useMemo(
-    () => getTeamCapacities(setupTeamCodes, rows.length),
-    [rows.length, setupTeamCodes]
+    () => capacitiesToMap(setupTeamCodes, selectedFormat?.capacities ?? []),
+    [selectedFormat, setupTeamCodes]
   );
 
   const calculatedRows = useMemo(() => {
@@ -481,31 +480,51 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
   useEffect(() => {
     if (isSkinsOnly) {
-      if (selectedFormatTeamCount) {
-        setSelectedFormatTeamCount("");
+      if (selectedFormatKey) {
+        setSelectedFormatKey("");
       }
       return;
     }
 
     if (!setupFormatOptions.length) {
-      if (selectedFormatTeamCount) {
-        setSelectedFormatTeamCount("");
+      if (selectedFormatKey) {
+        setSelectedFormatKey("");
       }
       return;
     }
 
+    if (!selectedFormatKey && round.teamCount) {
+      const teamSizes = setupFormatOptions
+        .map((format) => ({
+          format,
+          matches:
+            format.teamCount === round.teamCount &&
+            format.capacities.every((capacity, index) => {
+              const teamCode = teamOptions[index];
+              const actualSize = rows.filter((row) => row.team === teamCode).length;
+              return actualSize === 0 || actualSize === capacity;
+            })
+        }))
+        .find((option) => option.matches)?.format;
+
+      if (teamSizes) {
+        setSelectedFormatKey(getTeamFormatKey(teamSizes));
+        return;
+      }
+    }
+
     if (setupFormatOptions.length === 1) {
-      const onlyOption = String(setupFormatOptions[0].teamCount);
-      if (selectedFormatTeamCount !== onlyOption) {
-        setSelectedFormatTeamCount(onlyOption);
+      const onlyOption = getTeamFormatKey(setupFormatOptions[0]);
+      if (selectedFormatKey !== onlyOption) {
+        setSelectedFormatKey(onlyOption);
       }
       return;
     }
 
     if (!selectedFormat) {
-      setSelectedFormatTeamCount(String(setupFormatOptions[0].teamCount));
+      setSelectedFormatKey(getTeamFormatKey(setupFormatOptions[0]));
     }
-  }, [isSkinsOnly, selectedFormat, selectedFormatTeamCount, setupFormatOptions]);
+  }, [isSkinsOnly, round.teamCount, rows, selectedFormat, selectedFormatKey, setupFormatOptions]);
 
   useEffect(() => {
     if (isLocked || !showSetup || !rows.length || isSkinsOnly) {
@@ -644,13 +663,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     );
   }
 
-  function autoBuildTeams(nextTeamCount = selectedFormat?.teamCount) {
+  function autoBuildTeams(nextFormat = selectedFormat) {
     try {
       if (!rows.length) {
         setMessage("Add players before building teams.");
         return;
       }
-      if (!nextTeamCount) {
+      if (!nextFormat) {
         setMessage("Choose a valid team format first.");
         return;
       }
@@ -673,9 +692,20 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         conflictIds: string[];
       }>;
 
-      const nextTeamCodes = teamOptions.slice(0, nextTeamCount);
-      const nextCapacities = getTeamCapacities(nextTeamCodes, rows.length);
+      const nextTeamCodes = teamOptions.slice(0, nextFormat.teamCount);
+      const nextCapacities = capacitiesToMap(nextTeamCodes, nextFormat.capacities);
+      console.info("[team-builder] selected-format", {
+        label: nextFormat.label,
+        teamCount: nextFormat.teamCount,
+        capacities: nextFormat.capacities
+      });
       const teamAssignments = buildBalancedTeams(setupPlayers, nextTeamCodes, nextCapacities);
+      const finalSizes = nextTeamCodes.map((team) => ({
+        team,
+        size: teamAssignments.filter((assignment) => assignment.team === team).length,
+        capacity: nextCapacities.get(team) ?? 0
+      }));
+      console.info("[team-builder] final-sizes", finalSizes);
       setRows((current) =>
         current.map((row) => ({
           ...row,
@@ -906,6 +936,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         throw new Error(
           setupValidation.reason || formatCapacitySummary(setupTeamCodes, setupTeamCapacities)
         );
+      }
+
+      if (!isSkinsOnly && selectedFormat) {
+        console.info("[team-builder] start-validation", {
+          label: selectedFormat.label,
+          capacities: selectedFormat.capacities,
+          sizes: setupTeams.map((team) => ({
+            team: team.team,
+            size: team.players.length,
+            capacity: team.capacity
+          }))
+        });
       }
 
       nextRows = rows.map((row) => ({
@@ -1285,7 +1327,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 ) : (
                   <div className="grid gap-2">
                     {setupFormatOptions.map((format, index) => {
-                      const isSelected = selectedFormatTeamCount === String(format.teamCount);
+                      const formatKey = getTeamFormatKey(format);
+                      const isSelected = selectedFormatKey === formatKey;
                       const isRecommended = index === 0;
 
                       return (
@@ -1299,7 +1342,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                               : "border-ink/10 bg-canvas text-ink"
                           )}
                           onClick={() => {
-                            setSelectedFormatTeamCount(String(format.teamCount));
+                            setSelectedFormatKey(formatKey);
                             setSelectedSetupPlayerId(null);
                           }}
                         >
@@ -1366,7 +1409,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     type="button"
                     disabled={isPending || !selectedFormat}
                     className="min-h-12 flex-1 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
-                    onClick={() => autoBuildTeams(selectedFormat?.teamCount)}
+                    onClick={() => autoBuildTeams(selectedFormat)}
                   >
                     Regenerate Teams
                   </button>
