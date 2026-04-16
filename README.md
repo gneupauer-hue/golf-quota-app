@@ -1,0 +1,17 @@
+# Golf Quota Tracker
+
+Mobile-first golf quota scoring app built with Next.js, TypeScript, Tailwind CSS, Prisma, and SQLite.
+
+## Local setup
+
+1. Install dependencies with `npm install`
+2. Copy `.env.example` to `.env`
+3. Run `npx prisma db push`
+4. Run `npx prisma db seed`
+5. Start the app with `npm run dev`
+
+## Notes
+
+- Historical rounds are preserved.
+- Saving or editing a round recalculates every player's quota history so current quotas stay correct.
+- Seed data includes the requested player list plus two sample rounds for testing.

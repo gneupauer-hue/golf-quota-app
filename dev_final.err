@@ -1,0 +1,41 @@
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ ReferenceError: RoundTabView is not defined
+    at RoundEditor (components\round-editor.tsx:664:37)
+  662 |           </nav>
+  663 |
+> 664 |           {activeTab === "round" ? <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} groups={Array.from(groups.values()).sort((left, right) => left.groupNumber - right.groupNumber)} sideGames={sideGames} onOpenTeam={openTeam} /> : null}
+      |                                     ^
+  665 |           {activeTab === "leaders" ? <LeadersTab rows={calculatedRows} leaders={liveLeaders} teamStandings={teamStandings} sideGames={sideGames} onOpenRound={() => setActiveTab("round")} /> : null}
+  666 |           {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} /> : null}
+  667 |           {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={roundName} roundDate={roundDate} notes={notes} setRoundName={setRoundName} setRoundDate={setRoundDate} setNotes={setNotes} groups={Array.from(groups.values()).sort((left, right) => left.groupNumber - right.groupNumber)} sideGames={sideGames} isPending={isPending} onSave={saveSettings} /> : null} {
+  digest: '3027362256'
+}
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ Failed to generate static paths for /rounds/[id]:
+[Error: Cannot find module './vendor-chunks/next.js'
+Require stack:
+- C:\Users\gneup\Documents\New project\.next\server\webpack-runtime.js
+- C:\Users\gneup\Documents\New project\.next\server\app\rounds\[id]\page.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\server\require.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\server\load-components.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\build\utils.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\server\dev\static-paths-worker.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\compiled\jest-worker\processChild.js] {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ [Error: Cannot find module './vendor-chunks/next.js'
+Require stack:
+- C:\Users\gneup\Documents\New project\.next\server\webpack-runtime.js
+- C:\Users\gneup\Documents\New project\.next\server\app\rounds\[id]\page.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\server\require.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\server\load-components.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\build\utils.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\server\dev\static-paths-worker.js
+- C:\Users\gneup\Documents\New project\node_modules\next\dist\compiled\jest-worker\processChild.js] {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/rounds/cmnz2n5yk0000lhi005ao60bj'
+}

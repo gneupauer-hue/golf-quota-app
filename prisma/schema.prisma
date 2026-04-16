@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id               String           @id @default(cuid())
+  name             String           @unique
+  startingQuota    Int
+  currentQuota     Int
+  isRegular        Boolean          @default(false)
+  isActive         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  roundEntries     RoundEntry[]
+  conflictsFrom    PlayerConflict[] @relation("ConflictSource")
+  conflictsTo      PlayerConflict[] @relation("ConflictTarget")
+}
+
+model Round {
+  id             String             @id @default(cuid())
+  roundName      String
+  roundDate      DateTime
+  notes          String?
+  teamCount      Int?
+  lockedAt       DateTime?
+  startedAt      DateTime?
+  createdAt      DateTime           @default(now())
+  completedAt    DateTime?
+  entries        RoundEntry[]
+  teamResults    RoundTeamResult[]
+  skinHoles      RoundSkinHole[]
+  payoutSummary  RoundPayoutSummary?
+
+  @@index([roundDate, createdAt])
+}
+
+model RoundEntry {
+  id             String @id @default(cuid())
+  roundId        String
+  playerId       String
+  team           String?
+  groupNumber    Int?
+  teeTime        String?
+  startQuota     Int
+  hole1          Int?
+  hole2          Int?
+  hole3          Int?
+  hole4          Int?
+  hole5          Int?
+  hole6          Int?
+  hole7          Int?
+  hole8          Int?
+  hole9          Int?
+  hole10         Int?
+  hole11         Int?
+  hole12         Int?
+  hole13         Int?
+  hole14         Int?
+  hole15         Int?
+  hole16         Int?
+  hole17         Int?
+  hole18         Int?
+  frontQuota     Int @default(0)
+  backQuota      Int @default(0)
+  frontNine      Int @default(0)
+  backNine       Int @default(0)
+  frontPlusMinus Int @default(0)
+  backPlusMinus  Int @default(0)
+  totalPoints    Int @default(0)
+  plusMinus      Int
+  nextQuota      Int
+  rank           Int
+
+  round   Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  player  Player @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([roundId, playerId])
+  @@index([roundId, rank])
+  @@index([playerId, roundId])
+  @@index([roundId, team])
+}
+
+model PlayerConflict {
+  id               String @id @default(cuid())
+  playerId         String
+  conflictPlayerId String
+
+  player         Player @relation("ConflictSource", fields: [playerId], references: [id], onDelete: Cascade)
+  conflictPlayer Player @relation("ConflictTarget", fields: [conflictPlayerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, conflictPlayerId])
+  @@index([conflictPlayerId])
+}
+
+model RoundTeamResult {
+  id             String @id @default(cuid())
+  roundId        String
+  team           String
+  playerCount    Int
+  frontPoints    Int
+  frontQuota     Int
+  frontPlusMinus Int
+  backPoints     Int
+  backQuota      Int
+  backPlusMinus  Int
+  totalPoints    Int
+  totalQuota     Int
+  totalPlusMinus Int
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, team])
+  @@index([roundId, totalPlusMinus])
+}
+
+model RoundSkinHole {
+  id                String  @id @default(cuid())
+  roundId           String
+  holeNumber        Int
+  eligiblePlayerIds String?
+  eligibleNames     String?
+  carryover         Boolean @default(false)
+  skinAwarded       Boolean @default(false)
+  winnerPlayerId    String?
+  winnerName        String?
+  sharesCaptured    Int     @default(0)
+  activeCarryover   Boolean @default(false)
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, holeNumber])
+  @@index([roundId, holeNumber])
+}
+
+model RoundPayoutSummary {
+  id                   String  @id @default(cuid())
+  roundId              String  @unique
+  frontPot             Int
+  backPot              Int
+  totalPot             Int
+  skinsPot             Int
+  leaderCount          Int
+  payoutCount          Int
+  casherCount          Int
+  totalSkinSharesWon   Int
+  valuePerSkin         Float   @default(0)
+  activeCarryoverCount Int     @default(0)
+  activeCarryoverHoles String?
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}

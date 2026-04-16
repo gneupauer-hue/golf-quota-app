@@ -1,0 +1,48 @@
+
+> golf-quota-tracker@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.15
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.6.108:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 1510ms
+ ○ Compiling /rounds/[id]/results ...
+ ✓ Compiled /rounds/[id]/results in 1985ms (661 modules)
+ GET / 200 in 2446ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj/results 200 in 2844ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 3165ms
+ GET / 200 in 72ms
+ ✓ Compiled /rounds in 370ms (650 modules)
+ GET /rounds 200 in 492ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 51ms
+ ✓ Compiled /api/rounds/[id] in 260ms (670 modules)
+ PUT /api/rounds/cmnz2n5yk0000lhi005ao60bj 200 in 821ms
+ PUT /api/rounds/cmnz2n5yk0000lhi005ao60bj 200 in 98ms
+ GET /rounds 200 in 75ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 48ms
+ PUT /api/rounds/cmnz2n5yk0000lhi005ao60bj 200 in 86ms
+ ✓ Compiled in 416ms (662 modules)
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 146ms
+ ✓ Compiled in 294ms (662 modules)
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 74ms
+ ✓ Compiled in 322ms (662 modules)
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 79ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 500 in 188ms
+ ✓ Compiled in 319ms (662 modules)
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 220ms
+ ✓ Compiled in 379ms (662 modules)
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 99ms
+ ✓ Compiled in 295ms (662 modules)
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 1570ms (994 modules)
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 500 in 2306ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 524ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 49ms
+ GET /rounds/cmnz2n5yk0000lhi005ao60bj 200 in 205ms
+ ✓ Compiled in 409ms (1008 modules)
+ ✓ Compiled in 392ms (1008 modules)
+ ✓ Compiled in 290ms (1008 modules)
+ ✓ Compiled in 334ms (1008 modules)
