@@ -7,6 +7,8 @@
     "dev": "next dev",
     "build": "next build && node scripts/fix-next-css.cjs",
     "start": "node scripts/fix-next-css.cjs && next start",
+    "test:team-builder": "node --import tsx --test tests/team-builder.test.ts",
+    "simulate:team-builder": "tsx scripts/team-builder-sim.ts",
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed"

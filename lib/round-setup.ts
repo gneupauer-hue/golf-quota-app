@@ -34,6 +34,16 @@ export type EvaluatedTeamFormat = TeamFormat & {
   estimatedSpread: number | null;
 };
 
+const debugTeamBuilder = process.env.TEAM_BUILDER_DEBUG === "1";
+
+function logTeamBuilder(level: "info" | "warn", message: string, details: unknown) {
+  if (!debugTeamBuilder) {
+    return;
+  }
+
+  console[level](message, details);
+}
+
 export function getTeamFormatKey(format: Pick<TeamFormat, "teamCount" | "capacities">) {
   return `${format.teamCount}:${format.capacities.join("-")}`;
 }
@@ -318,7 +328,7 @@ function optimizeAssignments(
 
         const trialValidation = validateTeamAssignments(trialAssignments, teamCodes, capacities);
         if (!trialValidation.valid) {
-          console.info("[team-builder] rejected-swap", {
+          logTeamBuilder("info", "[team-builder] rejected-swap", {
             leftPlayerId: left.playerId,
             leftTeam: left.team,
             rightPlayerId: right.playerId,
@@ -331,7 +341,7 @@ function optimizeAssignments(
         const trialState = hydrateTeamState(trialAssignments, players, teamCodes);
         const nextConflicts = teamConflictCount(trialState, conflictMap);
         const nextSpread = teamBalanceSpread(trialState);
-        console.info("[team-builder] trial-swap", {
+        logTeamBuilder("info", "[team-builder] trial-swap", {
           leftPlayerId: left.playerId,
           leftTeam: left.team,
           rightPlayerId: right.playerId,
@@ -348,7 +358,7 @@ function optimizeAssignments(
         ) {
           assignments[leftIndex].team = right.team;
           assignments[rightIndex].team = left.team;
-          console.info("[team-builder] accepted-swap", {
+          logTeamBuilder("info", "[team-builder] accepted-swap", {
             leftPlayerId: left.playerId,
             rightPlayerId: right.playerId,
             nextSpread,
@@ -378,7 +388,7 @@ export function buildBalancedTeams(
   const teamState = createTeamState(teamCodes);
   const assignments: TeamAssignment[] = [];
   const fallbackAssignments = buildCapacitySafeAssignments(players, teamCodes, teamCapacities);
-  console.info("[team-builder] initial-capacities", {
+  logTeamBuilder("info", "[team-builder] initial-capacities", {
     teamCodes,
     capacities: teamCodes.map((team) => ({
       team,
@@ -434,7 +444,7 @@ export function buildBalancedTeams(
     if (!fallbackValidation.valid) {
       throw new Error("Could not build evenly sized teams for this round.");
     }
-    console.warn("[team-builder] falling-back-to-default-assignment", {
+    logTeamBuilder("warn", "[team-builder] falling-back-to-default-assignment", {
       reason: "initial-assignment-invalid",
       sizes: teamCodes.map((team) => ({
         team,
@@ -444,17 +454,18 @@ export function buildBalancedTeams(
     });
     return fallbackAssignments;
   }
-  console.info("[team-builder] initial-valid-teams", {
+  logTeamBuilder("info", "[team-builder] initial-valid-teams", {
     sizes: teamCodes.map((team) => ({
       team,
       size: initialValidation.sizes.get(team) ?? 0,
       capacity: teamCapacities.get(team) ?? 0
     }))
   });
+  const baseAssignments = assignments.map((assignment) => ({ ...assignment }));
 
   try {
     const optimizedAssignments = optimizeAssignments(
-      assignments,
+      baseAssignments.map((assignment) => ({ ...assignment })),
       sortedPlayers,
       teamCodes,
       conflictMap,
@@ -463,16 +474,16 @@ export function buildBalancedTeams(
     const validation = validateTeamAssignments(optimizedAssignments, teamCodes, teamCapacities);
 
     if (!validation.valid) {
-      console.warn("[team-builder] optimization-invalid-using-default", {
+      logTeamBuilder("warn", "[team-builder] optimization-invalid-using-default", {
         sizes: teamCodes.map((team) => ({
           team,
           optimizedSize: validation.sizes.get(team) ?? 0,
           capacity: teamCapacities.get(team) ?? 0
         }))
       });
-      return assignments;
+      return baseAssignments;
     }
-    console.info("[team-builder] final-valid-teams", {
+    logTeamBuilder("info", "[team-builder] final-valid-teams", {
       sizes: teamCodes.map((team) => ({
         team,
         size: validation.sizes.get(team) ?? 0,
@@ -482,10 +493,10 @@ export function buildBalancedTeams(
 
     return optimizedAssignments;
   } catch (error) {
-    console.warn("[team-builder] optimization-failed-using-default", {
+    logTeamBuilder("warn", "[team-builder] optimization-failed-using-default", {
       error: error instanceof Error ? error.message : "Unknown optimization error"
     });
-    return assignments;
+    return baseAssignments;
   }
 }
 
