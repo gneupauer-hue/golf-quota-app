@@ -18,17 +18,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-hero text-ink">
       <div className="mx-auto w-full max-w-md px-4 pb-24 pt-3">
-        <header className="mb-3 rounded-[24px] border border-white/60 bg-white/80 px-4 py-3 shadow-card backdrop-blur">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine/70">
+        <header className="mb-3 rounded-[24px] border border-pine/20 bg-grove px-4 py-4 shadow-card">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sand/90">
             Golf Quota
           </p>
-          <p className="mt-1 text-sm font-semibold text-ink/72">Fast phone-first scoring built for the course.</p>
+          <p className="mt-1 text-sm font-bold text-canvas/92">
+            Fast phone-first scoring built for the course.
+          </p>
         </header>
 
         <main>{children}</main>
       </div>
 
-      <nav className="fixed bottom-3 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-ink/10 bg-white/92 p-2 shadow-card backdrop-blur">
+      <nav className="fixed bottom-3 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-mist bg-card p-2 shadow-card">
         <ul className="grid grid-cols-5 gap-2">
           {links.map((link) => {
             const active =
@@ -40,8 +42,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   href={link.href}
                   className={classNames(
-                    "flex min-h-12 items-center justify-center rounded-2xl px-3 text-sm font-semibold transition",
-                    active ? "bg-pine text-white" : "bg-canvas text-ink/75"
+                    "flex min-h-14 items-center justify-center rounded-2xl px-3 text-sm font-bold transition",
+                    active ? "bg-pine text-canvas" : "bg-white text-ink"
                   )}
                 >
                   {link.label}

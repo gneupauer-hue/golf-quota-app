@@ -154,7 +154,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
             <button
               type="button"
               disabled={isPending}
-              className="min-h-12 w-full rounded-2xl bg-ink px-4 text-base font-semibold text-white disabled:opacity-60"
+              className="club-btn-primary min-h-12 w-full text-base disabled:opacity-60"
               onClick={handleCreateStarterPlayers}
             >
               {isPending ? "Creating..." : "Create Starter Players"}
@@ -180,7 +180,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
               <div className="grid gap-3">
                 <button
                   type="button"
-                  className="min-h-12 w-full rounded-2xl bg-ink px-4 text-base font-semibold text-white"
+                  className="club-btn-primary min-h-12 w-full text-base"
                   onClick={openCreateEditor}
                 >
                   Add Player
@@ -189,7 +189,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                 <button
                   type="button"
                   disabled={isPending}
-                  className="min-h-12 w-full rounded-2xl bg-canvas px-4 text-base font-semibold text-ink disabled:opacity-60"
+                  className="club-btn-secondary min-h-12 w-full text-base disabled:opacity-60"
                   onClick={handleCreateStarterPlayers}
                 >
                   {isPending ? "Restoring..." : "Restore Starter Players"}
@@ -214,7 +214,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                       <span
                         className={classNames(
                           "rounded-full px-2.5 py-1 text-xs font-semibold",
-                          player.isRegular ? "bg-pine/10 text-pine" : "bg-sand/30 text-ink"
+                          player.isRegular ? "bg-pine/12 text-pine" : "bg-sand/25 text-ink"
                         )}
                       >
                         {player.isRegular ? "Regular" : "Other"}
@@ -240,7 +240,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                   </button>
 
                   <button
-                    className="min-h-12 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink"
+                    className="club-btn-secondary min-h-12"
                     type="button"
                     onClick={() => handleEdit(player)}
                   >
@@ -255,7 +255,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
 
       {isEditorOpen ? (
         <div className="fixed inset-0 z-40 bg-ink/35 px-3 py-4">
-          <div className="mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[28px] bg-white shadow-card">
+          <div className="mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-mist bg-white shadow-card">
             <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-ink">
@@ -267,7 +267,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
               </div>
               <button
                 type="button"
-                className="min-h-11 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink"
+                className="club-btn-secondary min-h-11"
                 onClick={closeEditor}
               >
                 Cancel
@@ -280,7 +280,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                   <span className="mb-2 block text-sm font-semibold text-ink">Name</span>
                   <input
                     required
-                    className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none ring-0 placeholder:text-ink/35"
+                    className="club-input h-14 placeholder:text-ink/45"
                     value={form.name}
                     onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                     placeholder="Player name"
@@ -292,7 +292,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                   <input
                     required
                     type="number"
-                    className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none"
+                    className="club-input h-14"
                     value={form.currentQuota}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, currentQuota: event.target.value }))
@@ -306,7 +306,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                   <input
                     required
                     type="number"
-                    className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none"
+                    className="club-input h-14"
                     value={form.startingQuota}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, startingQuota: event.target.value }))
@@ -322,7 +322,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                       "min-h-12 rounded-2xl border px-4 text-sm font-semibold",
                       form.isRegular
                         ? "border-pine bg-pine text-white"
-                        : "border-ink/10 bg-canvas text-ink"
+                        : "border-mist bg-card text-ink"
                     )}
                     onClick={() => setForm((current) => ({ ...current, isRegular: !current.isRegular }))}
                   >
@@ -335,7 +335,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                       "min-h-12 rounded-2xl border px-4 text-sm font-semibold",
                       form.isActive
                         ? "border-pine bg-pine text-white"
-                        : "border-ink/10 bg-canvas text-ink"
+                        : "border-mist bg-card text-ink"
                     )}
                     onClick={() => setForm((current) => ({ ...current, isActive: !current.isActive }))}
                   >
@@ -345,7 +345,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
 
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-ink">Avoid pairing with</p>
-                  <div className="max-h-56 space-y-2 overflow-y-auto rounded-2xl bg-canvas p-3">
+                  <div className="max-h-56 space-y-2 overflow-y-auto rounded-2xl border border-mist bg-card p-3">
                     {players
                       .filter((player) => player.id !== form.id)
                       .map((player) => {
@@ -357,7 +357,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                             type="button"
                             className={classNames(
                               "flex min-h-12 w-full items-center justify-between rounded-2xl px-4 text-left text-sm font-semibold",
-                              selected ? "bg-ink text-white" : "bg-white text-ink"
+                              selected ? "bg-pine text-white" : "bg-white text-ink"
                             )}
                             onClick={() =>
                               setForm((current) => ({
@@ -377,11 +377,11 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                 </div>
               </div>
 
-              <div className="sticky bottom-0 mt-6 border-t border-ink/10 bg-white pt-4">
+              <div className="sticky bottom-0 mt-6 border-t border-mist bg-white pt-4">
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    className="min-h-12 rounded-2xl bg-canvas px-4 text-base font-semibold text-ink"
+                    className="club-btn-secondary min-h-12 text-base"
                     onClick={closeEditor}
                   >
                     Cancel
@@ -389,7 +389,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                   <button
                     type="submit"
                     disabled={isPending}
-                    className="min-h-12 rounded-2xl bg-ink px-4 text-base font-semibold text-white disabled:opacity-60"
+                    className="club-btn-primary min-h-12 text-base disabled:opacity-60"
                   >
                     {isPending ? "Saving..." : "Save"}
                   </button>

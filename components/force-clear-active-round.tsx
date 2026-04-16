@@ -54,7 +54,7 @@ export function ForceClearActiveRound({
   }
 
   return (
-    <div className="space-y-2 rounded-[24px] border border-danger/20 bg-white/90 px-4 py-4 shadow-card">
+    <div className="club-card space-y-2 px-4 py-4">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-danger/80">
           Temporary Admin
@@ -68,11 +68,11 @@ export function ForceClearActiveRound({
         type="button"
         disabled={isPending}
         onClick={handleForceClear}
-        className="flex min-h-12 w-full items-center justify-center rounded-[20px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-semibold text-danger disabled:opacity-45"
+        className="club-btn-danger min-h-12 w-full rounded-[20px] disabled:opacity-45"
       >
         {isPending ? "Clearing Active Round..." : "Force Clear Active Round"}
       </button>
-      {message ? <p className="text-sm text-danger">{message}</p> : null}
+      {message ? <p className="text-sm font-medium text-danger">{message}</p> : null}
     </div>
   );
 }

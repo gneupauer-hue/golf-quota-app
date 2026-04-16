@@ -4,6 +4,20 @@ import { SectionCard } from "@/components/section-card";
 import { getLeaderboardPageData } from "@/lib/data";
 import { formatPlusMinus } from "@/lib/quota";
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: value % 1 === 0 ? 0 : 2
+  }).format(value);
+}
+
+function getSkinResultLabel(score: number | null | undefined) {
+  if (score === 6) return "Eagle";
+  if (score === 4) return "Birdie";
+  return null;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
@@ -16,7 +30,7 @@ export default async function LeaderboardPage() {
         <SectionCard className="space-y-3">
           <h3 className="text-lg font-semibold">No current round</h3>
           <p className="text-sm text-ink/65">Start a round to see live team leaders, individual projections, and skins updates.</p>
-          <Link href="/rounds/new" className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white">
+          <Link href="/rounds/new" className="club-btn-primary min-h-12">
             New Round
           </Link>
         </SectionCard>
@@ -25,6 +39,19 @@ export default async function LeaderboardPage() {
   }
 
   const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
+  const awardedSkins = data.money.skins.holes
+    .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
+    .map((hole) => {
+      const winner = data.entries.find((entry) => entry.playerId === hole.winnerPlayerId);
+      const resultLabel = getSkinResultLabel(winner?.holeScores[hole.holeNumber - 1]) ?? "Birdie";
+
+      return {
+        holeNumber: hole.holeNumber,
+        winnerName: hole.winnerName ?? winner?.playerName ?? "-",
+        resultLabel,
+        value: data.money.skins.valuePerSkin * hole.sharesCaptured
+      };
+    });
 
   return (
     <div className="space-y-3">
@@ -36,16 +63,16 @@ export default async function LeaderboardPage() {
             : `${data.round.roundName} live standings and projections`
         }
         action={
-          <Link href={`/rounds/${data.round.id}`} className="rounded-2xl bg-pine px-4 py-3 text-sm font-semibold text-white">
+          <Link href={`/rounds/${data.round.id}`} className="club-btn-primary">
             Open Round
           </Link>
         }
       />
 
-      <section className="space-y-3 rounded-[24px] border border-white/10 bg-ink px-4 py-3 text-white shadow-card">
+      <section className="club-panel-dark space-y-3 px-4 py-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/80">Projections</p>
-          <h3 className="mt-1 text-xl font-semibold">{isSkinsOnly ? "Skins projection" : "Estimated win chances"}</h3>
+          <h3 className="mt-1 text-xl font-semibold">{isSkinsOnly ? "Live skins and current winners" : "Estimated win chances"}</h3>
           <p className="mt-1 text-xs text-white/80">
             Estimates based on current margins and holes remaining.
           </p>
@@ -82,26 +109,58 @@ export default async function LeaderboardPage() {
             </div>
           )) : null}
           <div className="rounded-2xl bg-white/10 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-white/75">
-                  {isSkinsOnly ? "Skins Leader" : "Skins Projection"}
+                  Current Good Skins
                 </p>
-                <p className="mt-1 text-lg font-semibold">{data.projections.skins.heading}</p>
-                <p className="mt-1 text-xs text-white/80">{data.projections.skins.detail}</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {awardedSkins.length
+                    ? `${awardedSkins.length} good skin${awardedSkins.length === 1 ? "" : "s"} currently in play`
+                    : "No good skins yet"}
+                </p>
+                <p className="mt-1 text-xs text-white/80">
+                  {awardedSkins.length
+                    ? data.money.skins.valuePerSkin > 0
+                      ? `Current skin value ${formatCurrency(data.money.skins.valuePerSkin)} per winning share`
+                      : "Winning skin value updates as carryovers resolve."
+                    : data.money.skins.currentCarryoverCount
+                      ? `${data.money.skins.currentCarryoverCount} carryover hole${data.money.skins.currentCarryoverCount === 1 ? "" : "s"} live`
+                      : "No outright skins have been won yet."}
+                </p>
               </div>
-              <p className="text-xl font-semibold">
-                {data.projections.skins.probability == null ? "Live" : `${data.projections.skins.probability}%`}
-              </p>
+              <div className="rounded-full bg-white/12 px-3 py-1.5 text-sm font-semibold text-white">
+                {formatCurrency(data.money.skins.totalPot)}
+              </div>
             </div>
-            {data.projections.skins.probability != null ? (
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-[#FFF1BF]"
-                  style={{ width: `${data.projections.skins.probability}%` }}
-                />
+
+            {awardedSkins.length ? (
+              <div className="mt-3 space-y-2">
+                {awardedSkins.map((skin) => (
+                  <div
+                    key={`${skin.holeNumber}-${skin.winnerName}`}
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-white/12 px-3 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">{`Hole ${skin.holeNumber} — ${skin.winnerName}`}</p>
+                      <p className="mt-1 text-xs font-medium text-white/88">{skin.resultLabel}</p>
+                    </div>
+                    <p className="text-base font-bold text-[#F3E2BC]">
+                      {formatCurrency(skin.value)}
+                    </p>
+                  </div>
+                ))}
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-3 rounded-2xl bg-white/12 px-3 py-3">
+                <p className="text-sm font-semibold text-white">No good skins yet</p>
+                <p className="mt-1 text-xs text-white/80">
+                  {data.money.skins.currentCarryoverCount
+                    ? `Carryover: ${data.money.skins.currentCarryoverCount} hole${data.money.skins.currentCarryoverCount === 1 ? "" : "s"}`
+                    : "Birdies or better will appear here once an outright winning hole is recorded."}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>

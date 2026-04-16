@@ -36,7 +36,7 @@ export function PastRounds({
         action={readOnly ? undefined : (
           <Link
             href="/rounds/new"
-            className="rounded-2xl bg-pine px-4 py-3 text-sm font-semibold text-white"
+            className="club-btn-primary"
           >
             New Round
           </Link>
@@ -49,11 +49,11 @@ export function PastRounds({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-semibold">{round.roundName}</h3>
-                  <span className="rounded-full bg-canvas px-2.5 py-1 text-xs font-semibold text-ink/70">
+                  <span className="club-pill">
                     {formatDisplayDate(round.roundDate)}
                   </span>
                   {round.isTestRound ? (
-                    <span className="rounded-full bg-[#FFF1BF] px-2.5 py-1 text-xs font-semibold text-ink">
+                    <span className="rounded-full bg-sand/25 px-2.5 py-1 text-xs font-semibold text-ink">
                       Test Round
                     </span>
                   ) : null}
@@ -72,13 +72,13 @@ export function PastRounds({
               <div className="flex flex-col gap-2">
                 <Link
                   href={readOnly ? `/rounds/${round.id}/results` : `/rounds/${round.id}`}
-                  className="rounded-[20px] bg-ink px-4 py-3 text-center text-sm font-semibold text-white"
+                  className="club-btn-secondary rounded-[20px]"
                 >
                   {readOnly ? "Review" : "Open"}
                 </Link>
                 <Link
                   href={`/rounds/${round.id}/results`}
-                  className="rounded-[20px] bg-pine px-4 py-3 text-center text-sm font-semibold text-white"
+                  className="club-btn-primary rounded-[20px]"
                 >
                   Scoreboard
                 </Link>

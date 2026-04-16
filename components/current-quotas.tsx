@@ -27,11 +27,11 @@ export function CurrentQuotas({ rows }: { rows: QuotaRow[] }) {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold">{row.name}</h3>
-                <span className="rounded-full bg-canvas px-2.5 py-1 text-xs font-semibold text-ink/70">
+                <span className="club-pill">
                   {row.group}
                 </span>
                 {!row.isActive ? (
-                  <span className="rounded-full bg-ink/10 px-2.5 py-1 text-xs font-semibold text-ink/55">
+                  <span className="rounded-full bg-mist px-2.5 py-1 text-xs font-semibold text-ink/70">
                     Inactive
                   </span>
                 ) : null}
@@ -51,9 +51,9 @@ export function CurrentQuotas({ rows }: { rows: QuotaRow[] }) {
               </p>
             </div>
 
-            <div className="rounded-[22px] bg-pine px-4 py-3 text-center text-white shadow-sm">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-white/75">Quota</p>
-              <p className="mt-1 text-2xl font-semibold">{row.currentQuota}</p>
+            <div className="rounded-[22px] border border-pine/15 bg-pine px-4 py-3 text-center text-white shadow-sm">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-white/85">Quota</p>
+              <p className="mt-1 text-2xl font-bold">{row.currentQuota}</p>
             </div>
           </div>
         </SectionCard>

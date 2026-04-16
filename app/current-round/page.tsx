@@ -32,7 +32,7 @@ export default async function CurrentRoundPage({
       <SectionCard className="space-y-3">
         <h3 className="text-lg font-semibold">No active round</h3>
         <p className="text-sm text-ink/65">Create a new round to start team setup and live scoring.</p>
-        <Link href="/rounds/new" className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white">
+        <Link href="/rounds/new" className="club-btn-primary min-h-12">
           New Round
         </Link>
       </SectionCard>

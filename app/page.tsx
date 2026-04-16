@@ -9,26 +9,22 @@ const actions = [
   {
     href: "/leaderboard",
     title: "Leaderboard",
-    description: "Read-only standings, projections, payouts, and skins.",
-    tone: "bg-white text-ink"
+    description: "Read-only standings, projections, payouts, and skins."
   },
   {
     href: "/current-round",
     title: "Current Round",
-    description: "Open the one live round for setup, teams, and score entry.",
-    tone: "bg-white text-ink"
+    description: "Open the one live round for setup, teams, and score entry."
   },
   {
     href: "/players",
     title: "Players",
-    description: "Manage roster, conflicts, quotas, and active status.",
-    tone: "bg-white text-ink"
+    description: "Manage roster, conflicts, quotas, and active status."
   },
   {
     href: "/past-games",
     title: "Past Games",
-    description: "Completed rounds archived for read-only review.",
-    tone: "bg-white text-ink"
+    description: "Completed rounds archived for read-only review."
   }
 ];
 
@@ -54,15 +50,9 @@ export default async function HomePage() {
       <div className="flex flex-col gap-3">
         {actions.map((action) => (
           <Link key={action.href} href={action.href} className="block">
-            <SectionCard className={`h-auto min-h-0 py-3 ${action.tone}`}>
-              <h3 className="text-xl font-semibold tracking-tight">{action.title}</h3>
-              <p
-                className={`mt-1 text-sm ${
-                  action.tone.includes("text-white") ? "text-white/78" : "text-ink/70"
-                }`}
-              >
-                {action.description}
-              </p>
+            <SectionCard className="h-auto min-h-0 py-4">
+              <h3 className="text-xl font-bold tracking-tight text-ink">{action.title}</h3>
+              <p className="mt-1 text-sm font-medium text-ink/80">{action.description}</p>
             </SectionCard>
           </Link>
         ))}

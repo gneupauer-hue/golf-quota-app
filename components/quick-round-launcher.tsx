@@ -60,11 +60,11 @@ export function QuickRoundLauncher() {
         type="button"
         disabled={isPending}
         onClick={createRound}
-        className="flex min-h-14 w-full items-center justify-center rounded-[24px] bg-pine px-5 py-4 text-base font-semibold text-white shadow-card disabled:opacity-60"
+        className="club-btn-primary min-h-14 w-full rounded-[24px] px-5 py-4 text-base disabled:opacity-60"
       >
         {isPending ? "Creating Round..." : "+ New Round"}
       </button>
-      {message ? <p className="text-sm text-[#A53B2A]">{message}</p> : null}
+      {message ? <p className="text-sm font-medium text-danger">{message}</p> : null}
     </div>
   );
 }
