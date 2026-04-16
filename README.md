@@ -1,14 +1,15 @@
 # Golf Quota Tracker
 
-Mobile-first golf quota scoring app built with Next.js, TypeScript, Tailwind CSS, Prisma, and SQLite.
+Mobile-first golf quota scoring app built with Next.js, TypeScript, Tailwind CSS, Prisma, and PostgreSQL.
 
 ## Local setup
 
 1. Install dependencies with `npm install`
 2. Copy `.env.example` to `.env`
-3. Run `npx prisma db push`
-4. Run `npx prisma db seed`
-5. Start the app with `npm run dev`
+3. Set `DATABASE_URL` to your PostgreSQL connection string
+4. Run `npx prisma db push`
+5. Run `npx prisma db seed`
+6. Start the app with `npm run dev`
 
 ## Notes
 
