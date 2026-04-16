@@ -111,25 +111,19 @@ export function getTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
   return buildTeamCapacities(teamCodes, playerCount);
 }
 
-function isSensibleFormat(capacities: number[]) {
-  const maxCapacity = Math.max(...capacities);
-  const minCapacity = Math.min(...capacities);
-  const isEqual = maxCapacity === minCapacity;
-
-  if (minCapacity < 2 || maxCapacity > 4) {
-    return false;
-  }
-
-  if (maxCapacity - minCapacity > 1) {
-    return false;
-  }
-
-  if (!isEqual && minCapacity < 3) {
-    return false;
-  }
-
-  return true;
-}
+const fixedMatchTeamFormats = new Map<number, number[]>([
+  [6, [3, 3]],
+  [7, [3, 4]],
+  [8, [4, 4]],
+  [9, [3, 3, 3]],
+  [10, [3, 3, 4]],
+  [11, [3, 4, 4]],
+  [12, [4, 4, 4]],
+  [13, [3, 3, 3, 4]],
+  [14, [3, 3, 4, 4]],
+  [15, [3, 4, 4, 4]],
+  [16, [4, 4, 4, 4]]
+]);
 
 function formatTeamFormatLabel(capacities: number[]) {
   const isEqual = capacities.every((capacity) => capacity === capacities[0]);
@@ -141,45 +135,20 @@ function formatTeamFormatLabel(capacities: number[]) {
 }
 
 export function getTeamFormats(playerCount: number) {
-  if (playerCount < 4) {
+  const capacities = fixedMatchTeamFormats.get(playerCount);
+
+  if (!capacities) {
     return [] as TeamFormat[];
   }
 
-  const formats: TeamFormat[] = [];
-  const maxTeamCount = Math.min(teamOptions.length, playerCount);
-
-  for (let teamCount = 2; teamCount <= maxTeamCount; teamCount += 1) {
-    const capacities = Array.from(
-      buildTeamCapacities(teamOptions.slice(0, teamCount), playerCount).values()
-    );
-
-    if (!isSensibleFormat(capacities)) {
-      continue;
-    }
-
-    formats.push({
-      teamCount,
+  return [
+    {
+      teamCount: capacities.length,
       capacities,
       label: formatTeamFormatLabel(capacities),
       isEqual: capacities.every((capacity) => capacity === capacities[0])
-    });
-  }
-
-  return formats.sort((left, right) => {
-    const leftAverage = left.capacities.reduce((sum, value) => sum + value, 0) / left.capacities.length;
-    const rightAverage =
-      right.capacities.reduce((sum, value) => sum + value, 0) / right.capacities.length;
-
-    if (rightAverage !== leftAverage) {
-      return rightAverage - leftAverage;
     }
-
-    if (right.isEqual !== left.isEqual) {
-      return right.isEqual ? 1 : -1;
-    }
-
-    return left.teamCount - right.teamCount;
-  });
+  ];
 }
 
 function getTeamSizeMap(assignments: TeamAssignment[], teamCodes: TeamCode[]) {

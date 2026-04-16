@@ -337,6 +337,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   );
   const hasRawFormatOptions = !isSkinsOnly && getTeamFormats(rows.length).length > 0;
   const setupFormatFailure = hasRawFormatOptions && setupFormatOptions.length === 0;
+  const setupFormatTeamLabels = useMemo(
+    () =>
+      setupTeamCodes.map((team, index) => `Team ${team} ${activeSetupFormat?.capacities[index] ?? 0}`),
+    [activeSetupFormat, setupTeamCodes]
+  );
 
   const calculatedRows = useMemo(() => {
     return calculateRoundRows(
@@ -1324,26 +1329,28 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
               </div>
               {!isSkinsOnly ? (
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-ink">Choose Team Format</p>
+                <p className="text-sm font-semibold text-ink">Team Format</p>
                 <p className="text-sm text-ink/65">
-                  Only clean formats for this field size are shown. Exact team sizes are locked before quota balancing.
+                  Match mode uses a fixed team-size structure for each supported field size. Balancing happens inside those exact capacities.
                 </p>
                 {!setupFormatOptions.length ? (
                   <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/65">
                     {setupFormatFailure
                       ? "We could not evaluate a safe team format for this player mix yet. Try removing a conflicting player or regenerate after another selection."
-                      : "Add at least 4 players to unlock a valid team format."}
+                      : "Match mode currently supports fixed team formats for 6 through 16 players."}
                   </div>
                 ) : setupFormatOptions.length === 1 ? (
                   <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-pine">{setupFormatOptions[0].label}</p>
+                      <p className="text-sm font-semibold text-pine">{`Team Format: ${setupFormatOptions[0].capacities.join(",")}`}</p>
                       <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-pine">
-                        Best fit
+                        Fixed
                       </span>
                     </div>
+                    <p className="mt-2 text-xs text-ink/70">{setupFormatTeamLabels.join(" • ")}</p>
+                    <p className="mt-2 text-sm font-medium text-ink">{setupFormatOptions[0].label}</p>
                     <p className="mt-2 text-sm font-medium text-ink">{`Estimated fairness gap ${setupFormatOptions[0].estimatedSpread}`}</p>
-                    <p className="mt-1 text-xs text-ink/65">Only one clean format fits this player count, so it is selected automatically.</p>
+                    <p className="mt-1 text-xs text-ink/65">This player count uses one fixed team structure, so it is selected automatically.</p>
                   </div>
                 ) : (
                   <div className="grid gap-2">
