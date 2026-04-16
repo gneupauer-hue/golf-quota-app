@@ -6,9 +6,14 @@ import {
   calculateSideGameResults,
   calculateTeamStandings,
   holeFieldNames,
+  type RoundMode,
   type TeamCode
 } from "@/lib/quota";
 import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
+
+function normalizeRoundMode(value: string): RoundMode {
+  return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
+}
 
 export async function getPlayersForSelection() {
   return prisma.player.findMany({
@@ -138,6 +143,7 @@ export async function getRoundsList() {
       id: round.id,
       roundName: round.roundName,
       roundDate: round.roundDate,
+      roundMode: normalizeRoundMode(round.roundMode),
       notes: round.notes,
       teamCount: round.teamCount,
       lockedAt: round.lockedAt,
@@ -182,6 +188,7 @@ export async function getPastGamesList() {
     id: round.id,
     roundName: round.roundName,
     roundDate: round.roundDate,
+    roundMode: normalizeRoundMode(round.roundMode),
     notes: round.notes,
     teamCount: round.teamCount,
     lockedAt: round.lockedAt,
@@ -300,6 +307,7 @@ export async function getRoundEditorData(roundId: string) {
       id: round.id,
       roundName: round.roundName,
       roundDate: round.roundDate.toISOString(),
+      roundMode: normalizeRoundMode(round.roundMode),
       notes: round.notes ?? "",
       teamCount: round.teamCount ?? null,
       lockedAt: round.lockedAt?.toISOString() ?? null,
@@ -383,6 +391,7 @@ export async function getRoundResultsData(roundId: string) {
       id: round.id,
       roundName: round.roundName,
       roundDate: round.roundDate,
+      roundMode: normalizeRoundMode(round.roundMode),
       notes: round.notes,
       completedAt: round.completedAt
     },

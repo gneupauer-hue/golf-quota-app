@@ -126,6 +126,7 @@ export async function resetDemoData(prisma: PrismaClient) {
     roundId: round410.id,
     roundName: "4.10",
     roundDate: new Date("2026-04-10"),
+    roundMode: "MATCH_QUOTA",
     notes: "Fast sample round for mobile entry testing.",
     entries: round410Entries.map(([name, totalPoints, team]) => ({
       playerId: createdPlayers.get(name)!,
@@ -157,6 +158,7 @@ export async function resetDemoData(prisma: PrismaClient) {
     roundId: round411.id,
     roundName: "4.11",
     roundDate: new Date("2026-04-11"),
+    roundMode: "MATCH_QUOTA",
     notes: "Sample weekend round.",
     entries: round411Entries.map(([name, totalPoints, team]) => ({
       playerId: createdPlayers.get(name)!,

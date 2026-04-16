@@ -24,11 +24,17 @@ export default async function LeaderboardPage() {
     );
   }
 
+  const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
+
   return (
     <div className="space-y-3">
       <PageTitle
         title="Leaderboard"
-        subtitle={`${data.round.roundName} live standings and projections`}
+        subtitle={
+          isSkinsOnly
+            ? `${data.round.roundName} skins-only view`
+            : `${data.round.roundName} live standings and projections`
+        }
         action={
           <Link href={`/rounds/${data.round.id}`} className="rounded-2xl bg-pine px-4 py-3 text-sm font-semibold text-white">
             Open Round
@@ -39,13 +45,13 @@ export default async function LeaderboardPage() {
       <section className="space-y-3 rounded-[24px] border border-white/10 bg-ink px-4 py-3 text-white shadow-card">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/80">Projections</p>
-          <h3 className="mt-1 text-xl font-semibold">Estimated win chances</h3>
+          <h3 className="mt-1 text-xl font-semibold">{isSkinsOnly ? "Skins projection" : "Estimated win chances"}</h3>
           <p className="mt-1 text-xs text-white/80">
             Estimates based on current margins and holes remaining.
           </p>
         </div>
         <div className="space-y-2">
-          {[
+          {!isSkinsOnly ? [
             { label: "Front", projection: data.projections.frontTeam },
             { label: "Back", projection: data.projections.backTeam },
             { label: "Total", projection: data.projections.totalTeam },
@@ -74,11 +80,13 @@ export default async function LeaderboardPage() {
                 </div>
               ) : null}
             </div>
-          ))}
+          )) : null}
           <div className="rounded-2xl bg-white/10 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-white/75">Skins Projection</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-white/75">
+                  {isSkinsOnly ? "Skins Leader" : "Skins Projection"}
+                </p>
                 <p className="mt-1 text-lg font-semibold">{data.projections.skins.heading}</p>
                 <p className="mt-1 text-xs text-white/80">{data.projections.skins.detail}</p>
               </div>

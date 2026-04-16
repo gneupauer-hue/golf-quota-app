@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
-import { formatPlusMinus } from "@/lib/quota";
+import { formatPlusMinus, type TeamCode } from "@/lib/quota";
 import { classNames, formatDisplayDate } from "@/lib/utils";
 
 type ResultsData = {
@@ -16,7 +16,7 @@ type ResultsData = {
     id: string;
     playerId: string;
     playerName: string;
-    team: "A" | "B" | "C" | "D" | "E" | null;
+    team: TeamCode | null;
     startQuota: number;
     frontNine: number;
     backNine: number;
@@ -26,7 +26,7 @@ type ResultsData = {
     rank: number;
   }>;
   teamStandings: Array<{
-    team: "A" | "B" | "C" | "D" | "E";
+    team: TeamCode;
     players: string[];
     frontPoints: number;
     backPoints: number;
@@ -41,12 +41,12 @@ type ResultsData = {
   leaders: {
     leaderGroup: { playerName: string; plusMinus: number }[];
     payoutGroup: { playerName: string; plusMinus: number }[];
-    first: { playerName: string; team: "A" | "B" | "C" | "D" | "E" | null; plusMinus: number } | null;
-    second: { playerName: string; team: "A" | "B" | "C" | "D" | "E" | null; plusMinus: number } | null;
-    third: { playerName: string; team: "A" | "B" | "C" | "D" | "E" | null; plusMinus: number } | null;
-    frontTeam: { team: "A" | "B" | "C" | "D" | "E"; frontPlusMinus: number } | null;
-    backTeam: { team: "A" | "B" | "C" | "D" | "E"; backPlusMinus: number } | null;
-    totalTeam: { team: "A" | "B" | "C" | "D" | "E"; totalPlusMinus: number } | null;
+    first: { playerName: string; team: TeamCode | null; plusMinus: number } | null;
+    second: { playerName: string; team: TeamCode | null; plusMinus: number } | null;
+    third: { playerName: string; team: TeamCode | null; plusMinus: number } | null;
+    frontTeam: { team: TeamCode; frontPlusMinus: number } | null;
+    backTeam: { team: TeamCode; backPlusMinus: number } | null;
+    totalTeam: { team: TeamCode; totalPlusMinus: number } | null;
   };
   money: {
     overallPot: {
@@ -64,9 +64,9 @@ type ResultsData = {
       frontPot: number;
       backPot: number;
       totalPot: number;
-      frontWinner: { team: "A" | "B" | "C" | "D" | "E" } | null;
-      backWinner: { team: "A" | "B" | "C" | "D" | "E" } | null;
-      totalWinner: { team: "A" | "B" | "C" | "D" | "E" } | null;
+      frontWinner: { team: TeamCode } | null;
+      backWinner: { team: TeamCode } | null;
+      totalWinner: { team: TeamCode } | null;
     };
     individualPayouts: Array<{
       playerId: string;

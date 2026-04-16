@@ -27,6 +27,7 @@ export async function POST(
         roundId: round.id,
         roundName: round.roundName,
         roundDate: round.roundDate,
+        roundMode: round.roundMode === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA",
         notes: round.notes,
         teamCount: round.teamCount,
         lockedAt: round.lockedAt,

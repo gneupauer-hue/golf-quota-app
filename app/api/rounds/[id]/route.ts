@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { holeScoreValues, teamOptions } from "@/lib/quota";
+import { holeScoreValues, teamOptions, type RoundMode } from "@/lib/quota";
 import { createOrReplaceRoundEntries } from "@/lib/round-service";
 import { formatRoundNameFromDate } from "@/lib/utils";
 
@@ -14,6 +14,8 @@ export async function PUT(
     const roundDate = String(body.roundDate ?? "").trim();
     const roundName = String(body.roundName ?? "").trim();
     const notes = String(body.notes ?? "");
+    const roundMode =
+      body.roundMode === "SKINS_ONLY" ? ("SKINS_ONLY" as RoundMode) : ("MATCH_QUOTA" as RoundMode);
     const teamCount =
       body.teamCount == null || body.teamCount === "" ? null : Number(body.teamCount);
     const lockedAt =
@@ -31,8 +33,15 @@ export async function PUT(
 
     const resolvedRoundName = roundName || formatRoundNameFromDate(roundDate);
 
-    if (teamCount !== null && (Number.isNaN(teamCount) || teamCount < 2 || teamCount > 5)) {
-      return NextResponse.json({ error: "Team count must be between 2 and 5." }, { status: 400 });
+    if (
+      roundMode === "MATCH_QUOTA" &&
+      teamCount !== null &&
+      (Number.isNaN(teamCount) || teamCount < 2 || teamCount > teamOptions.length)
+    ) {
+      return NextResponse.json(
+        { error: `Team count must be between 2 and ${teamOptions.length}.` },
+        { status: 400 }
+      );
     }
 
     const seen = new Set<string>();
@@ -88,8 +97,9 @@ export async function PUT(
         roundId: id,
         roundName: resolvedRoundName,
         roundDate: new Date(roundDate),
+        roundMode,
         notes,
-        teamCount,
+        teamCount: roundMode === "SKINS_ONLY" ? null : teamCount,
         lockedAt,
         startedAt,
         forceComplete,

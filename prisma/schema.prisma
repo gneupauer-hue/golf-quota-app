@@ -25,6 +25,7 @@ model Round {
   id             String             @id @default(cuid())
   roundName      String
   roundDate      DateTime
+  roundMode      String             @default("MATCH_QUOTA")
   notes          String?
   teamCount      Int?
   lockedAt       DateTime?

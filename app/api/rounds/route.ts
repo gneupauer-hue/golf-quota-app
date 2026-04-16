@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveActiveRound } from "@/lib/active-round";
 import { prisma } from "@/lib/prisma";
+import type { RoundMode } from "@/lib/quota";
 import { formatRoundNameFromDate } from "@/lib/utils";
 
 export async function POST(request: Request) {
@@ -9,6 +10,8 @@ export async function POST(request: Request) {
     const roundDate = String(body.roundDate ?? "").trim();
     const roundName = String(body.roundName ?? "").trim();
     const notes = String(body.notes ?? "");
+    const roundMode =
+      body.roundMode === "SKINS_ONLY" ? ("SKINS_ONLY" as RoundMode) : ("MATCH_QUOTA" as RoundMode);
 
     if (!roundDate) {
       return NextResponse.json({ error: "Round date is required." }, { status: 400 });
@@ -32,6 +35,7 @@ export async function POST(request: Request) {
       data: {
         roundName: resolvedRoundName,
         roundDate: new Date(roundDate),
+        roundMode,
         notes: notes.trim() ? notes.trim() : null
       }
     });

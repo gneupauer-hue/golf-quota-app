@@ -11,6 +11,7 @@ import { TeamSummaryMini } from "@/components/team-summary-mini";
 import {
   buildBalancedTeams,
   getTeamCapacities,
+  getTeamFormats,
   validateTeamAssignments
 } from "@/lib/round-setup";
 import {
@@ -26,6 +27,7 @@ import {
   isRoundRowComplete,
   teamOptions,
   type CalculatedRoundRow,
+  type RoundMode,
   type SideGameResults,
   type TeamCode,
   type TeamStanding
@@ -64,6 +66,7 @@ type EditorProps = {
     id: string;
     roundName: string;
     roundDate: string;
+    roundMode: RoundMode;
     notes: string;
     teamCount: number | null;
     lockedAt: string | null;
@@ -210,14 +213,20 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [toast, setToast] = useState("");
   const [isPending, startTransition] = useTransition();
   const [showSetup, setShowSetup] = useState(!round.lockedAt && rows.length > 0);
-  const [teamCount, setTeamCount] = useState(String(round.teamCount ?? 2));
+  const [gameMode, setGameMode] = useState<RoundMode>(round.roundMode ?? "MATCH_QUOTA");
+  const [selectedFormatTeamCount, setSelectedFormatTeamCount] = useState(
+    round.teamCount ? String(round.teamCount) : ""
+  );
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [activeTab, setActiveTab] = useState<RoundTab>(round.lockedAt ? "round" : "settings");
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
   const [activeHoleByTeam, setActiveHoleByTeam] = useState<Partial<Record<TeamCode, number>>>({});
+  const [skinsActiveHole, setSkinsActiveHole] = useState(1);
+  const [skinsEntryOpen, setSkinsEntryOpen] = useState(false);
   const [selectedSetupPlayerId, setSelectedSetupPlayerId] = useState<string | null>(null);
   const derivedRoundName = formatRoundNameFromDate(roundDate);
+  const isSkinsOnly = gameMode === "SKINS_ONLY";
 
   const isLocked = Boolean(lockedAt);
   const selectedIds = useMemo(() => new Set(rows.map((row) => row.playerId)), [rows]);
@@ -240,9 +249,19 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       });
   }, [isLocked, players, search, selectedIds]);
 
+  const setupFormatOptions = useMemo(
+    () => (isSkinsOnly ? [] : getTeamFormats(rows.length)),
+    [isSkinsOnly, rows.length]
+  );
+  const selectedFormat = useMemo(
+    () =>
+      setupFormatOptions.find((format) => String(format.teamCount) === selectedFormatTeamCount) ??
+      null,
+    [selectedFormatTeamCount, setupFormatOptions]
+  );
   const setupTeamCodes = useMemo(
-    () => teamOptions.slice(0, Math.max(2, Math.min(5, Number(teamCount) || 2))),
-    [teamCount]
+    () => (isSkinsOnly ? [] : teamOptions.slice(0, selectedFormat?.teamCount ?? 0)),
+    [isSkinsOnly, selectedFormat]
   );
   const setupTeamCapacities = useMemo(
     () => getTeamCapacities(setupTeamCodes, rows.length),
@@ -309,6 +328,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   );
 
   const setupValidation = useMemo(() => {
+    if (isSkinsOnly) {
+      return rows.length
+        ? { valid: true, reason: "" }
+        : { valid: false, reason: "Add players before starting the skins game." };
+    }
+
     const assignedRows = rows.filter(
       (row): row is RowState & { team: TeamCode } =>
         row.team != null && setupTeamCodes.includes(row.team)
@@ -336,7 +361,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }
 
     return { valid: true, reason: "" };
-  }, [rows, setupTeamCapacities, setupTeamCodes]);
+  }, [isSkinsOnly, rows, setupTeamCapacities, setupTeamCodes]);
 
   const setupTeams = useMemo(() => {
     return setupTeamCodes.map((team) => {
@@ -376,7 +401,56 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }, [toast]);
 
   useEffect(() => {
-    if (isLocked || !showSetup || !rows.length) {
+    if (!showSetup || isLocked) {
+      return;
+    }
+
+    if (isSkinsOnly) {
+      setRows((current) =>
+        current.map((row) =>
+          row.team == null && row.groupNumber == null && row.teeTime == null
+            ? row
+            : { ...row, team: null, groupNumber: null, teeTime: null }
+        )
+      );
+      setSelectedSetupPlayerId(null);
+    }
+  }, [isLocked, isSkinsOnly, showSetup]);
+
+  useEffect(() => {
+    if (isSkinsOnly) {
+      if (selectedFormatTeamCount) {
+        setSelectedFormatTeamCount("");
+      }
+      return;
+    }
+
+    if (!setupFormatOptions.length) {
+      if (selectedFormatTeamCount) {
+        setSelectedFormatTeamCount("");
+      }
+      return;
+    }
+
+    if (setupFormatOptions.length === 1) {
+      const onlyOption = String(setupFormatOptions[0].teamCount);
+      if (selectedFormatTeamCount !== onlyOption) {
+        setSelectedFormatTeamCount(onlyOption);
+      }
+      return;
+    }
+
+    if (!selectedFormat) {
+      setSelectedFormatTeamCount(String(setupFormatOptions[0].teamCount));
+    }
+  }, [isSkinsOnly, selectedFormat, selectedFormatTeamCount, setupFormatOptions]);
+
+  useEffect(() => {
+    if (isLocked || !showSetup || !rows.length || isSkinsOnly) {
+      return;
+    }
+
+    if (!selectedFormat) {
       return;
     }
 
@@ -385,7 +459,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }
 
     try {
-      const count = Math.max(2, Math.min(5, Number(teamCount) || 2));
       const setupPlayers = rows
         .map((row) => {
           const player = playersById.get(row.playerId);
@@ -404,7 +477,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         conflictIds: string[];
       }>;
 
-      const teamAssignments = buildBalancedTeams(setupPlayers, count);
+      const teamAssignments = buildBalancedTeams(setupPlayers, selectedFormat.teamCount);
       setRows((current) =>
         current.map((row) => ({
           ...row,
@@ -420,19 +493,20 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }
   }, [
     isLocked,
+    isSkinsOnly,
     playersById,
     quotaSnapshot,
     rows,
+    selectedFormat,
     setupValidation.valid,
-    showSetup,
-    teamCount
+    showSetup
   ]);
 
   async function persistRound(
     nextRows = rows,
     nextLockedAt = lockedAt,
     nextStartedAt = startedAt,
-    nextTeamCount = teamCount,
+    nextTeamCount = selectedFormat ? String(selectedFormat.teamCount) : "",
     nextRoundName = derivedRoundName,
     nextRoundDate = roundDate,
     nextNotes = notes,
@@ -441,8 +515,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     const payload = {
       roundName: nextRoundName,
       roundDate: nextRoundDate,
+      roundMode: gameMode,
       notes: nextNotes,
-      teamCount: nextLockedAt ? Number(nextTeamCount) : null,
+      teamCount: gameMode === "SKINS_ONLY" ? null : nextLockedAt ? Number(nextTeamCount) : null,
       lockedAt: nextLockedAt,
       startedAt: nextStartedAt,
       forceComplete,
@@ -503,10 +578,14 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     );
   }
 
-  function autoBuildTeams(nextTeamCount = Number(teamCount)) {
+  function autoBuildTeams(nextTeamCount = selectedFormat?.teamCount) {
     try {
       if (!rows.length) {
         setMessage("Add players before building teams.");
+        return;
+      }
+      if (!nextTeamCount) {
+        setMessage("Choose a valid team format first.");
         return;
       }
 
@@ -743,14 +822,14 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     let now = "";
 
     try {
-      count = Number(teamCount);
+      count = isSkinsOnly ? 0 : selectedFormat?.teamCount ?? 0;
 
       if (rows.length === 0) {
         setMessage("Add players before starting the game.");
         return;
       }
-      if (Number.isNaN(count) || count < 2 || count > 5) {
-        setMessage("Choose between 2 and 5 teams.");
+      if (!isSkinsOnly && (Number.isNaN(count) || count < 2 || count > teamOptions.length)) {
+        setMessage("Choose a valid team format before starting.");
         return;
       }
       if (!setupValidation.valid) {
@@ -759,6 +838,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
       nextRows = rows.map((row) => ({
         ...row,
+        team: isSkinsOnly ? null : row.team,
         groupNumber: null,
         teeTime: null
       }));
@@ -779,7 +859,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         setShowSetup(false);
         setSelectedTeam(null);
         setActiveTab("round");
-        setMessage("Round locked and ready for live scoring.");
+        setMessage(isSkinsOnly ? "Skins game ready for live scoring." : "Round locked and ready for live scoring.");
         router.push("/current-round");
         router.refresh();
       } catch (error) {
@@ -813,8 +893,16 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }));
   }
 
+  function openSkinsEntry() {
+    const nextHole = getSuggestedHole(calculatedRows);
+    setMessage("");
+    setSkinsEntryOpen(true);
+    setSkinsActiveHole(nextHole);
+  }
+
   function viewLeaders() {
     setSelectedTeam(null);
+    setSkinsEntryOpen(false);
     setActiveTab("leaders");
   }
 
@@ -837,6 +925,41 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     const nextIndex = (currentIndex + direction + availableTeams.length) % availableTeams.length;
     openTeam(availableTeams[nextIndex]);
+  }
+
+  function saveSkinsHole() {
+    const holeNumber = skinsActiveHole;
+    const holeIndex = holeNumber - 1;
+
+    if (!calculatedRows.length) {
+      setMessage("No players are in this skins game.");
+      return;
+    }
+
+    if (calculatedRows.some((row) => row.holeScores[holeIndex] == null)) {
+      setMessage(`Enter a score for every player on hole ${holeNumber}.`);
+      return;
+    }
+
+    if (invalidSequence) {
+      setMessage("Finish holes in order before saving.");
+      return;
+    }
+
+    const nextHole = Math.min(18, holeNumber + 1);
+
+    startTransition(async () => {
+      try {
+        const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
+        await persistRound();
+        setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        setSkinsActiveHole(nextHole);
+        setToast(skinToastMessage ?? "Hole saved");
+        setMessage("");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not save skins scores.");
+      }
+    });
   }
 
   function saveTeamHole(team: TeamCode) {
@@ -884,6 +1007,31 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       ...current,
       [team]: Math.max(1, currentHole - 1)
     }));
+  }
+
+  if (skinsEntryOpen && isSkinsOnly) {
+    const canGoBack = skinsActiveHole > 1;
+    const canSaveHole =
+      calculatedRows.length > 0 &&
+      calculatedRows.every((row) => row.holeScores[skinsActiveHole - 1] != null);
+
+    return (
+      <SkinsOnlyScoreEntry
+        activeHole={skinsActiveHole}
+        rows={calculatedRows}
+        message={message}
+        toast={toast}
+        isPending={isPending}
+        canGoBack={canGoBack}
+        canSaveHole={canSaveHole}
+        onUpdateHole={updateHole}
+        onPreviousHole={() => setSkinsActiveHole((current) => Math.max(1, current - 1))}
+        onSaveHole={saveSkinsHole}
+        onViewLeaders={viewLeaders}
+        onSelectHole={(hole) => setSkinsActiveHole(Math.max(1, Math.min(18, hole)))}
+        onBackToRound={() => setSkinsEntryOpen(false)}
+      />
+    );
   }
 
   if (selectedTeam) {
@@ -941,6 +1089,37 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       {!isLocked ? (
         <>
           <SectionCard className="space-y-4">
+            <div className="rounded-2xl bg-canvas px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Selected Mode</p>
+              <p className="mt-1 text-base font-semibold">
+                {isSkinsOnly ? "Skins Only Game" : "Match + Quota Game"}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <span className="block text-sm font-semibold">Game mode</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={classNames(
+                    "min-h-12 rounded-2xl border px-4 text-sm font-semibold",
+                    !isSkinsOnly ? "border-pine bg-pine text-white" : "border-ink/10 bg-canvas text-ink"
+                  )}
+                  onClick={() => setGameMode("MATCH_QUOTA")}
+                >
+                  Match + Quota
+                </button>
+                <button
+                  type="button"
+                  className={classNames(
+                    "min-h-12 rounded-2xl border px-4 text-sm font-semibold",
+                    isSkinsOnly ? "border-pine bg-pine text-white" : "border-ink/10 bg-canvas text-ink"
+                  )}
+                  onClick={() => setGameMode("SKINS_ONLY")}
+                >
+                  Skins Only
+                </button>
+              </div>
+            </div>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold">Round date</span>
               <input type="date" className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none" value={roundDate} onChange={(event) => setRoundDate(event.target.value)} />
@@ -1006,33 +1185,93 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             <SectionCard className="space-y-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Lock Round</p>
-                <h3 className="mt-1 text-lg font-semibold">Build teams and start the round</h3>
+                <h3 className="mt-1 text-lg font-semibold">
+                  {isSkinsOnly ? "Start the skins game" : "Build teams and start the round"}
+                </h3>
               </div>
-              <div className="grid grid-cols-4 gap-2">
-                {[2, 3, 4, 5].map((count) => (
-                  <button key={count} type="button" className={classNames("min-h-12 rounded-2xl border text-base font-semibold", teamCount === String(count) ? "border-pine bg-pine text-white" : "border-ink/10 bg-canvas text-ink")} onClick={() => { setTeamCount(String(count)); setSelectedSetupPlayerId(null); }}>
-                    {count}
-                  </button>
-                ))}
+              {!isSkinsOnly ? (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-ink">Choose Team Format</p>
+                <p className="text-sm text-ink/65">
+                  Only clean formats for this field size are shown. Exact team sizes are locked before quota balancing.
+                </p>
+                {!setupFormatOptions.length ? (
+                  <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/65">
+                    Add at least 4 players to unlock a valid team format.
+                  </div>
+                ) : setupFormatOptions.length === 1 ? (
+                  <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
+                    <p className="text-sm font-semibold text-pine">{setupFormatOptions[0].label}</p>
+                    <p className="mt-1 text-xs text-ink/65">Only one clean format fits this player count, so it is selected automatically.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {setupFormatOptions.map((format) => (
+                      <button
+                        key={format.label}
+                        type="button"
+                        className={classNames(
+                          "min-h-14 rounded-2xl border px-4 py-3 text-left",
+                          selectedFormatTeamCount === String(format.teamCount)
+                            ? "border-pine bg-pine text-white"
+                            : "border-ink/10 bg-canvas text-ink"
+                        )}
+                        onClick={() => {
+                          setSelectedFormatTeamCount(String(format.teamCount));
+                          setSelectedSetupPlayerId(null);
+                        }}
+                      >
+                        <span className="block text-base font-semibold">{format.label}</span>
+                        <span
+                          className={classNames(
+                            "mt-1 block text-xs",
+                            selectedFormatTeamCount === String(format.teamCount)
+                              ? "text-white/80"
+                              : "text-ink/60"
+                          )}
+                        >
+                          {format.isEqual
+                            ? "Equal teams"
+                            : `Exact split ${format.capacities.join("/")}`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+              ) : (
+                <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
+                  <p className="text-sm font-semibold text-pine">Skins Only Game</p>
+                  <p className="mt-1 text-xs text-ink/65">
+                    Team format and quota setup are skipped. Add players and start scoring skins.
+                  </p>
+                </div>
+              )}
               <div className="flex gap-2">
+                {!isSkinsOnly ? (
+                  <button
+                    type="button"
+                    disabled={isPending || !selectedFormat}
+                    className="min-h-12 flex-1 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                    onClick={() => autoBuildTeams(selectedFormat?.teamCount)}
+                  >
+                    Regenerate Teams
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={isPending}
-                  className="min-h-12 flex-1 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
-                  onClick={() => autoBuildTeams(Number(teamCount))}
-                >
-                  Rebalance Teams
-                </button>
-                <button
-                  type="button"
-                  disabled={isPending}
-                  className="min-h-12 rounded-2xl bg-[#FCE5E2] px-4 text-sm font-semibold text-[#A53B2A] disabled:opacity-60"
+                  className={classNames(
+                    "min-h-12 rounded-2xl bg-[#FCE5E2] px-4 text-sm font-semibold text-[#A53B2A] disabled:opacity-60",
+                    isSkinsOnly ? "w-full" : ""
+                  )}
                   onClick={deleteRound}
                 >
                   Delete Round
                 </button>
               </div>
+              {!isSkinsOnly ? (
+                <>
               <p className="text-sm text-ink/65">
                 Equal team sizes are enforced first. Current quota balance is optimized after sizing is valid.
               </p>
@@ -1042,9 +1281,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   <p className="mt-1 text-xl font-semibold">{setupQuotaSpread}</p>
                 </div>
                 <div className="rounded-2xl bg-canvas px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Sizing</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Selected Format</p>
                   <p className="mt-1 text-sm font-semibold text-ink">
-                    {setupTeams.map((team) => `${team.players.length}/${team.capacity}`).join(" | ")}
+                    {selectedFormat?.label ?? "Choose a format"}
                   </p>
                 </div>
               </div>
@@ -1111,9 +1350,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   </div>
                 ))}
               </div>
+                </>
+              ) : null}
               {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
               <button type="button" disabled={isPending} className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white disabled:opacity-60" onClick={startGame}>
-                {isPending ? "Starting round..." : "Lock Round And Start Game"}
+                {isPending ? "Starting round..." : isSkinsOnly ? "Start Skins Game" : "Start Match Game"}
               </button>
             </SectionCard>
           ) : null}
@@ -1130,9 +1371,21 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             </div>
           </nav>
 
-          {activeTab === "round" ? <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} onOpenTeam={openTeam} /> : null}
-          {activeTab === "leaders" ? <LeadersTab rows={calculatedRows} leaders={liveLeaders} projections={liveProjections} teamStandings={teamStandings} sideGames={sideGames} onOpenRound={() => setActiveTab("round")} /> : null}
-          {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} /> : null}
+          {activeTab === "round" ? (
+            isSkinsOnly ? (
+              <SkinsOnlyRoundTab rows={calculatedRows} sideGames={sideGames} onOpenEntry={openSkinsEntry} />
+            ) : (
+              <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} onOpenTeam={openTeam} />
+            )
+          ) : null}
+          {activeTab === "leaders" ? (
+            isSkinsOnly ? (
+              <SkinsOnlyLeadersTab sideGames={sideGames} projections={liveProjections} onOpenRound={() => setActiveTab("round")} />
+            ) : (
+              <LeadersTab rows={calculatedRows} leaders={liveLeaders} projections={liveProjections} teamStandings={teamStandings} sideGames={sideGames} onOpenRound={() => setActiveTab("round")} />
+            )
+          ) : null}
+          {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} mode={gameMode} /> : null}
           {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} setRoundDate={setRoundDate} setNotes={setNotes} sideGames={sideGames} isPending={isPending} isStarted={Boolean(startedAt || lockedAt)} hasSavedScores={hasSavedScores} onSave={saveSettings} onCompleteRound={completeRound} onDeleteRound={deleteRound} onForceDeleteRound={forceDeleteRound} /> : null}
         </>
       )}
@@ -1571,15 +1824,317 @@ function RoundTabView({
   );
 }
 
+function SkinsOnlyRoundTab({
+  rows,
+  sideGames,
+  onOpenEntry
+}: {
+  rows: CalculatedRoundRow[];
+  sideGames: SideGameResults;
+  onOpenEntry: () => void;
+}) {
+  const awardedSkins = sideGames.skins.holes
+    .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
+    .map((hole) => {
+      const winner = rows.find((row) => row.playerId === hole.winnerPlayerId);
+      const score = winner?.holeScores[hole.holeNumber - 1] ?? null;
+      const resultLabel = getSkinResultLabel(score) ?? "Birdie";
+      return {
+        holeNumber: hole.holeNumber,
+        winnerName: hole.winnerName ?? winner?.playerName ?? "-",
+        resultLabel,
+        value: sideGames.skins.valuePerSkin * hole.sharesCaptured
+      };
+    });
+
+  return (
+    <div className="space-y-4">
+      <SectionCard className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Skins Only</p>
+            <h3 className="mt-1 text-xl font-semibold">Live skins game</h3>
+            <p className="mt-1 text-sm text-ink/65">Enter hole scores, watch outright skins, and track carryovers.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenEntry}
+            className="min-h-12 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white"
+          >
+            Enter Scores
+          </button>
+        </div>
+      </SectionCard>
+
+      <SectionCard className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Current Good Skins</p>
+        <div className="space-y-1">
+          {awardedSkins.length ? (
+            awardedSkins.map((skin) => (
+              <div key={`${skin.holeNumber}-${skin.winnerName}`} className="flex items-center justify-between gap-3 rounded-2xl bg-canvas px-3 py-2">
+                <p className="text-sm font-semibold text-ink">{`Hole ${skin.holeNumber} - ${skin.winnerName} (${skin.resultLabel})`}</p>
+                <span className="text-sm font-semibold text-pine">{formatCurrency(skin.value)}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-ink/60">No current good skins.</p>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-2xl bg-canvas px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Carryover</p>
+            <p className="mt-1 text-xl font-semibold">{`${sideGames.skins.currentCarryoverCount} hole${sideGames.skins.currentCarryoverCount === 1 ? "" : "s"}`}</p>
+          </div>
+          <div className="rounded-2xl bg-canvas px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Skins Pot</p>
+            <p className="mt-1 text-xl font-semibold">{formatCurrency(sideGames.skins.totalPot)}</p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Players</p>
+        <div className="space-y-2">
+          {rows.map((row) => (
+            <div key={row.playerId} className="flex items-center justify-between rounded-2xl bg-canvas px-4 py-3">
+              <div>
+                <p className="text-base font-semibold">{row.playerName}</p>
+                <p className="mt-1 text-xs text-ink/60">{`${row.totalPoints} points`}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-semibold">{row.totalPoints}</p>
+                <p className="mt-1 text-xs text-ink/60">{`${row.holeScores.filter((score) => score != null).length}/18 holes`}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+function SkinsOnlyScoreEntry({
+  activeHole,
+  rows,
+  message,
+  toast,
+  isPending,
+  canGoBack,
+  canSaveHole,
+  onUpdateHole,
+  onPreviousHole,
+  onSaveHole,
+  onViewLeaders,
+  onSelectHole,
+  onBackToRound
+}: {
+  activeHole: number;
+  rows: CalculatedRoundRow[];
+  message: string;
+  toast: string;
+  isPending: boolean;
+  canGoBack: boolean;
+  canSaveHole: boolean;
+  onUpdateHole: (playerId: string, holeIndex: number, value: number) => void;
+  onPreviousHole: () => void;
+  onSaveHole: () => void;
+  onViewLeaders: () => void;
+  onSelectHole: (hole: number) => void;
+  onBackToRound: () => void;
+}) {
+  const activeHoleIndex = activeHole - 1;
+
+  return (
+    <div className="space-y-4 pb-32">
+      <PageTitle
+        title="Skins Score Entry"
+        subtitle={`Hole ${activeHole} of 18`}
+        action={
+          <button type="button" onClick={onBackToRound} className="rounded-2xl bg-canvas px-4 py-3 text-sm font-semibold text-ink">
+            Back To Round
+          </button>
+        }
+      />
+
+      <SectionCard className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Live Entry</p>
+            <h3 className="mt-1 text-2xl font-semibold">Skins Only</h3>
+            <p className="mt-1 text-sm text-ink/60">Tap one score per player. Save moves the game to the next hole.</p>
+          </div>
+          <div className="rounded-[22px] bg-canvas px-4 py-3 text-right">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Hole</p>
+            <p className="mt-1 text-3xl font-semibold">{`${activeHole}/18`}</p>
+          </div>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {holeNumbers.map((holeNumber) => (
+            <button
+              key={holeNumber}
+              type="button"
+              onClick={() => onSelectHole(holeNumber)}
+              className={classNames(
+                "min-h-12 min-w-12 rounded-2xl px-3 text-sm font-semibold",
+                holeNumber === activeHole ? "bg-ink text-white" : "bg-canvas text-ink"
+              )}
+            >
+              {holeNumber}
+            </button>
+          ))}
+        </div>
+      </SectionCard>
+
+      <div className="space-y-3">
+        {rows.map((row) => (
+          <SectionCard key={row.playerId} className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-semibold leading-tight">{row.playerName}</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-canvas px-3 py-1.5 text-xs font-semibold text-ink/70">{`Total ${row.totalPoints}`}</span>
+                  <span className="rounded-full bg-canvas px-3 py-1.5 text-xs font-semibold text-ink/70">{`Front ${row.frontNine}`}</span>
+                  <span className="rounded-full bg-canvas px-3 py-1.5 text-xs font-semibold text-ink/70">{`Back ${row.backNine}`}</span>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-canvas px-4 py-3 text-center">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{`Hole ${activeHole}`}</p>
+                <p className="mt-1 text-2xl font-semibold">{row.holeScores[activeHoleIndex] ?? "-"}</p>
+              </div>
+            </div>
+            <ScoreButtonGroup value={row.holeScores[activeHoleIndex]} onSelect={(value) => onUpdateHole(row.playerId, activeHoleIndex, value)} />
+          </SectionCard>
+        ))}
+      </div>
+
+      <div className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-white/80 bg-white/96 p-3 shadow-card backdrop-blur">
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={onPreviousHole} disabled={isPending || !canGoBack} className="min-h-14 rounded-[22px] border border-ink/10 bg-canvas px-4 text-base font-semibold text-ink disabled:opacity-45">
+            Previous Hole
+          </button>
+          <button type="button" onClick={onSaveHole} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
+            {isPending ? "Saving..." : activeHole === 18 ? "Save Hole" : "Save + Next Hole"}
+          </button>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button type="button" onClick={onViewLeaders} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
+            View Leaders
+          </button>
+          <button type="button" onClick={onBackToRound} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
+            Back To Round
+          </button>
+        </div>
+        {toast ? <p className="mt-2 text-center text-sm font-semibold text-pine">{toast}</p> : null}
+        {message ? <p className="mt-1 text-center text-xs font-medium text-ink/60">{message}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function SkinsOnlyLeadersTab({
+  sideGames,
+  projections,
+  onOpenRound
+}: {
+  sideGames: SideGameResults;
+  projections: ReturnType<typeof calculateLiveProjections>;
+  onOpenRound: () => void;
+}) {
+  const topWinner = sideGames.skins.winners[0] ?? null;
+
+  return (
+    <div className="space-y-4">
+      <SectionCard className="space-y-3 bg-ink text-white">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">Skins Only</p>
+            <h3 className="mt-1 text-2xl font-semibold tracking-tight">Live skins board</h3>
+          </div>
+          <button type="button" onClick={onOpenRound} className="rounded-2xl bg-white/12 px-4 py-3 text-sm font-semibold text-white">
+            Back To Round
+          </button>
+        </div>
+        <div className="grid gap-2">
+          <div className="rounded-2xl bg-white/10 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Skins Leader</p>
+            <p className="mt-1 text-lg font-semibold">{topWinner ? topWinner.playerName : "No winner yet"}</p>
+            <p className="mt-1 text-sm text-white/80">
+              {topWinner ? `${topWinner.skinsWon} skin share${topWinner.skinsWon === 1 ? "" : "s"} | ${formatCurrency(topWinner.payout)}` : "No outright skins captured yet."}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white/10 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Carryover</p>
+            <p className="mt-1 text-lg font-semibold">{`${sideGames.skins.currentCarryoverCount} hole${sideGames.skins.currentCarryoverCount === 1 ? "" : "s"}`}</p>
+            <p className="mt-1 text-sm text-white/80">
+              {sideGames.skins.currentCarryoverHoles.length
+                ? `Open holes: ${sideGames.skins.currentCarryoverHoles.join(", ")}`
+                : "No active carryovers."}
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Skins Projection</p>
+        <div className="rounded-[22px] bg-[#FFF1BF] px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Favorite</p>
+              <p className="mt-1 text-lg font-semibold">{projections.skins.heading}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-semibold">
+                {projections.skins.probability == null ? "Live" : `${projections.skins.probability}%`}
+              </p>
+              <p className="mt-1 text-xs text-ink/60">{projections.skins.probability == null ? "Projection" : "Estimate"}</p>
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-ink/70">{projections.skins.detail}</p>
+        </div>
+      </SectionCard>
+
+      <SectionCard className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Skins Breakdown</p>
+        <div className="space-y-2">
+          {sideGames.skins.holes.length ? (
+            sideGames.skins.holes.map((hole) => (
+              <div key={hole.holeNumber} className="rounded-[22px] bg-canvas px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-base font-semibold">{`Hole ${hole.holeNumber}`}</p>
+                  <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", hole.skinAwarded ? "bg-[#E2F4E6] text-pine" : "bg-white text-ink/70")}>
+                    {hole.skinAwarded ? "Skin Won" : "Carryover"}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-ink/65">
+                  {hole.skinAwarded
+                    ? `${hole.winnerName} won ${hole.sharesCaptured} skin share${hole.sharesCaptured === 1 ? "" : "s"}`
+                    : hole.eligibleNames.length
+                      ? `Tie at best qualifying score: ${hole.eligibleNames.join(", ")}`
+                      : "No birdie or better"}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[22px] bg-canvas px-4 py-3 text-sm text-ink/60">No completed skin holes yet.</div>
+          )}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
 function PlayersTab({
   rows,
   leaders,
-  sideGames
+  sideGames,
+  mode
 }: {
   rows: CalculatedRoundRow[];
   leaders: ReturnType<typeof calculateLiveLeaders>;
   sideGames: SideGameResults;
+  mode: RoundMode;
 }) {
+  const isSkinsOnly = mode === "SKINS_ONLY";
   return (
     <div className="space-y-3">
       {rows.map((row) => {
@@ -1592,20 +2147,31 @@ function PlayersTab({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-semibold">{row.playerName}</h3>
-                <p className="mt-1 text-sm text-ink/60">{`Team ${row.team ?? "-"} | Rank ${row.rank}`}</p>
+                <p className="mt-1 text-sm text-ink/60">
+                  {isSkinsOnly ? `Total ${row.totalPoints} points` : `Team ${row.team ?? "-"} | Rank ${row.rank}`}
+                </p>
               </div>
-              <div className="rounded-2xl bg-white/80 px-4 py-3 text-center">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">+/-</p>
-                <p className={classNames("mt-1 text-2xl font-semibold", row.plusMinus < 0 ? "text-danger" : "text-ink")}>{formatPlusMinus(row.plusMinus)}</p>
-              </div>
+              {isSkinsOnly ? null : (
+                <div className="rounded-2xl bg-white/80 px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">+/-</p>
+                  <p className={classNames("mt-1 text-2xl font-semibold", row.plusMinus < 0 ? "text-danger" : "text-ink")}>{formatPlusMinus(row.plusMinus)}</p>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-4 gap-2">
-              {[
-                { label: "Quota", value: row.startQuota },
-                { label: "Points", value: row.totalPoints },
-                { label: "Birdies+", value: birdiesOrBetter },
-                { label: "Skins", value: skinsWinner?.skinsWon ?? 0 }
-              ].map((item) => (
+              {(isSkinsOnly
+                ? [
+                    { label: "Points", value: row.totalPoints },
+                    { label: "Front", value: row.frontNine },
+                    { label: "Back", value: row.backNine },
+                    { label: "Skins", value: skinsWinner?.skinsWon ?? 0 }
+                  ]
+                : [
+                    { label: "Quota", value: row.startQuota },
+                    { label: "Points", value: row.totalPoints },
+                    { label: "Birdies+", value: birdiesOrBetter },
+                    { label: "Skins", value: skinsWinner?.skinsWon ?? 0 }
+                  ]).map((item) => (
                 <div key={item.label} className="rounded-2xl bg-white/80 px-3 py-3">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{item.label}</p>
                   <p className="mt-1 text-lg font-semibold">{item.value}</p>
@@ -1613,8 +2179,8 @@ function PlayersTab({
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              {leaders.leaderGroup.some((entry) => entry.playerId === row.playerId) ? <span className="rounded-full bg-pine px-3 py-1.5 text-xs font-semibold text-white">Leader</span> : null}
-              {leaders.payoutGroup.some((entry) => entry.playerId === row.playerId) ? <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white">Payout Position</span> : null}
+              {!isSkinsOnly && leaders.leaderGroup.some((entry) => entry.playerId === row.playerId) ? <span className="rounded-full bg-pine px-3 py-1.5 text-xs font-semibold text-white">Leader</span> : null}
+              {!isSkinsOnly && leaders.payoutGroup.some((entry) => entry.playerId === row.playerId) ? <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white">Payout Position</span> : null}
               {skinsWinner ? <span className="rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">{`${skinsWinner.skinsWon} skin${skinsWinner.skinsWon === 1 ? "" : "s"}`}</span> : null}
             </div>
           </SectionCard>

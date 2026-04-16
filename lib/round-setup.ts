@@ -1,4 +1,4 @@
-import type { TeamCode } from "@/lib/quota";
+import { teamOptions, type TeamCode } from "@/lib/quota";
 
 type SetupPlayer = {
   playerId: string;
@@ -21,6 +21,13 @@ type GroupAssignment = {
 type TeamState = {
   totalQuota: number;
   playerIds: string[];
+};
+
+export type TeamFormat = {
+  teamCount: number;
+  capacities: number[];
+  label: string;
+  isEqual: boolean;
 };
 
 function buildSnakeSequence(teamCodes: TeamCode[], capacities: Map<TeamCode, number>) {
@@ -88,6 +95,77 @@ function buildTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
 
 export function getTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
   return buildTeamCapacities(teamCodes, playerCount);
+}
+
+function isSensibleFormat(capacities: number[]) {
+  const maxCapacity = Math.max(...capacities);
+  const minCapacity = Math.min(...capacities);
+  const isEqual = maxCapacity === minCapacity;
+
+  if (minCapacity < 2 || maxCapacity > 4) {
+    return false;
+  }
+
+  if (maxCapacity - minCapacity > 1) {
+    return false;
+  }
+
+  if (!isEqual && minCapacity < 3) {
+    return false;
+  }
+
+  return true;
+}
+
+function formatTeamFormatLabel(capacities: number[]) {
+  const isEqual = capacities.every((capacity) => capacity === capacities[0]);
+  if (isEqual) {
+    return `${capacities.length} team${capacities.length === 1 ? "" : "s"} of ${capacities[0]}`;
+  }
+
+  return `${capacities.length} teams (${capacities.join("/")})`;
+}
+
+export function getTeamFormats(playerCount: number) {
+  if (playerCount < 4) {
+    return [] as TeamFormat[];
+  }
+
+  const formats: TeamFormat[] = [];
+  const maxTeamCount = Math.min(teamOptions.length, playerCount);
+
+  for (let teamCount = 2; teamCount <= maxTeamCount; teamCount += 1) {
+    const capacities = Array.from(
+      buildTeamCapacities(teamOptions.slice(0, teamCount), playerCount).values()
+    );
+
+    if (!isSensibleFormat(capacities)) {
+      continue;
+    }
+
+    formats.push({
+      teamCount,
+      capacities,
+      label: formatTeamFormatLabel(capacities),
+      isEqual: capacities.every((capacity) => capacity === capacities[0])
+    });
+  }
+
+  return formats.sort((left, right) => {
+    const leftAverage = left.capacities.reduce((sum, value) => sum + value, 0) / left.capacities.length;
+    const rightAverage =
+      right.capacities.reduce((sum, value) => sum + value, 0) / right.capacities.length;
+
+    if (rightAverage !== leftAverage) {
+      return rightAverage - leftAverage;
+    }
+
+    if (right.isEqual !== left.isEqual) {
+      return right.isEqual ? 1 : -1;
+    }
+
+    return left.teamCount - right.teamCount;
+  });
 }
 
 function getTeamSizeMap(assignments: TeamAssignment[], teamCodes: TeamCode[]) {

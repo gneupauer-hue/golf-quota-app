@@ -7,6 +7,7 @@ import {
   hasSequentialHoleEntry,
   holeFieldNames,
   isRoundRowComplete,
+  type RoundMode,
   type TeamCode
 } from "@/lib/quota";
 
@@ -258,7 +259,9 @@ export async function recomputeHistoricalState(tx: Tx) {
         }
       });
 
-      quotaMap.set(row.playerId, row.nextQuota);
+      if (round.roundMode !== "SKINS_ONLY") {
+        quotaMap.set(row.playerId, row.nextQuota);
+      }
     }
 
     await persistRoundSummaries(tx, round.id, recalculated);
@@ -340,7 +343,9 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     );
 
     for (const row of recalculated) {
-      quotaMap.set(row.playerId, row.nextQuota);
+      if (round.roundMode !== "SKINS_ONLY") {
+        quotaMap.set(row.playerId, row.nextQuota);
+      }
     }
   }
 
@@ -353,6 +358,7 @@ export async function createOrReplaceRoundEntries(
     roundId: string;
     roundName: string;
     roundDate: Date;
+    roundMode: RoundMode;
     notes?: string | null;
     teamCount?: number | null;
     lockedAt?: Date | null;
@@ -374,8 +380,9 @@ export async function createOrReplaceRoundEntries(
     data: {
       roundName: input.roundName,
       roundDate: input.roundDate,
+      roundMode: input.roundMode,
       notes: input.notes?.trim() ? input.notes.trim() : null,
-      teamCount: input.teamCount ?? null,
+      teamCount: input.roundMode === "SKINS_ONLY" ? null : input.teamCount ?? null,
       lockedAt: input.lockedAt ?? null,
       startedAt: input.startedAt ?? null,
       completedAt: input.forceComplete || allEntriesComplete ? new Date() : null

@@ -3,8 +3,10 @@ export type ScoringRule = {
   value: number;
 };
 
+export type RoundMode = "MATCH_QUOTA" | "SKINS_ONLY";
+
 export const holeScoreValues = [-1, 0, 1, 2, 4, 6] as const;
-export const teamOptions = ["A", "B", "C", "D", "E"] as const;
+export const teamOptions = ["A", "B", "C", "D", "E", "F"] as const;
 export const holeFieldNames = [
   "hole1",
   "hole2",
