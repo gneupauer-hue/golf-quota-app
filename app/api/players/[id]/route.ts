@@ -35,6 +35,7 @@ export async function PUT(
     const body = await request.json();
     const name = String(body.name ?? "").trim();
     const startingQuota = Number(body.startingQuota);
+    const currentQuota = Number(body.currentQuota);
     const isRegular = Boolean(body.isRegular);
     const isActive = Boolean(body.isActive);
     const conflictIds = Array.isArray(body.conflictIds)
@@ -47,6 +48,10 @@ export async function PUT(
 
     if (Number.isNaN(startingQuota)) {
       return NextResponse.json({ error: "Starting quota is required." }, { status: 400 });
+    }
+
+    if (Number.isNaN(currentQuota)) {
+      return NextResponse.json({ error: "Current quota is required." }, { status: 400 });
     }
 
     await prisma.$transaction(async (tx) => {
@@ -62,6 +67,12 @@ export async function PUT(
 
       await syncConflicts(tx, id, conflictIds);
       await recomputeHistoricalState(tx);
+      await tx.player.update({
+        where: { id },
+        data: {
+          currentQuota
+        }
+      });
     });
 
     const players = await getPlayersPageData();
