@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { ForceClearActiveRound } from "@/components/force-clear-active-round";
 import { PageTitle } from "@/components/page-title";
 import { QuickRoundLauncher } from "@/components/quick-round-launcher";
 import { SectionCard } from "@/components/section-card";
+import { getHomePageData } from "@/lib/data";
 
 const actions = [
   {
@@ -31,6 +33,8 @@ const actions = [
 ];
 
 export default async function HomePage() {
+  const home = await getHomePageData();
+
   return (
     <div className="space-y-3">
       <PageTitle
@@ -39,6 +43,13 @@ export default async function HomePage() {
       />
 
       <QuickRoundLauncher />
+
+      {home.currentRound ? (
+        <ForceClearActiveRound
+          roundId={home.currentRound.id}
+          roundName={home.currentRound.roundName}
+        />
+      ) : null}
 
       <div className="flex flex-col gap-3">
         {actions.map((action) => (
