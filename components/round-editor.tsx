@@ -417,44 +417,54 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   function startGame() {
-    const count = Number(teamCount);
+    let count = 0;
+    let nextRows: RowState[] = [];
+    let now = "";
 
-    if (rows.length === 0) {
-      setMessage("Add players before starting the game.");
+    try {
+      count = Number(teamCount);
+
+      if (rows.length === 0) {
+        setMessage("Add players before starting the game.");
+        return;
+      }
+      if (Number.isNaN(count) || count < 2 || count > 5) {
+        setMessage("Choose between 2 and 5 teams.");
+        return;
+      }
+
+      const setupPlayers = rows
+        .map((row) => {
+          const player = playersById.get(row.playerId);
+          if (!player) return null;
+          return {
+            playerId: player.id,
+            playerName: player.name,
+            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
+            conflictIds: player.conflictIds
+          };
+        })
+        .filter(Boolean) as Array<{
+        playerId: string;
+        playerName: string;
+        quota: number;
+        conflictIds: string[];
+      }>;
+
+      const teamAssignments = buildBalancedTeams(setupPlayers, count);
+
+      nextRows = rows.map((row) => ({
+        ...row,
+        team:
+          teamAssignments.find((assignment) => assignment.playerId === row.playerId)?.team ?? null,
+        groupNumber: null,
+        teeTime: null
+      }));
+      now = new Date().toISOString();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not build teams for this round.");
       return;
     }
-    if (Number.isNaN(count) || count < 2 || count > 5) {
-      setMessage("Choose between 2 and 5 teams.");
-      return;
-    }
-
-    const setupPlayers = rows
-      .map((row) => {
-        const player = playersById.get(row.playerId);
-        if (!player) return null;
-        return {
-          playerId: player.id,
-          playerName: player.name,
-          quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
-          conflictIds: player.conflictIds
-        };
-      })
-      .filter(Boolean) as Array<{
-      playerId: string;
-      playerName: string;
-      quota: number;
-      conflictIds: string[];
-    }>;
-
-    const teamAssignments = buildBalancedTeams(setupPlayers, count);
-
-    const nextRows = rows.map((row) => ({
-      ...row,
-      team: teamAssignments.find((assignment) => assignment.playerId === row.playerId)?.team ?? null,
-      groupNumber: null,
-      teeTime: null
-    }));
-    const now = new Date().toISOString();
 
     startTransition(async () => {
       try {

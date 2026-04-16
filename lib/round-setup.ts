@@ -68,6 +68,15 @@ function createTeamState(teamCodes: TeamCode[]) {
   );
 }
 
+function buildTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
+  const base = Math.floor(playerCount / teamCodes.length);
+  const remainder = playerCount % teamCodes.length;
+
+  return new Map<TeamCode, number>(
+    teamCodes.map((team, index) => [team, base + (index < remainder ? 1 : 0)])
+  );
+}
+
 function hydrateTeamState(
   assignments: TeamAssignment[],
   players: SetupPlayer[],
@@ -122,10 +131,28 @@ function optimizeAssignments(
   teamCodes: TeamCode[],
   conflictMap: Map<string, Set<string>>
 ) {
+  const seenStates = new Set<string>();
+  const maxIterations = Math.max(24, assignments.length * teamCodes.length * 4);
   let changed = true;
+  let iterations = 0;
 
   while (changed) {
+    iterations += 1;
+    if (iterations > maxIterations) {
+      break;
+    }
+
     changed = false;
+    const stateKey = assignments
+      .map((assignment) => `${assignment.playerId}:${assignment.team}`)
+      .sort()
+      .join("|");
+
+    if (seenStates.has(stateKey)) {
+      break;
+    }
+
+    seenStates.add(stateKey);
     const currentState = hydrateTeamState(assignments, players, teamCodes);
     const currentConflicts = teamConflictCount(currentState, conflictMap);
     const currentSpread = teamBalanceSpread(currentState);
@@ -169,6 +196,7 @@ export function buildBalancedTeams(
   teamCount: number
 ): TeamAssignment[] {
   const teamCodes = ["A", "B", "C", "D", "E"].slice(0, teamCount) as TeamCode[];
+  const teamCapacities = buildTeamCapacities(teamCodes, players.length);
   const sortedPlayers = [...players].sort(
     (a, b) => b.quota - a.quota || a.playerName.localeCompare(b.playerName)
   );
@@ -179,16 +207,23 @@ export function buildBalancedTeams(
 
   sortedPlayers.forEach((player, index) => {
     const preferredTeam = snakeSequence[index];
-    const candidateTeams = [preferredTeam, ...teamCodes.filter((team) => team !== preferredTeam)].sort(
-      (left, right) => {
+    const teamsWithCapacity = teamCodes.filter(
+      (team) => teamState.get(team)!.playerIds.length < (teamCapacities.get(team) ?? 0)
+    );
+    const fallbackTeams = teamsWithCapacity
+      .filter((team) => team !== preferredTeam)
+      .sort((left, right) => {
         const leftState = teamState.get(left)!;
         const rightState = teamState.get(right)!;
         if (leftState.playerIds.length !== rightState.playerIds.length) {
           return leftState.playerIds.length - rightState.playerIds.length;
         }
         return leftState.totalQuota - rightState.totalQuota;
-      }
-    );
+      });
+    const candidateTeams = [
+      ...(teamsWithCapacity.includes(preferredTeam) ? [preferredTeam] : []),
+      ...fallbackTeams
+    ];
 
     let chosenTeam = candidateTeams.find((team) => {
       const state = teamState.get(team)!;
