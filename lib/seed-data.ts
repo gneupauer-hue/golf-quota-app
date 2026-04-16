@@ -60,6 +60,17 @@ export const otherPlayers = [
   ["Travis Debona", 27]
 ] as const;
 
+type StarterPlayerSeed = {
+  name: string;
+  quota: number;
+  isRegular: boolean;
+};
+
+const starterPlayers: StarterPlayerSeed[] = [
+  ...regularPlayers.map(([name, quota]) => ({ name, quota, isRegular: true })),
+  ...otherPlayers.map(([name, quota]) => ({ name, quota, isRegular: false }))
+];
+
 function buildHolesForTotal(total: number) {
   const holes = Array.from({ length: 18 }, () => 0);
   let remaining = total;
@@ -89,35 +100,7 @@ export async function resetDemoData(prisma: PrismaClient) {
   await prisma.round.deleteMany();
   await prisma.player.deleteMany();
 
-  const createdPlayers = new Map<string, string>();
-
-  for (const [name, quota] of regularPlayers) {
-    const player = await prisma.player.create({
-      data: {
-        name,
-        startingQuota: quota,
-        currentQuota: quota,
-        isRegular: true,
-        isActive: true
-      }
-    });
-
-    createdPlayers.set(name, player.id);
-  }
-
-  for (const [name, quota] of otherPlayers) {
-    const player = await prisma.player.create({
-      data: {
-        name,
-        startingQuota: quota,
-        currentQuota: quota,
-        isRegular: false,
-        isActive: true
-      }
-    });
-
-    createdPlayers.set(name, player.id);
-  }
+  const createdPlayers = await ensureStarterPlayers(prisma);
 
   const round410 = await prisma.round.create({
     data: {
@@ -180,4 +163,32 @@ export async function resetDemoData(prisma: PrismaClient) {
       holes: buildHolesForTotal(totalPoints)
     }))
   });
+}
+
+export async function ensureStarterPlayers(prisma: PrismaClient) {
+  const createdPlayers = new Map<string, string>();
+
+  for (const playerSeed of starterPlayers) {
+    const player = await prisma.player.upsert({
+      where: {
+        name: playerSeed.name
+      },
+      update: {
+        startingQuota: playerSeed.quota,
+        isRegular: playerSeed.isRegular,
+        isActive: true
+      },
+      create: {
+        name: playerSeed.name,
+        startingQuota: playerSeed.quota,
+        currentQuota: playerSeed.quota,
+        isRegular: playerSeed.isRegular,
+        isActive: true
+      }
+    });
+
+    createdPlayers.set(playerSeed.name, player.id);
+  }
+
+  return createdPlayers;
 }

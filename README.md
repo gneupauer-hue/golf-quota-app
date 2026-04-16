@@ -15,4 +15,4 @@ Mobile-first golf quota scoring app built with Next.js, TypeScript, Tailwind CSS
 
 - Historical rounds are preserved.
 - Saving or editing a round recalculates every player's quota history so current quotas stay correct.
-- Seed data includes the requested player list plus two sample rounds for testing.
+- `npx prisma db seed` safely restores the standard starter player list without duplicating players.

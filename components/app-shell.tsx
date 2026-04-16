@@ -12,34 +12,16 @@ const links = [
   { href: "/players", label: "Players" }
 ];
 
-export function AppShell({
-  children,
-  appMode
-}: {
-  children: React.ReactNode;
-  appMode: "demo" | "live";
-}) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
     <div className="min-h-screen bg-hero text-ink">
       <div className="mx-auto w-full max-w-md px-4 pb-24 pt-3">
         <header className="mb-3 rounded-[24px] border border-white/60 bg-white/80 px-4 py-3 shadow-card backdrop-blur">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine/70">
-              Golf Quota
-            </p>
-            <span
-              className={classNames(
-                "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
-                appMode === "demo"
-                  ? "bg-[#FFF1BF] text-ink"
-                  : "bg-[#E2F4E6] text-pine"
-              )}
-            >
-              {appMode === "demo" ? "Demo Mode" : "Live Mode"}
-            </span>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine/70">
+            Golf Quota
+          </p>
           <p className="mt-1 text-sm font-semibold text-ink/72">Fast phone-first scoring built for the course.</p>
         </header>
 

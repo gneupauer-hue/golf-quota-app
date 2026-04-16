@@ -1,10 +1,10 @@
 import { PrismaClient } from "@prisma/client";
-import { resetDemoData } from "../lib/seed-data";
+import { ensureStarterPlayers } from "../lib/seed-data";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  await resetDemoData(prisma);
+  await ensureStarterPlayers(prisma);
 }
 
 main()
