@@ -285,7 +285,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       }
 
       return formats
-        .map((format) => evaluateTeamFormat(setupPlayersForBalancing, format))
+        .flatMap((format) => {
+          try {
+            return [evaluateTeamFormat(setupPlayersForBalancing, format)];
+          } catch (error) {
+            console.warn("[team-builder] format-evaluation-failed", {
+              format: format.label,
+              capacities: format.capacities,
+              error: error instanceof Error ? error.message : "Unknown format evaluation error"
+            });
+            return [];
+          }
+        })
         .sort((left, right) => {
           if (left.estimatedSpread !== right.estimatedSpread) {
             return left.estimatedSpread - right.estimatedSpread;
@@ -315,14 +326,17 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       null,
     [selectedFormatKey, setupFormatOptions]
   );
+  const activeSetupFormat = selectedFormat ?? setupFormatOptions[0] ?? null;
   const setupTeamCodes = useMemo(
-    () => (isSkinsOnly ? [] : teamOptions.slice(0, selectedFormat?.teamCount ?? 0)),
-    [isSkinsOnly, selectedFormat]
+    () => (isSkinsOnly ? [] : teamOptions.slice(0, activeSetupFormat?.teamCount ?? 0)),
+    [activeSetupFormat, isSkinsOnly]
   );
   const setupTeamCapacities = useMemo(
-    () => capacitiesToMap(setupTeamCodes, selectedFormat?.capacities ?? []),
-    [selectedFormat, setupTeamCodes]
+    () => capacitiesToMap(setupTeamCodes, activeSetupFormat?.capacities ?? []),
+    [activeSetupFormat, setupTeamCodes]
   );
+  const hasRawFormatOptions = !isSkinsOnly && getTeamFormats(rows.length).length > 0;
+  const setupFormatFailure = hasRawFormatOptions && setupFormatOptions.length === 0;
 
   const calculatedRows = useMemo(() => {
     return calculateRoundRows(
@@ -453,7 +467,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     return totals.length ? Math.max(...totals) - Math.min(...totals) : 0;
   }, [setupTeams]);
   const canStartConfiguredRound =
-    rows.length > 0 && (isSkinsOnly || Boolean(selectedFormat)) && setupValidation.valid;
+    rows.length > 0 && (isSkinsOnly || Boolean(activeSetupFormat)) && setupValidation.valid;
 
   useEffect(() => {
     if (!toast) return;
@@ -531,7 +545,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
-    if (!selectedFormat) {
+    if (!activeSetupFormat) {
       return;
     }
 
@@ -582,7 +596,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     playersById,
     quotaSnapshot,
     rows,
-    selectedFormat,
+    activeSetupFormat,
     setupValidation.valid,
     showSetup
   ]);
@@ -591,7 +605,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     nextRows = rows,
     nextLockedAt = lockedAt,
     nextStartedAt = startedAt,
-    nextTeamCount = selectedFormat ? String(selectedFormat.teamCount) : "",
+    nextTeamCount = activeSetupFormat ? String(activeSetupFormat.teamCount) : "",
     nextRoundName = derivedRoundName,
     nextRoundDate = roundDate,
     nextNotes = notes,
@@ -663,7 +677,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     );
   }
 
-  function autoBuildTeams(nextFormat = selectedFormat) {
+  function autoBuildTeams(nextFormat = activeSetupFormat) {
     try {
       if (!rows.length) {
         setMessage("Add players before building teams.");
@@ -943,10 +957,10 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         );
       }
 
-      if (!isSkinsOnly && selectedFormat) {
+      if (!isSkinsOnly && activeSetupFormat) {
         console.info("[team-builder] start-validation", {
-          label: selectedFormat.label,
-          capacities: selectedFormat.capacities,
+          label: activeSetupFormat.label,
+          capacities: activeSetupFormat.capacities,
           sizes: setupTeams.map((team) => ({
             team: team.team,
             size: team.players.length,
@@ -1316,7 +1330,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 </p>
                 {!setupFormatOptions.length ? (
                   <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/65">
-                    Add at least 4 players to unlock a valid team format.
+                    {setupFormatFailure
+                      ? "We could not evaluate a safe team format for this player mix yet. Try removing a conflicting player or regenerate after another selection."
+                      : "Add at least 4 players to unlock a valid team format."}
                   </div>
                 ) : setupFormatOptions.length === 1 ? (
                   <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
@@ -1414,7 +1430,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     type="button"
                     disabled={isPending || !selectedFormat}
                     className="min-h-12 flex-1 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
-                    onClick={() => autoBuildTeams(selectedFormat)}
+                    onClick={() => autoBuildTeams(activeSetupFormat)}
                   >
                     Regenerate Teams
                   </button>
