@@ -281,25 +281,36 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
       const formats = getTeamFormats(rows.length);
       if (!setupPlayersForBalancing.length) {
-        return formats.map((format) => ({ ...format, estimatedSpread: 0 }));
+        return formats.map((format) => ({ ...format, estimatedSpread: null }));
       }
 
       return formats
-        .flatMap((format) => {
+        .map((format) => {
           try {
-            return [evaluateTeamFormat(setupPlayersForBalancing, format)];
+            return evaluateTeamFormat(setupPlayersForBalancing, format);
           } catch (error) {
             console.warn("[team-builder] format-evaluation-failed", {
               format: format.label,
               capacities: format.capacities,
               error: error instanceof Error ? error.message : "Unknown format evaluation error"
             });
-            return [];
+            return {
+              ...format,
+              estimatedSpread: null
+            } satisfies EvaluatedTeamFormat;
           }
         })
         .sort((left, right) => {
+          if (left.estimatedSpread == null && right.estimatedSpread != null) {
+            return 1;
+          }
+
+          if (left.estimatedSpread != null && right.estimatedSpread == null) {
+            return -1;
+          }
+
           if (left.estimatedSpread !== right.estimatedSpread) {
-            return left.estimatedSpread - right.estimatedSpread;
+            return (left.estimatedSpread ?? Number.POSITIVE_INFINITY) - (right.estimatedSpread ?? Number.POSITIVE_INFINITY);
           }
 
           if (left.isEqual !== right.isEqual) {
@@ -335,8 +346,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     () => capacitiesToMap(setupTeamCodes, activeSetupFormat?.capacities ?? []),
     [activeSetupFormat, setupTeamCodes]
   );
-  const hasRawFormatOptions = !isSkinsOnly && getTeamFormats(rows.length).length > 0;
-  const setupFormatFailure = hasRawFormatOptions && setupFormatOptions.length === 0;
   const setupFormatTeamLabels = useMemo(
     () =>
       setupTeamCodes.map((team, index) => `Team ${team} ${activeSetupFormat?.capacities[index] ?? 0}`),
@@ -1335,9 +1344,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 </p>
                 {!setupFormatOptions.length ? (
                   <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/65">
-                    {setupFormatFailure
-                      ? "We could not evaluate a safe team format for this player mix yet. Try removing a conflicting player or regenerate after another selection."
-                      : "Match mode currently supports fixed team formats for 6 through 16 players."}
+                    Match mode currently supports fixed team formats for 6 through 16 players.
                   </div>
                 ) : setupFormatOptions.length === 1 ? (
                   <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
@@ -1349,7 +1356,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     </div>
                     <p className="mt-2 text-xs text-ink/70">{setupFormatTeamLabels.join(" • ")}</p>
                     <p className="mt-2 text-sm font-medium text-ink">{setupFormatOptions[0].label}</p>
-                    <p className="mt-2 text-sm font-medium text-ink">{`Estimated fairness gap ${setupFormatOptions[0].estimatedSpread}`}</p>
+                    <p className="mt-2 text-sm font-medium text-ink">
+                      {setupFormatOptions[0].estimatedSpread == null
+                        ? "Fairness unavailable"
+                        : `Estimated fairness gap ${setupFormatOptions[0].estimatedSpread}`}
+                    </p>
                     <p className="mt-1 text-xs text-ink/65">This player count uses one fixed team structure, so it is selected automatically.</p>
                   </div>
                 ) : (

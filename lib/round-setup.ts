@@ -31,7 +31,7 @@ export type TeamFormat = {
 };
 
 export type EvaluatedTeamFormat = TeamFormat & {
-  estimatedSpread: number;
+  estimatedSpread: number | null;
 };
 
 export function getTeamFormatKey(format: Pick<TeamFormat, "teamCount" | "capacities">) {
