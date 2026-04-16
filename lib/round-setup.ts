@@ -202,6 +202,19 @@ export function validateTeamAssignments(
   } as const;
 }
 
+export function formatCapacitySummary(teamCodes: TeamCode[], capacities: Map<TeamCode, number>) {
+  const uniqueCapacities = Array.from(new Set(teamCodes.map((team) => capacities.get(team) ?? 0)));
+
+  if (uniqueCapacities.length === 1) {
+    const onlyCapacity = uniqueCapacities[0] ?? 0;
+    return `Teams must have ${onlyCapacity} player${onlyCapacity === 1 ? "" : "s"} each.`;
+  }
+
+  return `Teams must match the selected format: ${teamCodes
+    .map((team) => `${team}:${capacities.get(team) ?? 0}`)
+    .join(" | ")}.`;
+}
+
 function hydrateTeamState(
   assignments: TeamAssignment[],
   players: SetupPlayer[],
@@ -254,7 +267,8 @@ function optimizeAssignments(
   assignments: TeamAssignment[],
   players: SetupPlayer[],
   teamCodes: TeamCode[],
-  conflictMap: Map<string, Set<string>>
+  conflictMap: Map<string, Set<string>>,
+  capacities: Map<TeamCode, number>
 ) {
   const seenStates = new Set<string>();
   const maxIterations = Math.max(24, assignments.length * teamCodes.length * 4);
@@ -295,6 +309,11 @@ function optimizeAssignments(
         trialAssignments[leftIndex].team = right.team;
         trialAssignments[rightIndex].team = left.team;
 
+        const trialValidation = validateTeamAssignments(trialAssignments, teamCodes, capacities);
+        if (!trialValidation.valid) {
+          continue;
+        }
+
         const trialState = hydrateTeamState(trialAssignments, players, teamCodes);
         const nextConflicts = teamConflictCount(trialState, conflictMap);
         const nextSpread = teamBalanceSpread(trialState);
@@ -318,10 +337,9 @@ function optimizeAssignments(
 
 export function buildBalancedTeams(
   players: SetupPlayer[],
-  teamCount: number
+  teamCodes: TeamCode[],
+  teamCapacities: Map<TeamCode, number>
 ): TeamAssignment[] {
-  const teamCodes = ["A", "B", "C", "D", "E"].slice(0, teamCount) as TeamCode[];
-  const teamCapacities = buildTeamCapacities(teamCodes, players.length);
   const sortedPlayers = [...players].sort(
     (a, b) => b.quota - a.quota || a.playerName.localeCompare(b.playerName)
   );
@@ -377,7 +395,13 @@ export function buildBalancedTeams(
     throw new Error("Could not build evenly sized teams for this round.");
   }
 
-  const optimizedAssignments = optimizeAssignments(assignments, sortedPlayers, teamCodes, conflictMap);
+  const optimizedAssignments = optimizeAssignments(
+    assignments,
+    sortedPlayers,
+    teamCodes,
+    conflictMap,
+    teamCapacities
+  );
   const validation = validateTeamAssignments(optimizedAssignments, teamCodes, teamCapacities);
 
   if (!validation.valid) {

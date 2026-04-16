@@ -10,6 +10,7 @@ import { SectionCard } from "@/components/section-card";
 import { TeamSummaryMini } from "@/components/team-summary-mini";
 import {
   buildBalancedTeams,
+  formatCapacitySummary,
   getTeamCapacities,
   getTeamFormats,
   validateTeamAssignments
@@ -357,7 +358,10 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     );
 
     if (!validation.valid) {
-      return { valid: false, reason: "Team sizes are invalid for this field size." };
+      return {
+        valid: false,
+        reason: formatCapacitySummary(setupTeamCodes, setupTeamCapacities)
+      };
     }
 
     return { valid: true, reason: "" };
@@ -393,6 +397,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     const totals = setupTeams.map((team) => team.totalQuota);
     return totals.length ? Math.max(...totals) - Math.min(...totals) : 0;
   }, [setupTeams]);
+  const canStartConfiguredRound =
+    rows.length > 0 && (isSkinsOnly || Boolean(selectedFormat)) && setupValidation.valid;
 
   useEffect(() => {
     if (!toast) return;
@@ -477,7 +483,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         conflictIds: string[];
       }>;
 
-      const teamAssignments = buildBalancedTeams(setupPlayers, selectedFormat.teamCount);
+      const teamAssignments = buildBalancedTeams(
+        setupPlayers,
+        setupTeamCodes,
+        setupTeamCapacities
+      );
       setRows((current) =>
         current.map((row) => ({
           ...row,
@@ -607,7 +617,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         conflictIds: string[];
       }>;
 
-      const teamAssignments = buildBalancedTeams(setupPlayers, nextTeamCount);
+      const nextTeamCodes = teamOptions.slice(0, nextTeamCount);
+      const nextCapacities = getTeamCapacities(nextTeamCodes, rows.length);
+      const teamAssignments = buildBalancedTeams(setupPlayers, nextTeamCodes, nextCapacities);
       setRows((current) =>
         current.map((row) => ({
           ...row,
@@ -640,7 +652,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     if (destinationSize >= destinationCapacity || sourceSize <= sourceCapacity) {
       setMessage(
-        `Team ${destinationTeam} is already full. Tap a player there to swap instead.`
+        destinationSize >= destinationCapacity
+          ? `Team ${destinationTeam} is full. Tap a player there to swap instead.`
+          : formatCapacitySummary(setupTeamCodes, setupTeamCapacities)
       );
       return;
     }
@@ -833,7 +847,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         return;
       }
       if (!setupValidation.valid) {
-        throw new Error(setupValidation.reason || "Team setup is invalid.");
+        throw new Error(
+          setupValidation.reason || formatCapacitySummary(setupTeamCodes, setupTeamCapacities)
+        );
       }
 
       nextRows = rows.map((row) => ({
@@ -1295,9 +1311,21 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         <p className="text-lg font-semibold">{`Team ${team.team}`}</p>
                         <p className="mt-1 text-sm text-ink/60">{`${team.players.length} of ${team.capacity} players`}</p>
                       </div>
-                      <div className="rounded-2xl bg-white px-4 py-3 text-center">
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Quota</p>
-                        <p className="mt-1 text-xl font-semibold">{team.totalQuota}</p>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={classNames(
+                            "rounded-full px-3 py-1.5 text-xs font-semibold",
+                            team.players.length >= team.capacity
+                              ? "bg-[#E2F4E6] text-pine"
+                              : "bg-white text-ink/70"
+                          )}
+                        >
+                          {team.players.length >= team.capacity ? "Full" : `${team.capacity - team.players.length} open`}
+                        </span>
+                        <div className="rounded-2xl bg-white px-4 py-3 text-center">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Quota</p>
+                          <p className="mt-1 text-xl font-semibold">{team.totalQuota}</p>
+                        </div>
                       </div>
                     </div>
                     <div className="mt-3 space-y-2">
@@ -1329,17 +1357,31 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                 {setupTeamCodes
                                   .filter((targetTeam) => targetTeam !== team.team)
                                   .map((targetTeam) => (
+                                    (() => {
+                                      const target = setupTeams.find((candidate) => candidate.team === targetTeam);
+                                      const targetIsFull =
+                                        (target?.players.length ?? 0) >= (target?.capacity ?? 0);
+
+                                      return (
                                     <button
                                       key={targetTeam}
                                       type="button"
-                                      className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink"
+                                      disabled={targetIsFull}
+                                      className={classNames(
+                                        "min-h-10 rounded-full px-3 text-xs font-semibold",
+                                        targetIsFull
+                                          ? "bg-ink/10 text-ink/35"
+                                          : "bg-white text-ink"
+                                      )}
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         moveSetupPlayer(player.playerId, targetTeam);
                                       }}
                                     >
-                                      {`Move to ${targetTeam}`}
+                                      {targetIsFull ? `Team ${targetTeam} Full` : `Move to ${targetTeam}`}
                                     </button>
+                                      );
+                                    })()
                                   ))}
                               </div>
                             ) : null}
@@ -1353,7 +1395,17 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 </>
               ) : null}
               {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
-              <button type="button" disabled={isPending} className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white disabled:opacity-60" onClick={startGame}>
+              {!setupValidation.valid && rows.length > 0 ? (
+                <p className="text-sm font-medium text-[#A53B2A]">
+                  {setupValidation.reason || "Teams must have equal players before starting."}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                disabled={isPending || !canStartConfiguredRound}
+                className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white disabled:opacity-60"
+                onClick={startGame}
+              >
                 {isPending ? "Starting round..." : isSkinsOnly ? "Start Skins Game" : "Start Match Game"}
               </button>
             </SectionCard>
