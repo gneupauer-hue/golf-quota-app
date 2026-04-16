@@ -114,6 +114,9 @@ export async function getCurrentQuotaRows() {
 
 export async function getRoundsList() {
   const rounds = await prisma.round.findMany({
+    where: {
+      canceledAt: null
+    },
     include: {
       entries: {
         include: {
@@ -155,7 +158,8 @@ export async function getPastGamesList() {
     where: {
       completedAt: {
         not: null
-      }
+      },
+      canceledAt: null
     },
     include: {
       entries: {
@@ -301,6 +305,7 @@ export async function getRoundEditorData(roundId: string) {
       lockedAt: round.lockedAt?.toISOString() ?? null,
       startedAt: round.startedAt?.toISOString() ?? null,
       completedAt: round.completedAt?.toISOString() ?? null,
+      canceledAt: round.canceledAt?.toISOString() ?? null,
       entries: calculatedEntries
     },
     players,

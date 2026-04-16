@@ -5,7 +5,8 @@ type RoundClient = typeof prisma;
 export async function resolveActiveRound(client: RoundClient = prisma) {
   const incompleteRounds = await client.round.findMany({
     where: {
-      completedAt: null
+      completedAt: null,
+      canceledAt: null
     },
     orderBy: {
       createdAt: "desc"

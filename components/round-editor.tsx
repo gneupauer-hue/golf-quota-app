@@ -659,8 +659,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       "Force clear this active round? This permanently deletes the unfinished round and all of its live scoring data. Type DELETE to confirm."
     );
 
-    if (confirmation !== "DELETE") {
-      setMessage("Force clear canceled.");
+    if (confirmation === null) {
+      setMessage("Force clear dismissed.");
+      return;
+    }
+
+    if (confirmation.trim().toLowerCase() !== "delete") {
+      setMessage("Type delete to confirm force clear.");
       return;
     }
 
@@ -676,6 +681,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           throw new Error(result.error ?? "Could not force clear round.");
         }
 
+        setMessage("Active round cleared.");
         router.push("/current-round");
         router.refresh();
       } catch (error) {
@@ -1686,24 +1692,24 @@ function SettingsTab({
               ? "Use this only for mistaken live rounds that have not recorded any scores yet."
               : "Delete an unstarted round if this setup should be discarded."}
         </p>
-        {hasSavedScores ? (
-          <div className="rounded-2xl border border-danger/20 bg-danger/5 px-4 py-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-danger/80">
-              Admin Only
-            </p>
-            <p className="mt-2 text-sm text-ink/70">
-              Force clear removes this active round and all unfinished live scoring data. Use it only if the round was created by mistake.
-            </p>
-            <button
-              type="button"
-              onClick={onForceDeleteRound}
-              disabled={isPending}
-              className="mt-3 min-h-12 w-full rounded-[20px] border border-danger/30 bg-white px-4 py-3 text-sm font-semibold text-danger disabled:opacity-45"
-            >
-              {isPending ? "Working..." : "Force Clear Active Round"}
-            </button>
-          </div>
-        ) : null}
+        <div className="rounded-2xl border border-danger/20 bg-danger/5 px-4 py-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-danger/80">
+            Admin Only
+          </p>
+          <p className="mt-2 text-sm text-ink/70">
+            {hasSavedScores
+              ? "Force clear removes this active round and all unfinished live scoring data. Use it only if the round was created by mistake."
+              : "Use force clear only if a stuck current round still will not leave the live flow after normal delete."}
+          </p>
+          <button
+            type="button"
+            onClick={onForceDeleteRound}
+            disabled={isPending}
+            className="mt-3 min-h-12 w-full rounded-[20px] border border-danger/30 bg-white px-4 py-3 text-sm font-semibold text-danger disabled:opacity-45"
+          >
+            {isPending ? "Working..." : "Force Clear Active Round"}
+          </button>
+        </div>
       </SectionCard>
 
       <SectionCard className="space-y-3">

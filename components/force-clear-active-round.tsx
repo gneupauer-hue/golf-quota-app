@@ -19,8 +19,13 @@ export function ForceClearActiveRound({
       `Force clear ${roundName}? This permanently removes the current live round and its unfinished data. Type DELETE to confirm.`
     );
 
-    if (confirmation !== "DELETE") {
-      setMessage("Force clear canceled.");
+    if (confirmation === null) {
+      setMessage("Force clear dismissed.");
+      return;
+    }
+
+    if (confirmation.trim().toLowerCase() !== "delete") {
+      setMessage("Type delete to confirm force clear.");
       return;
     }
 
@@ -38,6 +43,8 @@ export function ForceClearActiveRound({
         return;
       }
 
+      setMessage("Active round cleared.");
+      router.push("/");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not clear the active round.");

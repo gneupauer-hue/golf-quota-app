@@ -10,6 +10,10 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
     notFound();
   }
 
+  if (data.round.canceledAt) {
+    redirect("/");
+  }
+
   if (data.round.completedAt) {
     redirect(`/rounds/${id}/results`);
   }

@@ -136,12 +136,17 @@ export async function DELETE(
         id: true,
         lockedAt: true,
         startedAt: true,
-        completedAt: true
+        completedAt: true,
+        canceledAt: true
       }
     });
 
     if (!round) {
       return NextResponse.json({ error: "Round not found." }, { status: 404 });
+    }
+
+    if (round.canceledAt) {
+      return NextResponse.json({ ok: true });
     }
 
     if (round.completedAt) {
@@ -194,9 +199,20 @@ export async function DELETE(
       );
     }
 
-    await prisma.round.delete({
-      where: { id }
-    });
+    if (savedScoreCount > 0 && forceDelete) {
+      await prisma.round.update({
+        where: { id },
+        data: {
+          canceledAt: new Date(),
+          lockedAt: null,
+          startedAt: null
+        }
+      });
+    } else {
+      await prisma.round.delete({
+        where: { id }
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
