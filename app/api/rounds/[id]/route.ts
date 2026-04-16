@@ -121,3 +121,43 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const round = await prisma.round.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        lockedAt: true,
+        startedAt: true,
+        completedAt: true
+      }
+    });
+
+    if (!round) {
+      return NextResponse.json({ error: "Round not found." }, { status: 404 });
+    }
+
+    if (round.lockedAt || round.startedAt || round.completedAt) {
+      return NextResponse.json(
+        { error: "Only unstarted rounds can be deleted." },
+        { status: 400 }
+      );
+    }
+
+    await prisma.round.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not delete round." },
+      { status: 500 }
+    );
+  }
+}

@@ -8,7 +8,11 @@ import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
 import { SectionCard } from "@/components/section-card";
 import { TeamSummaryMini } from "@/components/team-summary-mini";
-import { buildBalancedTeams } from "@/lib/round-setup";
+import {
+  buildBalancedTeams,
+  getTeamCapacities,
+  validateTeamAssignments
+} from "@/lib/round-setup";
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
@@ -212,6 +216,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [activeTab, setActiveTab] = useState<RoundTab>(round.lockedAt ? "round" : "settings");
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
   const [activeHoleByTeam, setActiveHoleByTeam] = useState<Partial<Record<TeamCode, number>>>({});
+  const [selectedSetupPlayerId, setSelectedSetupPlayerId] = useState<string | null>(null);
   const derivedRoundName = formatRoundNameFromDate(roundDate);
 
   const isLocked = Boolean(lockedAt);
@@ -234,6 +239,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         return !query || player.name.toLowerCase().includes(query);
       });
   }, [isLocked, players, search, selectedIds]);
+
+  const setupTeamCodes = useMemo(
+    () => teamOptions.slice(0, Math.max(2, Math.min(5, Number(teamCount) || 2))),
+    [teamCount]
+  );
+  const setupTeamCapacities = useMemo(
+    () => getTeamCapacities(setupTeamCodes, rows.length),
+    [rows.length, setupTeamCodes]
+  );
 
   const calculatedRows = useMemo(() => {
     return calculateRoundRows(
@@ -290,11 +304,125 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const invalidSequence = rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
   const completedRound = rows.length > 0 && rows.every((row) => isRoundRowComplete(row.holeScores));
 
+  const setupValidation = useMemo(() => {
+    const assignedRows = rows.filter(
+      (row): row is RowState & { team: TeamCode } =>
+        row.team != null && setupTeamCodes.includes(row.team)
+    );
+
+    if (!assignedRows.length) {
+      return { valid: false, reason: "Teams have not been assigned yet." };
+    }
+
+    if (assignedRows.length !== rows.length) {
+      return { valid: false, reason: "Every player needs a team before the round can start." };
+    }
+
+    const validation = validateTeamAssignments(
+      assignedRows.map((row) => ({
+        playerId: row.playerId,
+        team: row.team
+      })),
+      setupTeamCodes,
+      setupTeamCapacities
+    );
+
+    if (!validation.valid) {
+      return { valid: false, reason: "Team sizes are invalid for this field size." };
+    }
+
+    return { valid: true, reason: "" };
+  }, [rows, setupTeamCapacities, setupTeamCodes]);
+
+  const setupTeams = useMemo(() => {
+    return setupTeamCodes.map((team) => {
+      const teamRows = rows.filter((row) => row.team === team);
+      const totalQuota = teamRows.reduce((sum, row) => {
+        const player = playersById.get(row.playerId);
+        return sum + (player ? quotaSnapshot[row.playerId] ?? player.currentQuota ?? player.startingQuota : 0);
+      }, 0);
+
+      return {
+        team,
+        capacity: setupTeamCapacities.get(team) ?? 0,
+        players: teamRows.map((row) => {
+          const player = playersById.get(row.playerId);
+          return {
+            playerId: row.playerId,
+            playerName: player?.name ?? "Unknown Player",
+            quota: player
+              ? quotaSnapshot[row.playerId] ?? player.currentQuota ?? player.startingQuota
+              : 0
+          };
+        }),
+        totalQuota
+      };
+    });
+  }, [playersById, quotaSnapshot, rows, setupTeamCapacities, setupTeamCodes]);
+
+  const setupQuotaSpread = useMemo(() => {
+    const totals = setupTeams.map((team) => team.totalQuota);
+    return totals.length ? Math.max(...totals) - Math.min(...totals) : 0;
+  }, [setupTeams]);
+
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(""), 1000);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (isLocked || !showSetup || !rows.length) {
+      return;
+    }
+
+    if (setupValidation.valid) {
+      return;
+    }
+
+    try {
+      const count = Math.max(2, Math.min(5, Number(teamCount) || 2));
+      const setupPlayers = rows
+        .map((row) => {
+          const player = playersById.get(row.playerId);
+          if (!player) return null;
+          return {
+            playerId: player.id,
+            playerName: player.name,
+            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
+            conflictIds: player.conflictIds
+          };
+        })
+        .filter(Boolean) as Array<{
+        playerId: string;
+        playerName: string;
+        quota: number;
+        conflictIds: string[];
+      }>;
+
+      const teamAssignments = buildBalancedTeams(setupPlayers, count);
+      setRows((current) =>
+        current.map((row) => ({
+          ...row,
+          team:
+            teamAssignments.find((assignment) => assignment.playerId === row.playerId)?.team ?? null,
+          groupNumber: null,
+          teeTime: null
+        }))
+      );
+      setSelectedSetupPlayerId(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not build teams for this round.");
+    }
+  }, [
+    isLocked,
+    playersById,
+    quotaSnapshot,
+    rows,
+    setupValidation.valid,
+    showSetup,
+    teamCount
+  ]);
 
   async function persistRound(
     nextRows = rows,
@@ -347,11 +475,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     ]);
     setSearch("");
     setShowSetup(true);
+    setSelectedSetupPlayerId(null);
   }
 
   function removePlayer(playerId: string) {
     if (isLocked) return;
     setRows((current) => current.filter((row) => row.playerId !== playerId));
+    setSelectedSetupPlayerId((current) => (current === playerId ? null : current));
   }
 
   function updateHole(playerId: string, holeIndex: number, value: number) {
@@ -367,6 +497,145 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           : row
       )
     );
+  }
+
+  function autoBuildTeams(nextTeamCount = Number(teamCount)) {
+    try {
+      if (!rows.length) {
+        setMessage("Add players before building teams.");
+        return;
+      }
+
+      const setupPlayers = rows
+        .map((row) => {
+          const player = playersById.get(row.playerId);
+          if (!player) return null;
+          return {
+            playerId: player.id,
+            playerName: player.name,
+            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
+            conflictIds: player.conflictIds
+          };
+        })
+        .filter(Boolean) as Array<{
+        playerId: string;
+        playerName: string;
+        quota: number;
+        conflictIds: string[];
+      }>;
+
+      const teamAssignments = buildBalancedTeams(setupPlayers, nextTeamCount);
+      setRows((current) =>
+        current.map((row) => ({
+          ...row,
+          team:
+            teamAssignments.find((assignment) => assignment.playerId === row.playerId)?.team ?? null,
+          groupNumber: null,
+          teeTime: null
+        }))
+      );
+      setSelectedSetupPlayerId(null);
+      setMessage("Teams balanced.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not build teams for this round.");
+    }
+  }
+
+  function moveSetupPlayer(playerId: string, destinationTeam: TeamCode) {
+    const sourceRow = rows.find((row) => row.playerId === playerId);
+    if (!sourceRow?.team || sourceRow.team === destinationTeam) {
+      return;
+    }
+
+    const currentSizes = new Map(
+      setupTeams.map((team) => [team.team, team.players.length])
+    );
+    const sourceSize = currentSizes.get(sourceRow.team) ?? 0;
+    const destinationSize = currentSizes.get(destinationTeam) ?? 0;
+    const sourceCapacity = setupTeamCapacities.get(sourceRow.team) ?? 0;
+    const destinationCapacity = setupTeamCapacities.get(destinationTeam) ?? 0;
+
+    if (destinationSize >= destinationCapacity || sourceSize <= sourceCapacity) {
+      setMessage(
+        `Team ${destinationTeam} is already full. Tap a player there to swap instead.`
+      );
+      return;
+    }
+
+    setRows((current) =>
+      current.map((row) =>
+        row.playerId === playerId ? { ...row, team: destinationTeam } : row
+      )
+    );
+    setSelectedSetupPlayerId(null);
+    setMessage(`Moved player to Team ${destinationTeam}.`);
+  }
+
+  function handleSetupPlayerTap(playerId: string) {
+    if (!selectedSetupPlayerId) {
+      setSelectedSetupPlayerId(playerId);
+      setMessage("Player selected. Choose a team below or tap a player on another team to swap.");
+      return;
+    }
+
+    if (selectedSetupPlayerId === playerId) {
+      setSelectedSetupPlayerId(null);
+      setMessage("");
+      return;
+    }
+
+    const leftRow = rows.find((row) => row.playerId === selectedSetupPlayerId);
+    const rightRow = rows.find((row) => row.playerId === playerId);
+
+    if (!leftRow?.team || !rightRow?.team) {
+      setSelectedSetupPlayerId(null);
+      setMessage("Both players need a team before they can be swapped.");
+      return;
+    }
+
+    if (leftRow.team === rightRow.team) {
+      setMessage("Tap a player on a different team to swap.");
+      return;
+    }
+
+    setRows((current) =>
+      current.map((row) => {
+        if (row.playerId === leftRow.playerId) {
+          return { ...row, team: rightRow.team };
+        }
+        if (row.playerId === rightRow.playerId) {
+          return { ...row, team: leftRow.team };
+        }
+        return row;
+      })
+    );
+    setSelectedSetupPlayerId(null);
+    setMessage("Players swapped.");
+  }
+
+  function deleteRound() {
+    if (!window.confirm("Delete this unstarted round?")) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setMessage("");
+        const response = await fetch(`/api/rounds/${round.id}`, {
+          method: "DELETE"
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not delete round.");
+        }
+
+        router.push("/");
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not delete round.");
+      }
+    });
   }
 
   function saveRound(messageText = completedRound ? "Round completed and quotas updated." : "Round saved.") {
@@ -432,31 +701,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         setMessage("Choose between 2 and 5 teams.");
         return;
       }
-
-      const setupPlayers = rows
-        .map((row) => {
-          const player = playersById.get(row.playerId);
-          if (!player) return null;
-          return {
-            playerId: player.id,
-            playerName: player.name,
-            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
-            conflictIds: player.conflictIds
-          };
-        })
-        .filter(Boolean) as Array<{
-        playerId: string;
-        playerName: string;
-        quota: number;
-        conflictIds: string[];
-      }>;
-
-      const teamAssignments = buildBalancedTeams(setupPlayers, count);
+      if (!setupValidation.valid) {
+        throw new Error(setupValidation.reason || "Team setup is invalid.");
+      }
 
       nextRows = rows.map((row) => ({
         ...row,
-        team:
-          teamAssignments.find((assignment) => assignment.playerId === row.playerId)?.team ?? null,
         groupNumber: null,
         teeTime: null
       }));
@@ -708,14 +958,107 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {[2, 3, 4, 5].map((count) => (
-                  <button key={count} type="button" className={classNames("min-h-12 rounded-2xl border text-base font-semibold", teamCount === String(count) ? "border-pine bg-pine text-white" : "border-ink/10 bg-canvas text-ink")} onClick={() => setTeamCount(String(count))}>
+                  <button key={count} type="button" className={classNames("min-h-12 rounded-2xl border text-base font-semibold", teamCount === String(count) ? "border-pine bg-pine text-white" : "border-ink/10 bg-canvas text-ink")} onClick={() => { setTeamCount(String(count)); setSelectedSetupPlayerId(null); }}>
                     {count}
                   </button>
                 ))}
               </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={isPending}
+                  className="min-h-12 flex-1 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                  onClick={() => autoBuildTeams(Number(teamCount))}
+                >
+                  Rebalance Teams
+                </button>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  className="min-h-12 rounded-2xl bg-[#FCE5E2] px-4 text-sm font-semibold text-[#A53B2A] disabled:opacity-60"
+                  onClick={deleteRound}
+                >
+                  Delete Round
+                </button>
+              </div>
               <p className="text-sm text-ink/65">
-                Teams will be balanced automatically from current quotas. Tap once to lock the round and jump into live scoring.
+                Equal team sizes are enforced first. Current quota balance is optimized after sizing is valid.
               </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl bg-canvas px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Quota Gap</p>
+                  <p className="mt-1 text-xl font-semibold">{setupQuotaSpread}</p>
+                </div>
+                <div className="rounded-2xl bg-canvas px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Sizing</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">
+                    {setupTeams.map((team) => `${team.players.length}/${team.capacity}`).join(" | ")}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {setupTeams.map((team) => (
+                  <div key={team.team} className="rounded-[22px] bg-canvas px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-semibold">{`Team ${team.team}`}</p>
+                        <p className="mt-1 text-sm text-ink/60">{`${team.players.length} of ${team.capacity} players`}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white px-4 py-3 text-center">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Quota</p>
+                        <p className="mt-1 text-xl font-semibold">{team.totalQuota}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {team.players.map((player) => {
+                        const isSelected = selectedSetupPlayerId === player.playerId;
+                        return (
+                          <button
+                            key={player.playerId}
+                            type="button"
+                            className={classNames(
+                              "w-full rounded-2xl px-4 py-3 text-left",
+                              isSelected ? "bg-ink text-white" : "bg-white text-ink"
+                            )}
+                            onClick={() => handleSetupPlayerTap(player.playerId)}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-base font-semibold">{player.playerName}</p>
+                                <p className={classNames("mt-1 text-xs", isSelected ? "text-white/75" : "text-ink/55")}>
+                                  {`Quota ${player.quota}`}
+                                </p>
+                              </div>
+                              <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", isSelected ? "bg-white text-ink" : "bg-canvas text-ink/70")}>
+                                {isSelected ? "Selected" : "Tap To Swap"}
+                              </span>
+                            </div>
+                            {isSelected ? (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {setupTeamCodes
+                                  .filter((targetTeam) => targetTeam !== team.team)
+                                  .map((targetTeam) => (
+                                    <button
+                                      key={targetTeam}
+                                      type="button"
+                                      className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        moveSetupPlayer(player.playerId, targetTeam);
+                                      }}
+                                    >
+                                      {`Move to ${targetTeam}`}
+                                    </button>
+                                  ))}
+                              </div>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
               {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
               <button type="button" disabled={isPending} className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white disabled:opacity-60" onClick={startGame}>
                 {isPending ? "Starting round..." : "Lock Round And Start Game"}

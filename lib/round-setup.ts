@@ -23,21 +23,30 @@ type TeamState = {
   playerIds: string[];
 };
 
-function buildSnakeSequence(teamCodes: TeamCode[], playerCount: number) {
+function buildSnakeSequence(teamCodes: TeamCode[], capacities: Map<TeamCode, number>) {
   const sequence: TeamCode[] = [];
-  let direction = 1;
-  let index = 0;
+  let direction: 1 | -1 = 1;
+  const remainingCapacities = new Map(capacities);
+  const totalPlayers = Array.from(remainingCapacities.values()).reduce(
+    (sum, value) => sum + value,
+    0
+  );
 
-  while (sequence.length < playerCount) {
-    sequence.push(teamCodes[index]);
+  while (sequence.length < totalPlayers) {
+    const pass =
+      direction === 1 ? teamCodes : [...teamCodes].reverse();
 
-    if (direction === 1 && index === teamCodes.length - 1) {
-      direction = -1;
-    } else if (direction === -1 && index === 0) {
-      direction = 1;
-    } else {
-      index += direction;
+    for (const team of pass) {
+      const remaining = remainingCapacities.get(team) ?? 0;
+      if (remaining <= 0) {
+        continue;
+      }
+
+      sequence.push(team);
+      remainingCapacities.set(team, remaining - 1);
     }
+
+    direction = direction === 1 ? -1 : 1;
   }
 
   return sequence;
@@ -75,6 +84,44 @@ function buildTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
   return new Map<TeamCode, number>(
     teamCodes.map((team, index) => [team, base + (index < remainder ? 1 : 0)])
   );
+}
+
+export function getTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
+  return buildTeamCapacities(teamCodes, playerCount);
+}
+
+function getTeamSizeMap(assignments: TeamAssignment[], teamCodes: TeamCode[]) {
+  const sizes = new Map<TeamCode, number>(teamCodes.map((team) => [team, 0]));
+
+  for (const assignment of assignments) {
+    sizes.set(assignment.team, (sizes.get(assignment.team) ?? 0) + 1);
+  }
+
+  return sizes;
+}
+
+export function validateTeamAssignments(
+  assignments: TeamAssignment[],
+  teamCodes: TeamCode[],
+  capacities: Map<TeamCode, number>
+) {
+  const sizes = getTeamSizeMap(assignments, teamCodes);
+
+  for (const team of teamCodes) {
+    if ((sizes.get(team) ?? 0) !== (capacities.get(team) ?? 0)) {
+      return {
+        valid: false,
+        sizes,
+        capacities
+      } as const;
+    }
+  }
+
+  return {
+    valid: true,
+    sizes,
+    capacities
+  } as const;
 }
 
 function hydrateTeamState(
@@ -200,7 +247,7 @@ export function buildBalancedTeams(
   const sortedPlayers = [...players].sort(
     (a, b) => b.quota - a.quota || a.playerName.localeCompare(b.playerName)
   );
-  const snakeSequence = buildSnakeSequence(teamCodes, sortedPlayers.length);
+  const snakeSequence = buildSnakeSequence(teamCodes, teamCapacities);
   const conflictMap = buildConflictMap(sortedPlayers);
   const teamState = createTeamState(teamCodes);
   const assignments: TeamAssignment[] = [];
@@ -225,6 +272,10 @@ export function buildBalancedTeams(
       ...fallbackTeams
     ];
 
+    if (!candidateTeams.length) {
+      throw new Error("Could not assign players into valid team sizes.");
+    }
+
     let chosenTeam = candidateTeams.find((team) => {
       const state = teamState.get(team)!;
       return !hasConflict(player.playerId, state.playerIds, conflictMap);
@@ -243,7 +294,19 @@ export function buildBalancedTeams(
     });
   });
 
-  return optimizeAssignments(assignments, sortedPlayers, teamCodes, conflictMap);
+  const initialValidation = validateTeamAssignments(assignments, teamCodes, teamCapacities);
+  if (!initialValidation.valid) {
+    throw new Error("Could not build evenly sized teams for this round.");
+  }
+
+  const optimizedAssignments = optimizeAssignments(assignments, sortedPlayers, teamCodes, conflictMap);
+  const validation = validateTeamAssignments(optimizedAssignments, teamCodes, teamCapacities);
+
+  if (!validation.valid) {
+    return assignments;
+  }
+
+  return optimizedAssignments;
 }
 
 function buildGroupCapacities(playerCount: number, groupCount: number) {
