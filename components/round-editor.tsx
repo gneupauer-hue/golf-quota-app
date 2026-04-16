@@ -1342,95 +1342,28 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 <p className="text-sm text-ink/65">
                   Match mode uses a fixed team-size structure for each supported field size. Balancing happens inside those exact capacities.
                 </p>
-                {!setupFormatOptions.length ? (
+                {!activeSetupFormat ? (
                   <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/65">
-                    Match mode currently supports fixed team formats for 6 through 16 players.
+                    Match mode supports fixed 3-player and 4-player team formats for 6 through 16 players.
                   </div>
-                ) : setupFormatOptions.length === 1 ? (
+                ) : (
                   <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-pine">{`Team Format: ${setupFormatOptions[0].capacities.join(",")}`}</p>
+                      <p className="text-sm font-semibold text-pine">{`Team Format: ${activeSetupFormat.capacities.join(",")}`}</p>
                       <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-pine">
                         Fixed
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-ink/70">{setupFormatTeamLabels.join(" • ")}</p>
-                    <p className="mt-2 text-sm font-medium text-ink">{setupFormatOptions[0].label}</p>
+                    <p className="mt-2 text-xs text-ink/70">{setupFormatTeamLabels.join(" | ")}</p>
+                    <p className="mt-2 text-sm font-medium text-ink">{activeSetupFormat.label}</p>
                     <p className="mt-2 text-sm font-medium text-ink">
-                      {setupFormatOptions[0].estimatedSpread == null
+                      {activeSetupFormat.estimatedSpread == null
                         ? "Fairness unavailable"
-                        : `Estimated fairness gap ${setupFormatOptions[0].estimatedSpread}`}
+                        : `Estimated fairness gap ${activeSetupFormat.estimatedSpread}`}
                     </p>
-                    <p className="mt-1 text-xs text-ink/65">This player count uses one fixed team structure, so it is selected automatically.</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    {setupFormatOptions.map((format, index) => {
-                      const formatKey = getTeamFormatKey(format);
-                      const isSelected = selectedFormatKey === formatKey;
-                      const isRecommended = index === 0;
-
-                      return (
-                        <button
-                          key={format.label}
-                          type="button"
-                          className={classNames(
-                            "rounded-2xl border px-4 py-3 text-left",
-                            isSelected
-                              ? "border-pine bg-pine text-white"
-                              : "border-ink/10 bg-canvas text-ink"
-                          )}
-                          onClick={() => {
-                            setSelectedFormatKey(formatKey);
-                            setSelectedSetupPlayerId(null);
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <span className="block text-base font-semibold">{format.label}</span>
-                              <span
-                                className={classNames(
-                                  "mt-1 block text-xs",
-                                  isSelected ? "text-white/80" : "text-ink/60"
-                                )}
-                              >
-                                {format.isEqual
-                                  ? "Equal teams"
-                                  : `Exact split ${format.capacities.join("/")}`}
-                              </span>
-                            </div>
-                            {isRecommended ? (
-                              <span
-                                className={classNames(
-                                  "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
-                                  isSelected ? "bg-white/15 text-white" : "bg-[#E2F4E6] text-pine"
-                                )}
-                              >
-                                Recommended
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="mt-3 flex items-center justify-between gap-3">
-                            <span
-                              className={classNames(
-                                "text-sm font-medium",
-                                isSelected ? "text-white" : "text-ink"
-                              )}
-                            >
-                              {`Estimated fairness gap ${format.estimatedSpread}`}
-                            </span>
-                            <span
-                              className={classNames(
-                                "text-xs",
-                                isSelected ? "text-white/75" : "text-ink/55"
-                              )}
-                            >
-                              Smaller is fairer
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
+                    <p className="mt-1 text-xs text-ink/65">
+                      This player count uses one fixed Match format. Teams are balanced by quota only within these exact capacities.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1446,7 +1379,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 {!isSkinsOnly ? (
                   <button
                     type="button"
-                    disabled={isPending || !selectedFormat}
+                    disabled={isPending || !activeSetupFormat}
                     className="min-h-12 flex-1 rounded-2xl bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
                     onClick={() => autoBuildTeams(activeSetupFormat)}
                   >
