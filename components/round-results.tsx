@@ -152,15 +152,6 @@ function formatCurrency(value: number) {
 }
 
 export function RoundResults({ data }: { data: ResultsData }) {
-  const hasEntries = data.entries.length > 0;
-  const hasTeams = data.teamStandings.length > 0;
-  const hasLeaderboardData =
-    hasEntries ||
-    hasTeams ||
-    data.leaders.first != null ||
-    data.leaders.second != null ||
-    data.leaders.third != null;
-
   console.info("[scoreboard] round-results", {
     roundId: data.round.id,
     roundName: data.round.roundName,
@@ -266,61 +257,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
           moneyLabel="Final In Play"
         />
       </SectionCard>
-
-      {hasLeaderboardData ? (
-        <>
-          <SectionCard className="space-y-3 bg-ink text-white">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
-                Scoreboard
-              </p>
-              <h3 className="mt-1 text-2xl font-semibold tracking-tight">Final standings</h3>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                {
-                  label: "Front",
-                  winner: data.leaders.frontTeam ? `Team ${data.leaders.frontTeam.team}` : "-",
-                  score: data.leaders.frontTeam ? formatPlusMinus(data.leaders.frontTeam.frontPlusMinus) : "-"
-                },
-                {
-                  label: "Back",
-                  winner: data.leaders.backTeam ? `Team ${data.leaders.backTeam.team}` : "-",
-                  score: data.leaders.backTeam ? formatPlusMinus(data.leaders.backTeam.backPlusMinus) : "-"
-                },
-                {
-                  label: "Total",
-                  winner: data.leaders.totalTeam ? `Team ${data.leaders.totalTeam.team}` : "-",
-                  score: data.leaders.totalTeam ? formatPlusMinus(data.leaders.totalTeam.totalPlusMinus) : "-"
-                }
-              ].map((item) => (
-                <div key={item.label} className="rounded-2xl bg-white/10 px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">{item.label}</p>
-                  <p className="mt-1 text-sm font-semibold">{item.winner}</p>
-                  <p className="mt-1 text-lg font-semibold">{item.score}</p>
-                </div>
-              ))}
-            </div>
-            <div className="grid gap-2">
-              <div className="rounded-2xl bg-white/10 px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Leader Group (Top 25%)</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {data.leaders.leaderGroup.length
-                    ? data.leaders.leaderGroup.map((player) => `${player.playerName} ${formatPlusMinus(player.plusMinus)}`).join(" | ")
-                    : "-"}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white/10 px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Payout Positions (Top 25%)</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {data.leaders.payoutGroup.length
-                    ? data.leaders.payoutGroup.map((player) => `${player.playerName} ${formatPlusMinus(player.plusMinus)}`).join(" | ")
-                    : "-"}
-                </p>
-              </div>
-            </div>
-          </SectionCard>
 
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
@@ -466,42 +402,44 @@ export function RoundResults({ data }: { data: ResultsData }) {
         </div>
       </SectionCard>
 
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-          Top 3 Individuals
-        </p>
-        <div className="space-y-2">
-          {podium.map((item) => (
-            <div
-              key={item.place}
-              className={classNames(
-                "flex items-center justify-between rounded-[22px] border px-4 py-3",
-                podiumTone(item.place)
-              )}
-            >
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{`${item.place}${item.place === 1 ? "st" : item.place === 2 ? "nd" : "rd"} Place`}</p>
-                <p className="mt-1 text-lg font-semibold">{item.leader?.playerName ?? "-"}</p>
-                <p className="mt-1 text-sm text-ink/65">
-                  {item.leader?.team ? `Team ${item.leader.team}` : "No team"}
-                </p>
+      {podium.some((item) => item.leader != null) ? (
+        <SectionCard className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+            Top 3 Individuals
+          </p>
+          <div className="space-y-2">
+            {podium.map((item) => (
+              <div
+                key={item.place}
+                className={classNames(
+                  "flex items-center justify-between rounded-[22px] border px-4 py-3",
+                  podiumTone(item.place)
+                )}
+              >
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{`${item.place}${item.place === 1 ? "st" : item.place === 2 ? "nd" : "rd"} Place`}</p>
+                  <p className="mt-1 text-lg font-semibold">{item.leader?.playerName ?? "-"}</p>
+                  <p className="mt-1 text-sm text-ink/65">
+                    {item.leader?.team ? `Team ${item.leader.team}` : "No team"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total +/-</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {item.leader ? formatPlusMinus(item.leader.plusMinus) : "-"}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total +/-</p>
-                <p className="mt-1 text-2xl font-semibold">
-                  {item.leader ? formatPlusMinus(item.leader.plusMinus) : "-"}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
+            ))}
+          </div>
+        </SectionCard>
+      ) : null}
 
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-          Team Standings
-        </p>
-        {data.teamStandings.length ? (
+      {data.teamStandings.length ? (
+        <SectionCard className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+            Team Standings
+          </p>
           <div className="space-y-2">
             {data.teamStandings.map((team) => {
               const winningFront = data.leaders.frontTeam?.team === team.team;
@@ -571,21 +509,14 @@ export function RoundResults({ data }: { data: ResultsData }) {
               );
             })}
           </div>
-        ) : (
-          <div className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-4">
-            <p className="text-sm font-semibold text-ink">Scoreboard unavailable</p>
-            <p className="mt-1 text-xs text-ink/65">
-              Team results are missing for this round.
-            </p>
-          </div>
-        )}
-      </SectionCard>
+        </SectionCard>
+      ) : null}
 
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-          Individual Standings
-        </p>
-        {data.entries.length ? (
+      {data.entries.length ? (
+        <SectionCard className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+            Individual Standings
+          </p>
           <div className="space-y-2">
             {data.entries.map((entry) => (
               <div
@@ -641,16 +572,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
               </div>
             ))}
           </div>
-        ) : (
-          <div className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-4">
-            <p className="text-sm font-semibold text-ink">Scoreboard unavailable</p>
-            <p className="mt-1 text-xs text-ink/65">
-              Player standings are missing for this round.
-            </p>
-          </div>
-        )}
-      </SectionCard>
-        </>
+        </SectionCard>
       ) : null}
     </div>
   );
