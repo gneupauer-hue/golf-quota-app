@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation";
 import { classNames } from "@/lib/utils";
 
 const links = [
-  { href: "/", label: "Home" },
-  { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/season-stats", label: "Season" },
-  { href: "/current-round", label: "Current Round" },
-  { href: "/past-games", label: "Past Games" },
-  { href: "/players", label: "Players" }
+  { href: "/", lines: ["Home"] },
+  { href: "/leaderboard", lines: ["Leader", "Board"] },
+  { href: "/current-round", lines: ["Current", "Round"] },
+  { href: "/past-games", lines: ["Past", "Games"] },
+  { href: "/players", lines: ["Players"] },
+  { href: "/season-stats", lines: ["Season"] }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -32,7 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav className="fixed bottom-3 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-mist bg-card p-2 shadow-card">
-        <ul className="grid grid-cols-6 gap-2">
+        <ul className="grid grid-cols-6 gap-1.5">
           {links.map((link) => {
             const active =
               pathname === link.href ||
@@ -43,11 +43,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   href={link.href}
                   className={classNames(
-                    "flex min-h-14 items-center justify-center rounded-2xl px-3 text-sm font-bold transition",
+                    "flex min-h-[60px] items-center justify-center rounded-2xl px-1.5 py-2 text-center text-xs font-bold leading-tight transition sm:text-sm",
                     active ? "bg-pine text-canvas" : "bg-white text-ink"
                   )}
                 >
-                  {link.label}
+                  <span className="flex flex-col items-center justify-center gap-0.5">
+                    {link.lines.map((line) => (
+                      <span key={`${link.href}-${line}`} className="block">
+                        {line}
+                      </span>
+                    ))}
+                  </span>
                 </Link>
               </li>
             );
