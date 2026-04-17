@@ -11,7 +11,8 @@
     "simulate:team-builder": "tsx scripts/team-builder-sim.ts",
     "lint": "next lint",
     "db:push": "prisma db push",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:backfill-player-quota": "tsx scripts/backfill-player-quota.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",

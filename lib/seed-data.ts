@@ -177,12 +177,16 @@ export async function ensureStarterPlayers(prisma: PrismaClient) {
       },
       update: {
         quota: playerSeed.quota,
+        currentQuota: playerSeed.quota,
+        startingQuota: playerSeed.quota,
         isRegular: playerSeed.isRegular,
         isActive: true
       },
       create: {
         name: playerSeed.name,
         quota: playerSeed.quota,
+        currentQuota: playerSeed.quota,
+        startingQuota: playerSeed.quota,
         isRegular: playerSeed.isRegular,
         isActive: true
       }

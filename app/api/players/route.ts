@@ -54,6 +54,8 @@ export async function POST(request: Request) {
         data: {
           name,
           quota,
+          currentQuota: quota,
+          startingQuota: quota,
           isRegular,
           isActive
         }

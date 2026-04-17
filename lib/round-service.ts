@@ -203,7 +203,9 @@ export async function recomputeHistoricalState(tx: Tx) {
     orderBy: { name: "asc" }
   });
 
-  const liveQuotaMap = new Map(players.map((player) => [player.id, player.quota]));
+  const liveQuotaMap = new Map(
+    players.map((player) => [player.id, player.quota ?? player.currentQuota ?? player.startingQuota])
+  );
   const quotaMap = new Map<string, number>();
 
   const rounds = await tx.round.findMany({
@@ -283,7 +285,9 @@ export async function recomputeHistoricalState(tx: Tx) {
     await tx.player.update({
       where: { id: player.id },
       data: {
-        quota: quotaMap.get(player.id) ?? player.quota
+        quota: quotaMap.get(player.id) ?? player.quota ?? player.currentQuota ?? player.startingQuota,
+        currentQuota:
+          quotaMap.get(player.id) ?? player.quota ?? player.currentQuota ?? player.startingQuota
       }
     });
   }
@@ -307,7 +311,9 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     throw new Error("Round not found");
   }
 
-  const liveQuotaMap = new Map(players.map((player) => [player.id, player.quota]));
+  const liveQuotaMap = new Map(
+    players.map((player) => [player.id, player.quota ?? player.currentQuota ?? player.startingQuota])
+  );
   const quotaMap = new Map<string, number>();
 
   const priorRounds = await tx.round.findMany({
@@ -366,7 +372,10 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     }
   }
   return Object.fromEntries(
-    players.map((player) => [player.id, quotaMap.get(player.id) ?? player.quota])
+    players.map((player) => [
+      player.id,
+      quotaMap.get(player.id) ?? player.quota ?? player.currentQuota ?? player.startingQuota
+    ])
   );
 }
 

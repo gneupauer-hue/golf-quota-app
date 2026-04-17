@@ -10,7 +10,9 @@ datasource db {
 model Player {
   id               String           @id @default(cuid())
   name             String           @unique
-  quota            Int
+  quota            Int?
+  startingQuota    Int
+  currentQuota     Int
   isRegular        Boolean          @default(false)
   isActive         Boolean          @default(true)
   createdAt        DateTime         @default(now())

@@ -54,6 +54,8 @@ export async function PUT(
         data: {
           name,
           quota,
+          currentQuota: quota,
+          startingQuota: quota,
           isRegular,
           isActive
         }
