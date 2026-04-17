@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { getLeaderboardPageData } from "@/lib/data";
-import { formatPlusMinus } from "@/lib/quota";
+import { calculateIndividualPayoutProjection, formatPlusMinus } from "@/lib/quota";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -39,6 +39,9 @@ export default async function LeaderboardPage() {
   }
 
   const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
+  const individualPayoutProjection = isSkinsOnly
+    ? []
+    : calculateIndividualPayoutProjection(data.entries);
   const awardedSkins = data.money.skins.holes
     .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
     .map((hole) => {
@@ -81,8 +84,7 @@ export default async function LeaderboardPage() {
           {!isSkinsOnly ? [
             { label: "Front", projection: data.projections.frontTeam },
             { label: "Back", projection: data.projections.backTeam },
-            { label: "Total", projection: data.projections.totalTeam },
-            { label: "Individual", projection: data.projections.individual }
+            { label: "Total", projection: data.projections.totalTeam }
           ].map((item) => (
             <div key={item.label} className="rounded-2xl bg-white/10 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
@@ -108,6 +110,55 @@ export default async function LeaderboardPage() {
               ) : null}
             </div>
           )) : null}
+          {!isSkinsOnly ? (
+            <div className="rounded-2xl bg-white/10 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/75">
+                    Individual Payout Projection
+                  </p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {individualPayoutProjection.length
+                      ? `${individualPayoutProjection.length} paid spot${individualPayoutProjection.length === 1 ? "" : "s"} projected`
+                      : "No paid spots projected yet"}
+                  </p>
+                  <p className="mt-1 text-xs text-white/80">
+                    Paid places use the app&apos;s existing top-25% payout table for this field size.
+                  </p>
+                </div>
+                <div className="rounded-full bg-white/12 px-3 py-1.5 text-sm font-semibold text-white">
+                  {formatCurrency(data.money.overallPot.indyPot)}
+                </div>
+              </div>
+
+              {individualPayoutProjection.length ? (
+                <div className="mt-3 space-y-2">
+                  {individualPayoutProjection.map((spot) => (
+                    <div
+                      key={spot.place}
+                      className="flex items-center justify-between gap-3 rounded-2xl bg-white/12 px-3 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          {`${spot.placeLabel} - ${spot.playerName}`}
+                        </p>
+                        <p className="mt-1 text-xs text-white/82">
+                          {`${spot.probability}% | Margin ${formatPlusMinus(spot.margin)} | ${spot.holesRemaining} hole${spot.holesRemaining === 1 ? "" : "s"} left`}
+                        </p>
+                      </div>
+                      <p className="text-base font-bold text-[#F3E2BC]">
+                        {formatCurrency(spot.payout)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-2xl bg-white/12 px-3 py-3">
+                  <p className="text-sm font-semibold text-white">No paid spots projected yet</p>
+                </div>
+              )}
+            </div>
+          ) : null}
           <div className="rounded-2xl bg-white/10 px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div>

@@ -182,6 +182,17 @@ export type LiveProjections = {
   skins: SkinsProjection;
 };
 
+export type IndividualPayoutProjection = {
+  place: number;
+  placeLabel: string;
+  playerId: string;
+  playerName: string;
+  payout: number;
+  probability: number;
+  margin: number;
+  holesRemaining: number;
+};
+
 const birdieOrBetterValues = new Set<number>([4, 6]);
 const individualPayoutTable: Record<number, number[]> = {
   6: [40, 20],
@@ -963,4 +974,72 @@ export function calculateLiveProjections(rows: CalculatedRoundRow[]): LiveProjec
       probability: skinsProbability
     }
   };
+}
+
+export function calculateIndividualPayoutProjection(
+  rows: CalculatedRoundRow[]
+): IndividualPayoutProjection[] {
+  if (!rows.length) {
+    return [];
+  }
+
+  const rankedPlayers = [...rows].sort((a, b) => {
+    if (b.plusMinus !== a.plusMinus) {
+      return b.plusMinus - a.plusMinus;
+    }
+    if (b.totalPoints !== a.totalPoints) {
+      return b.totalPoints - a.totalPoints;
+    }
+    return a.playerName.localeCompare(b.playerName);
+  });
+
+  const { payoutByPlace } = calculateIndividualPayouts(rows);
+  const overallCompleted = Math.max(...rows.map((row) => getCompletedHoleCount(row.holeScores)));
+  const holesRemaining = Math.max(0, 18 - overallCompleted);
+  const individualVolatility = calculateIndividualPerHoleVolatility(rows, overallCompleted);
+
+  return payoutByPlace
+    .map((spot) => {
+      const projectedPlayer = rankedPlayers[spot.place - 1];
+
+      if (!projectedPlayer) {
+        return null;
+      }
+
+      const nextPlayer = rankedPlayers[spot.place] ?? null;
+      const previousPlayer = rankedPlayers[spot.place - 2] ?? null;
+      const marginOverNext = nextPlayer
+        ? projectedPlayer.plusMinus - nextPlayer.plusMinus
+        : projectedPlayer.plusMinus;
+      const pressureFromAbove = previousPlayer
+        ? Math.max(0, previousPlayer.plusMinus - projectedPlayer.plusMinus)
+        : 0;
+      const effectiveMargin = marginOverNext - pressureFromAbove * 0.35;
+      const competitorCount = Math.max(2, rankedPlayers.length - spot.place + 1);
+
+      return {
+        place: spot.place,
+        placeLabel:
+          spot.place === 1
+            ? "1st"
+            : spot.place === 2
+              ? "2nd"
+              : spot.place === 3
+                ? "3rd"
+                : `${spot.place}th`,
+        playerId: projectedPlayer.playerId,
+        playerName: projectedPlayer.playerName,
+        payout: spot.payout,
+        probability: estimateWinProbabilityFromState({
+          margin: effectiveMargin,
+          completed: overallCompleted,
+          total: 18,
+          perHoleVolatility: individualVolatility,
+          competitors: competitorCount
+        }),
+        margin: effectiveMargin,
+        holesRemaining
+      } satisfies IndividualPayoutProjection;
+    })
+    .filter((value): value is IndividualPayoutProjection => value != null);
 }
