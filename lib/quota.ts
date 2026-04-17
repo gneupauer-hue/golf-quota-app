@@ -236,6 +236,25 @@ export type PayoutPredictionsSummary = {
   isBalanced: boolean;
 };
 
+export type PlayerBuyIn = {
+  playerId: string;
+  playerName: string;
+  teamFrontOwed: number;
+  teamBackOwed: number;
+  teamTotalOwed: number;
+  teamOwed: number;
+  indyOwed: number;
+  skinsOwed: number;
+  totalOwed: number;
+};
+
+export type PlayerBuyInSummary = {
+  players: PlayerBuyIn[];
+  everyoneOwesSame: boolean;
+  commonTotal: number | null;
+  teamContributionVaries: boolean;
+};
+
 const birdieOrBetterValues = new Set<number>([4, 6]);
 const individualPayoutTable: Record<number, number[]> = {
   4: [20],
@@ -943,6 +962,76 @@ export function calculateSideGameResults(rows: CalculatedRoundRow[]): SideGameRe
       placeLabel: player.placeLabel
     })),
     skins
+  };
+}
+
+export function calculatePlayerBuyIns(
+  rows: CalculatedRoundRow[],
+  mode: RoundMode
+): PlayerBuyInSummary {
+  if (!rows.length) {
+    return {
+      players: [],
+      everyoneOwesSame: true,
+      commonTotal: null,
+      teamContributionVaries: false
+    };
+  }
+
+  const sideGames = calculateSideGameResults(rows);
+  const teams = calculateTeamStandings(rows);
+  const teamCount = teams.length;
+  const teamSizeByCode = new Map(teams.map((team) => [team.team, team.players.length]));
+  const includeTeamGame = mode === "MATCH_QUOTA" && teamCount > 0;
+  const includeIndy = mode === "MATCH_QUOTA";
+  const skinsPerPlayer = rows.length ? roundCurrency(sideGames.overallPot.skinsPot / rows.length) : 0;
+  const indyPerPlayer = rows.length ? roundCurrency(sideGames.overallPot.indyPot / rows.length) : 0;
+  const frontPerTeam = includeTeamGame ? roundCurrency(sideGames.teamPots.frontPot / teamCount) : 0;
+  const backPerTeam = includeTeamGame ? roundCurrency(sideGames.teamPots.backPot / teamCount) : 0;
+  const totalPerTeam = includeTeamGame ? roundCurrency(sideGames.teamPots.totalPot / teamCount) : 0;
+
+  const players = [...rows]
+    .sort((left, right) => left.playerName.localeCompare(right.playerName))
+    .map((row) => {
+      const teamSize = row.team ? teamSizeByCode.get(row.team) ?? 0 : 0;
+      const teamFrontOwed =
+        includeTeamGame && row.team && teamSize > 0
+          ? roundCurrency(frontPerTeam / teamSize)
+          : 0;
+      const teamBackOwed =
+        includeTeamGame && row.team && teamSize > 0
+          ? roundCurrency(backPerTeam / teamSize)
+          : 0;
+      const teamTotalOwed =
+        includeTeamGame && row.team && teamSize > 0
+          ? roundCurrency(totalPerTeam / teamSize)
+          : 0;
+      const teamOwed = roundCurrency(teamFrontOwed + teamBackOwed + teamTotalOwed);
+      const indyOwed = includeIndy ? indyPerPlayer : 0;
+      const skinsOwed = roundCurrency(skinsPerPlayer);
+      const totalOwed = roundCurrency(teamOwed + indyOwed + skinsOwed);
+
+      return {
+        playerId: row.playerId,
+        playerName: row.playerName,
+        teamFrontOwed,
+        teamBackOwed,
+        teamTotalOwed,
+        teamOwed,
+        indyOwed,
+        skinsOwed,
+        totalOwed
+      } satisfies PlayerBuyIn;
+    });
+
+  const uniqueTotals = new Set(players.map((player) => roundCurrency(player.totalOwed)));
+  const uniqueTeamOwed = new Set(players.map((player) => roundCurrency(player.teamOwed)));
+
+  return {
+    players,
+    everyoneOwesSame: uniqueTotals.size <= 1,
+    commonTotal: players[0]?.totalOwed ?? null,
+    teamContributionVaries: uniqueTeamOwed.size > 1
   };
 }
 

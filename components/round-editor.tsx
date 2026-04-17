@@ -21,6 +21,7 @@ import {
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
+  calculatePlayerBuyIns,
   calculateRoundRows,
   calculateSideGameResults,
   calculateTeamStandings,
@@ -33,6 +34,7 @@ import {
   type CalculatedRoundRow,
   type RoundMode,
   type SideGameResults,
+  type PlayerBuyInSummary,
   type TeamCode,
   type TeamStanding
 } from "@/lib/quota";
@@ -404,6 +406,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const liveProjections = useMemo(() => calculateLiveProjections(calculatedRows), [calculatedRows]);
   const teamStandings = useMemo(() => calculateTeamStandings(calculatedRows), [calculatedRows]);
   const sideGames = useMemo(() => calculateSideGameResults(calculatedRows), [calculatedRows]);
+  const playerBuyIns = useMemo(() => calculatePlayerBuyIns(calculatedRows, gameMode), [calculatedRows, gameMode]);
   const savedCalculatedRows = useMemo(() => {
     return calculateRoundRows(
       savedRows
@@ -1698,9 +1701,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
           {activeTab === "round" ? (
             isSkinsOnly ? (
-              <SkinsOnlyRoundTab rows={calculatedRows} sideGames={sideGames} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenEntry={openSkinsEntry} />
+              <SkinsOnlyRoundTab rows={calculatedRows} sideGames={sideGames} playerBuyIns={playerBuyIns} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenEntry={openSkinsEntry} />
             ) : (
-              <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenTeam={openTeam} />
+              <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} playerBuyIns={playerBuyIns} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenTeam={openTeam} />
             )
           ) : null}
           {activeTab === "leaders" ? (
@@ -2076,6 +2079,7 @@ function RoundTabView({
   teamStandings,
   teamRowsByCode,
   sideGames,
+  playerBuyIns,
   isTestRound,
   onDeleteRound,
   onOpenTeam
@@ -2084,6 +2088,7 @@ function RoundTabView({
   teamStandings: TeamStanding[];
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
   sideGames: SideGameResults;
+  playerBuyIns: PlayerBuyInSummary;
   isTestRound: boolean;
   onDeleteRound: () => void;
   onOpenTeam: (team: TeamCode) => void;
@@ -2115,6 +2120,8 @@ function RoundTabView({
           {isTestRound ? "Delete Test Round" : "Cancel Current Round"}
         </button>
       </SectionCard>
+
+      <PlayerBuyInSection buyIns={playerBuyIns} mode="MATCH_QUOTA" />
 
       <div className="space-y-3">
         {teamStandings.map((team) => {
@@ -2172,12 +2179,14 @@ function RoundTabView({
 function SkinsOnlyRoundTab({
   rows,
   sideGames,
+  playerBuyIns,
   isTestRound,
   onDeleteRound,
   onOpenEntry
 }: {
   rows: CalculatedRoundRow[];
   sideGames: SideGameResults;
+  playerBuyIns: PlayerBuyInSummary;
   isTestRound: boolean;
   onDeleteRound: () => void;
   onOpenEntry: () => void;
@@ -2226,6 +2235,8 @@ function SkinsOnlyRoundTab({
           </button>
         </div>
       </SectionCard>
+
+      <PlayerBuyInSection buyIns={playerBuyIns} mode="SKINS_ONLY" />
 
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Players</p>
@@ -2481,6 +2492,81 @@ function SkinsOnlyLeadersTab({
         </div>
       </SectionCard>
     </div>
+  );
+}
+
+function PlayerBuyInSection({
+  buyIns,
+  mode
+}: {
+  buyIns: PlayerBuyInSummary;
+  mode: RoundMode;
+}) {
+  if (!buyIns.players.length) {
+    return null;
+  }
+
+  const teamLabel = mode === "MATCH_QUOTA" ? "Team" : null;
+  const summaryText =
+    buyIns.everyoneOwesSame && buyIns.commonTotal != null
+      ? `Each player owes ${formatCurrency(buyIns.commonTotal)} today.`
+      : buyIns.teamContributionVaries
+        ? "Team contribution varies by team size. Indy and skins stay even for everyone."
+        : "Player totals are calculated from the live pots for this round.";
+
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+            Player Buy-In
+          </p>
+          <h3 className="mt-1 text-lg font-semibold">How much each guy owes today</h3>
+          <p className="mt-1 text-sm text-ink/65">{summaryText}</p>
+        </div>
+        {buyIns.everyoneOwesSame && buyIns.commonTotal != null ? (
+          <div className="rounded-2xl bg-canvas px-4 py-3 text-right">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Each Player</p>
+            <p className="mt-1 text-2xl font-semibold">{formatCurrency(buyIns.commonTotal)}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        {buyIns.players.map((player) => {
+          const parts = [
+            teamLabel && player.teamOwed > 0 ? `${teamLabel} ${formatCurrency(player.teamOwed)}` : null,
+            player.indyOwed > 0 ? `Indy ${formatCurrency(player.indyOwed)}` : null,
+            player.skinsOwed > 0 ? `Skins ${formatCurrency(player.skinsOwed)}` : null
+          ].filter(Boolean) as string[];
+
+          return (
+            <div
+              key={player.playerId}
+              className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-semibold text-ink">{player.playerName}</p>
+                  <p className="mt-1 text-sm text-ink/65">{parts.join(" · ")}</p>
+                  {mode === "MATCH_QUOTA" && buyIns.teamContributionVaries && player.teamOwed > 0 ? (
+                    <p className="mt-1 text-xs text-ink/55">
+                      {`Team split ${formatCurrency(player.teamFrontOwed)} front · ${formatCurrency(player.teamBackOwed)} back · ${formatCurrency(player.teamTotalOwed)} total`}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Owed</p>
+                  <p className="mt-1 text-xl font-semibold text-pine">
+                    {formatCurrency(player.totalOwed)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
   );
 }
 
