@@ -233,8 +233,31 @@ export async function getCurrentRoundId() {
   return activeRound?.id ?? null;
 }
 
+async function getLeaderboardRoundId() {
+  const activeRound = await resolveActiveRound(prisma);
+
+  if (activeRound?.id) {
+    return activeRound.id;
+  }
+
+  const latestCompletedRound = await prisma.round.findFirst({
+    where: {
+      completedAt: {
+        not: null
+      },
+      canceledAt: null
+    },
+    orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true
+    }
+  });
+
+  return latestCompletedRound?.id ?? null;
+}
+
 export async function getLeaderboardPageData() {
-  const currentRoundId = await getCurrentRoundId();
+  const currentRoundId = await getLeaderboardRoundId();
 
   if (!currentRoundId) {
     return null;
@@ -263,13 +286,38 @@ export async function getLeaderboardPageData() {
     rank: entry.rank
   }));
 
+  const teamStandings = calculateTeamStandings(calculatedEntries);
+  const leaders = calculateLiveLeaders(calculatedEntries);
+  const projections = calculateLiveProjections(calculatedEntries);
+  const money = calculateSideGameResults(calculatedEntries);
+
+  console.info("[scoreboard] getLeaderboardPageData", {
+    round: {
+      id: data.round.id,
+      roundName: data.round.roundName,
+      roundMode: data.round.roundMode,
+      completedAt: data.round.completedAt
+    },
+    teams: teamStandings,
+    playerScores: calculatedEntries.map((entry) => ({
+      playerId: entry.playerId,
+      playerName: entry.playerName,
+      team: entry.team,
+      frontNine: entry.frontNine,
+      backNine: entry.backNine,
+      totalPoints: entry.totalPoints,
+      plusMinus: entry.plusMinus,
+      rank: entry.rank
+    }))
+  });
+
   return {
     round: data.round,
     entries: calculatedEntries,
-    leaders: calculateLiveLeaders(calculatedEntries),
-    projections: calculateLiveProjections(calculatedEntries),
-    teamStandings: calculateTeamStandings(calculatedEntries),
-    money: calculateSideGameResults(calculatedEntries)
+    leaders,
+    projections,
+    teamStandings,
+    money
   };
 }
 

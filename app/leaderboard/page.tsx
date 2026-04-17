@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LeaderboardPayoutPredictions } from "@/components/leaderboard-payout-predictions";
+import { LeaderboardScoreboard } from "@/components/leaderboard-scoreboard";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { getLeaderboardPageData } from "@/lib/data";
@@ -294,6 +295,18 @@ export default async function LeaderboardPage() {
           </div>
         </div>
       </section>
+
+      <LeaderboardScoreboard
+        round={{
+          id: data.round.id,
+          roundName: data.round.roundName,
+          roundMode: data.round.roundMode,
+          completedAt: data.round.completedAt ?? null
+        }}
+        teamStandings={data.teamStandings}
+        entries={data.entries}
+        leaders={data.leaders}
+      />
 
       <SectionCard className="space-y-3">
         <LeaderboardPayoutPredictions
