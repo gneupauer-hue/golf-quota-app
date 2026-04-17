@@ -8,8 +8,7 @@ import { classNames } from "@/lib/utils";
 type PlayerItem = {
   id: string;
   name: string;
-  startingQuota: number;
-  currentQuota: number;
+  quota: number;
   isRegular: boolean;
   isActive: boolean;
   conflictIds: string[];
@@ -18,8 +17,7 @@ type PlayerItem = {
 type FormState = {
   id?: string;
   name: string;
-  startingQuota: string;
-  currentQuota: string;
+  quota: string;
   isRegular: boolean;
   isActive: boolean;
   conflictIds: string[];
@@ -27,8 +25,7 @@ type FormState = {
 
 const emptyForm: FormState = {
   name: "",
-  startingQuota: "",
-  currentQuota: "",
+  quota: "",
   isRegular: true,
   isActive: true,
   conflictIds: []
@@ -62,8 +59,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
     setForm({
       id: player.id,
       name: player.name,
-      startingQuota: String(player.startingQuota),
-      currentQuota: String(player.currentQuota),
+      quota: String(player.quota),
       isRegular: player.isRegular,
       isActive: player.isActive,
       conflictIds: player.conflictIds
@@ -84,8 +80,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
     startTransition(async () => {
       const payload = {
         name: form.name.trim(),
-        startingQuota: Number(form.startingQuota),
-        currentQuota: Number(form.currentQuota),
+        quota: Number(form.quota),
         isRegular: form.isRegular,
         isActive: form.isActive,
         conflictIds: form.conflictIds
@@ -137,7 +132,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
     <div className="space-y-4">
       <PageTitle
         title="Players"
-        subtitle="Manage regular and guest players. Current quota updates from saved rounds."
+        subtitle="Manage regular and guest players. Live quota updates from saved rounds."
       />
 
       {!hasPlayers ? (
@@ -229,10 +224,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                       </span>
                     </div>
                     <p className="mt-2 text-sm text-ink/70">
-                      Current quota <span className="font-semibold text-ink">{player.currentQuota}</span>
-                    </p>
-                    <p className="text-sm text-ink/70">
-                      Starting quota <span className="font-semibold text-ink">{player.startingQuota}</span>
+                      Quota <span className="font-semibold text-ink">{player.quota}</span>
                     </p>
                     <p className="text-sm text-ink/70">
                       Avoid pairings <span className="font-semibold text-ink">{player.conflictIds.length}</span>
@@ -288,28 +280,14 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-ink">Current quota</span>
+                  <span className="mb-2 block text-sm font-semibold text-ink">Quota</span>
                   <input
                     required
                     type="number"
                     className="club-input h-14"
-                    value={form.currentQuota}
+                    value={form.quota}
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, currentQuota: event.target.value }))
-                    }
-                    placeholder="27"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-ink">Starting quota</span>
-                  <input
-                    required
-                    type="number"
-                    className="club-input h-14"
-                    value={form.startingQuota}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, startingQuota: event.target.value }))
+                      setForm((current) => ({ ...current, quota: event.target.value }))
                     }
                     placeholder="27"
                   />

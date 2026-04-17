@@ -203,7 +203,8 @@ export async function recomputeHistoricalState(tx: Tx) {
     orderBy: { name: "asc" }
   });
 
-  const quotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
+  const liveQuotaMap = new Map(players.map((player) => [player.id, player.quota]));
+  const quotaMap = new Map<string, number>();
 
   const rounds = await tx.round.findMany({
     where: {
@@ -237,7 +238,11 @@ export async function recomputeHistoricalState(tx: Tx) {
         playerName: entry.player.name,
         team: (entry.team as TeamCode | null) ?? null,
         holeScores: getHoleScores(entry),
-        startQuota: quotaMap.get(entry.playerId) ?? entry.startQuota
+        startQuota:
+          quotaMap.get(entry.playerId) ??
+          entry.startQuota ??
+          liveQuotaMap.get(entry.playerId) ??
+          0
       }))
     );
 
@@ -278,7 +283,7 @@ export async function recomputeHistoricalState(tx: Tx) {
     await tx.player.update({
       where: { id: player.id },
       data: {
-        currentQuota: quotaMap.get(player.id) ?? player.startingQuota
+        quota: quotaMap.get(player.id) ?? player.quota
       }
     });
   }
@@ -302,7 +307,8 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     throw new Error("Round not found");
   }
 
-  const quotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
+  const liveQuotaMap = new Map(players.map((player) => [player.id, player.quota]));
+  const quotaMap = new Map<string, number>();
 
   const priorRounds = await tx.round.findMany({
     where: {
@@ -345,7 +351,11 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
         playerName: entry.player.name,
         team: (entry.team as TeamCode | null) ?? null,
         holeScores: getHoleScores(entry),
-        startQuota: quotaMap.get(entry.playerId) ?? entry.startQuota
+        startQuota:
+          quotaMap.get(entry.playerId) ??
+          entry.startQuota ??
+          liveQuotaMap.get(entry.playerId) ??
+          0
       }))
     );
 
@@ -355,8 +365,9 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
       }
     }
   }
-
-  return Object.fromEntries(quotaMap);
+  return Object.fromEntries(
+    players.map((player) => [player.id, quotaMap.get(player.id) ?? player.quota])
+  );
 }
 
 export async function createOrReplaceRoundEntries(

@@ -5,7 +5,7 @@ import { formatDisplayDate } from "@/lib/utils";
 type QuotaRow = {
   id: string;
   name: string;
-  currentQuota: number;
+  quota: number;
   lastRoundPlayed: string;
   lastRoundDate: Date | string | null;
   lastScore: number | null;
@@ -53,7 +53,7 @@ export function CurrentQuotas({ rows }: { rows: QuotaRow[] }) {
 
             <div className="rounded-[22px] border border-pine/15 bg-pine px-4 py-3 text-center text-white shadow-sm">
               <p className="text-[11px] uppercase tracking-[0.22em] text-white/85">Quota</p>
-              <p className="mt-1 text-2xl font-bold">{row.currentQuota}</p>
+              <p className="mt-1 text-2xl font-bold">{row.quota}</p>
             </div>
           </div>
         </SectionCard>

@@ -4,66 +4,65 @@ import { createOrReplaceRoundEntries } from "./round-service";
 const scorePlan = [6, 4, 2, 1, 0, -1] as const;
 
 export const regularPlayers = [
-  { name: "Billy Mattioli", startingQuota: 27, currentQuota: 27 },
-  { name: "Bob Lipski", startingQuota: 34, currentQuota: 34 },
-  { name: "Brandon Wills", startingQuota: 33, currentQuota: 33 },
-  { name: "Chad Kelly", startingQuota: 27, currentQuota: 23 },
-  { name: "Gary Neupauer", startingQuota: 20, currentQuota: 17 },
-  { name: "Jay Thomas", startingQuota: 32, currentQuota: 32 },
-  { name: "Jeff Hodorowski", startingQuota: 27, currentQuota: 28 },
-  { name: "John Thomas", startingQuota: 27, currentQuota: 27 },
-  { name: "Lou Belgio", startingQuota: 30, currentQuota: 30 },
-  { name: "Marty Behm", startingQuota: 32, currentQuota: 34 },
-  { name: "Mike Mahasky", startingQuota: 26, currentQuota: 25 },
-  { name: "Mike Wills", startingQuota: 35, currentQuota: 34 },
-  { name: "Rob Michaels", startingQuota: 27, currentQuota: 23 },
-  { name: "Ryan Holthaus", startingQuota: 17, currentQuota: 15 },
-  { name: "Scott Francis", startingQuota: 31, currentQuota: 30 },
-  { name: "Scott Schifter", startingQuota: 15, currentQuota: 15 }
+  { name: "Billy Mattioli", quota: 27 },
+  { name: "Bob Lipski", quota: 34 },
+  { name: "Brandon Wills", quota: 33 },
+  { name: "Chad Kelly", quota: 23 },
+  { name: "Gary Neupauer", quota: 17 },
+  { name: "Jay Thomas", quota: 32 },
+  { name: "Jeff Hodorowski", quota: 28 },
+  { name: "John Thomas", quota: 27 },
+  { name: "Lou Belgio", quota: 30 },
+  { name: "Marty Behm", quota: 34 },
+  { name: "Mike Mahasky", quota: 25 },
+  { name: "Mike Wills", quota: 34 },
+  { name: "Rob Michaels", quota: 23 },
+  { name: "Ryan Holthaus", quota: 15 },
+  { name: "Scott Francis", quota: 30 },
+  { name: "Scott Schifter", quota: 15 }
 ] as const;
 
 export const otherPlayers = [
-  { name: "AJ Kochanski", startingQuota: 26, currentQuota: 26 },
-  { name: "Bob Ashworth", startingQuota: 21, currentQuota: 21 },
-  { name: "Bogey", startingQuota: 22, currentQuota: 22 },
-  { name: "Brett Sikora", startingQuota: 23, currentQuota: 23 },
-  { name: "Brett Slocum", startingQuota: 25, currentQuota: 25 },
-  { name: "Broj", startingQuota: 33, currentQuota: 33 },
-  { name: "Chad DeBona", startingQuota: 30, currentQuota: 30 },
-  { name: "Charlie Gelso", startingQuota: 29, currentQuota: 29 },
-  { name: "Chris Jones", startingQuota: 29, currentQuota: 29 },
-  { name: "Chris Sikora", startingQuota: 15, currentQuota: 15 },
-  { name: "Chuck Brand", startingQuota: 31, currentQuota: 31 },
-  { name: "Cooper Kelly", startingQuota: 30, currentQuota: 30 },
-  { name: "Dave Straley", startingQuota: 30, currentQuota: 30 },
-  { name: "Dave Yurko", startingQuota: 31, currentQuota: 31 },
-  { name: "Derek Shurmanek", startingQuota: 26, currentQuota: 26 },
-  { name: "Ethan Zawatski", startingQuota: 41, currentQuota: 41 },
-  { name: "Jack Fenwick", startingQuota: 33, currentQuota: 32 },
-  { name: "Jack Morris", startingQuota: 29, currentQuota: 29 },
-  { name: "Jake Humphreys", startingQuota: 27, currentQuota: 27 },
-  { name: "Jim Blinn", startingQuota: 34, currentQuota: 34 },
-  { name: "Jim Fronzoni", startingQuota: 26, currentQuota: 26 },
-  { name: "Joe Bevavino", startingQuota: 34, currentQuota: 34 },
-  { name: "Joe Collini", startingQuota: 32, currentQuota: 32 },
-  { name: "Joe Rubbico", startingQuota: 28, currentQuota: 27 },
-  { name: "John Ashley", startingQuota: 32, currentQuota: 32 },
-  { name: "Jonathon Wilson", startingQuota: 41, currentQuota: 41 },
-  { name: "Matt Alfano", startingQuota: 19, currentQuota: 19 },
-  { name: "Mike Aritz", startingQuota: 22, currentQuota: 22 },
-  { name: "Mike Boland", startingQuota: 32, currentQuota: 32 },
-  { name: "Mike Lipski", startingQuota: 23, currentQuota: 23 },
-  { name: "Pat Murray", startingQuota: 26, currentQuota: 26 },
-  { name: "Phil Lipski", startingQuota: 22, currentQuota: 22 },
-  { name: "Ron Prokrinchak", startingQuota: 21, currentQuota: 21 },
-  { name: "Tony Bevevino", startingQuota: 38, currentQuota: 38 },
-  { name: "Travis Debona", startingQuota: 27, currentQuota: 27 }
+  { name: "AJ Kochanski", quota: 26 },
+  { name: "Bob Ashworth", quota: 21 },
+  { name: "Bogey", quota: 22 },
+  { name: "Brett Sikora", quota: 23 },
+  { name: "Brett Slocum", quota: 25 },
+  { name: "Broj", quota: 33 },
+  { name: "Chad DeBona", quota: 30 },
+  { name: "Charlie Gelso", quota: 29 },
+  { name: "Chris Jones", quota: 29 },
+  { name: "Chris Sikora", quota: 15 },
+  { name: "Chuck Brand", quota: 31 },
+  { name: "Cooper Kelly", quota: 30 },
+  { name: "Dave Straley", quota: 30 },
+  { name: "Dave Yurko", quota: 31 },
+  { name: "Derek Shurmanek", quota: 26 },
+  { name: "Ethan Zawatski", quota: 41 },
+  { name: "Jack Fenwick", quota: 32 },
+  { name: "Jack Morris", quota: 29 },
+  { name: "Jake Humphreys", quota: 27 },
+  { name: "Jim Blinn", quota: 34 },
+  { name: "Jim Fronzoni", quota: 26 },
+  { name: "Joe Bevavino", quota: 34 },
+  { name: "Joe Collini", quota: 32 },
+  { name: "Joe Rubbico", quota: 27 },
+  { name: "John Ashley", quota: 32 },
+  { name: "Jonathon Wilson", quota: 41 },
+  { name: "Matt Alfano", quota: 19 },
+  { name: "Mike Aritz", quota: 22 },
+  { name: "Mike Boland", quota: 32 },
+  { name: "Mike Lipski", quota: 23 },
+  { name: "Pat Murray", quota: 26 },
+  { name: "Phil Lipski", quota: 22 },
+  { name: "Ron Prokrinchak", quota: 21 },
+  { name: "Tony Bevevino", quota: 38 },
+  { name: "Travis Debona", quota: 27 }
 ] as const;
 
 type StarterPlayerSeed = {
   name: string;
-  startingQuota: number;
-  currentQuota: number;
+  quota: number;
   isRegular: boolean;
 };
 
@@ -177,15 +176,13 @@ export async function ensureStarterPlayers(prisma: PrismaClient) {
         name: playerSeed.name
       },
       update: {
-        startingQuota: playerSeed.startingQuota,
-        currentQuota: playerSeed.currentQuota,
+        quota: playerSeed.quota,
         isRegular: playerSeed.isRegular,
         isActive: true
       },
       create: {
         name: playerSeed.name,
-        startingQuota: playerSeed.startingQuota,
-        currentQuota: playerSeed.currentQuota,
+        quota: playerSeed.quota,
         isRegular: playerSeed.isRegular,
         isActive: true
       }

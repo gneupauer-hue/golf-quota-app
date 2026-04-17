@@ -43,8 +43,7 @@ import { classNames, formatDateInput, formatRoundNameFromDate } from "@/lib/util
 type PlayerOption = {
   id: string;
   name: string;
-  startingQuota: number;
-  currentQuota: number;
+  quota: number;
   isRegular: boolean;
   isActive: boolean;
   conflictIds: string[];
@@ -290,7 +289,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           return {
             playerId: player.id,
             playerName: player.name,
-            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
+      quota: quotaSnapshot[player.id] ?? player.quota,
             conflictIds: player.conflictIds
           };
         })
@@ -392,7 +391,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             playerId: row.playerId,
             playerName: player.name,
             team: row.team,
-            startQuota: quotaSnapshot[row.playerId] ?? player.currentQuota ?? player.startingQuota,
+      startQuota: quotaSnapshot[row.playerId] ?? player.quota,
             holeScores: row.holeScores
           };
         })
@@ -421,7 +420,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             playerId: row.playerId,
             playerName: player.name,
             team: row.team,
-            startQuota: quotaSnapshot[row.playerId] ?? player.currentQuota ?? player.startingQuota,
+      startQuota: quotaSnapshot[row.playerId] ?? player.quota,
             holeScores: row.holeScores
           };
         })
@@ -486,7 +485,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       const teamRows = rows.filter((row) => row.team === team);
       const totalQuota = teamRows.reduce((sum, row) => {
         const player = playersById.get(row.playerId);
-        return sum + (player ? quotaSnapshot[row.playerId] ?? player.currentQuota ?? player.startingQuota : 0);
+      return sum + (player ? quotaSnapshot[row.playerId] ?? player.quota : 0);
       }, 0);
 
       return {
@@ -498,7 +497,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             playerId: row.playerId,
             playerName: player?.name ?? "Unknown Player",
             quota: player
-              ? quotaSnapshot[row.playerId] ?? player.currentQuota ?? player.startingQuota
+        ? quotaSnapshot[row.playerId] ?? player.quota
               : 0
           };
         }),
@@ -606,7 +605,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           return {
             playerId: player.id,
             playerName: player.name,
-            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
+      quota: quotaSnapshot[player.id] ?? player.quota,
             conflictIds: player.conflictIds
           };
         })
@@ -741,7 +740,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           return {
             playerId: player.id,
             playerName: player.name,
-            quota: quotaSnapshot[player.id] ?? player.currentQuota ?? player.startingQuota,
+      quota: quotaSnapshot[player.id] ?? player.quota,
             conflictIds: player.conflictIds
           };
         })
@@ -1454,7 +1453,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 <button key={player.id} type="button" className="flex min-h-16 w-full items-center justify-between rounded-[22px] bg-canvas px-4 text-left" onClick={() => addPlayer(player.id)}>
                   <span>
                     <span className="block text-base font-semibold">{player.name}</span>
-                    <span className="mt-1 block text-sm text-ink/55">{`Quota ${quotaSnapshot[player.id] ?? player.currentQuota} | ${player.isRegular ? "Regular" : "Other"}`}</span>
+                    <span className="mt-1 block text-sm text-ink/55">{`Quota ${quotaSnapshot[player.id] ?? player.quota} | ${player.isRegular ? "Regular" : "Other"}`}</span>
                   </span>
                   <span className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-pine">Add</span>
                 </button>
@@ -1481,7 +1480,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     <div key={row.playerId} className="flex items-center justify-between rounded-2xl bg-canvas px-4 py-3">
                       <div>
                         <p className="text-base font-semibold">{player.name}</p>
-                        <p className="mt-1 text-xs text-ink/55">{`Quota ${quotaSnapshot[player.id] ?? player.currentQuota} | Conflicts ${player.conflictIds.length}`}</p>
+                  <p className="mt-1 text-xs text-ink/55">{`Quota ${quotaSnapshot[player.id] ?? player.quota} | Conflicts ${player.conflictIds.length}`}</p>
                       </div>
                       <button type="button" className="min-h-11 rounded-2xl bg-white px-4 text-sm font-semibold text-ink/70" onClick={() => removePlayer(row.playerId)}>
                         Remove

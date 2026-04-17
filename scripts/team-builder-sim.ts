@@ -16,7 +16,7 @@ type SetupPlayer = {
 const starterPlayers: SetupPlayer[] = [...regularPlayers, ...otherPlayers].map((player, index) => ({
   playerId: `player-${index + 1}`,
   playerName: player.name,
-  quota: player.currentQuota,
+  quota: player.quota,
   conflictIds: []
 }));
 

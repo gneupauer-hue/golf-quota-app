@@ -35,8 +35,7 @@ export async function getPlayersForSelection() {
     select: {
       id: true,
       name: true,
-      startingQuota: true,
-      currentQuota: true,
+      quota: true,
       isRegular: true,
       isActive: true,
       conflictsFrom: {
@@ -49,8 +48,7 @@ export async function getPlayersForSelection() {
     players.map((player) => ({
       id: player.id,
       name: player.name,
-      startingQuota: player.startingQuota,
-      currentQuota: player.currentQuota,
+      quota: player.quota,
       isRegular: player.isRegular,
       isActive: player.isActive,
       conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId)
@@ -64,8 +62,7 @@ export async function getPlayersPageData() {
     select: {
       id: true,
       name: true,
-      startingQuota: true,
-      currentQuota: true,
+      quota: true,
       isRegular: true,
       isActive: true,
       conflictsFrom: {
@@ -88,8 +85,7 @@ export async function getCurrentQuotaRows() {
     select: {
       id: true,
       name: true,
-      startingQuota: true,
-      currentQuota: true,
+      quota: true,
       isRegular: true,
       isActive: true,
       roundEntries: {
@@ -122,7 +118,7 @@ export async function getCurrentQuotaRows() {
   return players.map((player) => ({
     id: player.id,
     name: player.name,
-    currentQuota: player.currentQuota,
+    quota: player.quota,
     group: player.isRegular ? "Regular" : "Other",
     isActive: player.isActive,
     lastRoundPlayed: player.roundEntries[0]?.round.roundName ?? "-",
