@@ -130,7 +130,7 @@ export async function getCurrentQuotaRows() {
 }
 
 export async function getRoundsList() {
-  const rounds = await prisma.round.findMany({
+  const rounds = await (prisma as any).round.findMany({
     where: {
       canceledAt: null
     },
@@ -151,7 +151,7 @@ export async function getRoundsList() {
     orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }]
   });
 
-  return rounds.map((round) => {
+  return (rounds as any[]).map((round: any) => {
     const settlement = getRoundSettlementState(round);
 
     return {
@@ -178,7 +178,7 @@ export async function getRoundsList() {
 }
 
 export async function getPastGamesList() {
-  const rounds = await prisma.round.findMany({
+  const rounds = await (prisma as any).round.findMany({
     where: {
       completedAt: {
         not: null
@@ -202,7 +202,7 @@ export async function getPastGamesList() {
     orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }]
   });
 
-  return rounds.map((round) => {
+  return (rounds as any[]).map((round: any) => {
     const settlement = getRoundSettlementState(round);
 
     return {
@@ -245,7 +245,7 @@ export async function getLeaderboardPageData() {
     return null;
   }
 
-  const calculatedEntries = data.round.entries.map((entry) => ({
+  const calculatedEntries = data.round.entries.map((entry: any) => ({
     playerId: entry.playerId,
     playerName: entry.playerName,
     team: entry.team,
@@ -275,7 +275,7 @@ export async function getLeaderboardPageData() {
 
 export async function getRoundEditorData(roundId: string) {
   const [round, players] = await Promise.all([
-    prisma.round.findUnique({
+    (prisma as any).round.findUnique({
       where: { id: roundId },
       include: {
         entries: {
@@ -302,7 +302,7 @@ export async function getRoundEditorData(roundId: string) {
 
   const quotaSnapshot = await getQuotaSnapshotBeforeRound(prisma, roundId);
 
-  const calculatedEntries = round.entries.map((entry) => ({
+  const calculatedEntries = (round.entries as any[]).map((entry: any) => ({
     id: entry.id,
     playerId: entry.playerId,
     playerName: entry.player.name,
@@ -353,7 +353,10 @@ export async function getRoundEditorData(roundId: string) {
       calculatedEntries
       .filter((entry) => entry.groupNumber && entry.teeTime)
       .reduce(
-        (acc, entry) => {
+        (
+          acc: Map<string, { groupNumber: number; teeTime: string; players: string[] }>,
+          entry: any
+        ) => {
           const key = `${entry.groupNumber}`;
           const current = acc.get(key) ?? {
             groupNumber: entry.groupNumber!,
@@ -372,7 +375,7 @@ export async function getRoundEditorData(roundId: string) {
 }
 
 export async function getRoundResultsData(roundId: string) {
-  const round = await prisma.round.findUnique({
+  const round = await (prisma as any).round.findUnique({
     where: { id: roundId },
     include: {
       entries: {
@@ -394,7 +397,7 @@ export async function getRoundResultsData(roundId: string) {
     return null;
   }
 
-  const entries = round.entries.map((entry) => ({
+  const entries = (round.entries as any[]).map((entry: any) => ({
     id: entry.id,
     playerId: entry.playerId,
     playerName: entry.player.name,

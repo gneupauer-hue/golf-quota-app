@@ -45,7 +45,7 @@ export async function PUT(
       );
     }
 
-    const existingRound = await prisma.round.findUnique({
+    const existingRound = await (prisma as any).round.findUnique({
       where: { id }
     });
 

@@ -21,6 +21,7 @@ type ReconciliationRow = {
   allocated: number;
   pot: number;
   difference: number;
+  bar: number;
 };
 
 function formatCurrency(value: number) {
@@ -36,6 +37,7 @@ export function LeaderboardPayoutPredictions({
   isPayoutLocked,
   initialPaidPlayerIds,
   players,
+  barRemainder,
   moneyCurrentlyInPlay,
   unsettledSkinsValue,
   isBalanced,
@@ -46,6 +48,7 @@ export function LeaderboardPayoutPredictions({
   isPayoutLocked: boolean;
   initialPaidPlayerIds: string[];
   players: PlayerPrediction[];
+  barRemainder: number;
   moneyCurrentlyInPlay: number;
   unsettledSkinsValue: number;
   isBalanced: boolean;
@@ -251,6 +254,21 @@ export function LeaderboardPayoutPredictions({
               </div>
             </details>
           ))}
+          {barRemainder > 0 ? (
+            <div className="rounded-[22px] border border-[color:var(--club-card-border)] bg-[color:var(--club-cream)] px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-base font-semibold text-ink">Bar</p>
+                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-ink/55">
+                    Rounded remainder
+                  </p>
+                </div>
+                <p className="text-xl font-bold text-[color:var(--club-green)]">
+                  {formatCurrency(barRemainder)}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="rounded-[22px] border border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-4 py-4">
@@ -311,6 +329,11 @@ export function LeaderboardPayoutPredictions({
                     {`${formatCurrency(row.allocated)} / ${formatCurrency(row.pot)}`}
                   </p>
                 </div>
+                {row.bar > 0 ? (
+                  <p className="mt-1 text-xs font-medium text-ink/75">
+                    {`Includes ${formatCurrency(row.bar)} to Bar`}
+                  </p>
+                ) : null}
                 {mismatch ? (
                   <p className="mt-1 text-xs font-medium text-ink/75">
                     {`Off by ${formatCurrency(Math.abs(row.difference))} ${row.difference > 0 ? "over" : "under"}`}

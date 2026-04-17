@@ -10,7 +10,7 @@ export async function POST(
     const body = await request.json();
     const action = String(body.action ?? "").trim();
 
-    const round = await prisma.round.findUnique({
+    const round = await (prisma as any).round.findUnique({
       where: { id },
       include: {
         entries: {
@@ -37,7 +37,9 @@ export async function POST(
       }
 
       const playerId = String(body.playerId ?? "").trim();
-      const validPlayerIds = new Set(round.entries.map((entry) => entry.playerId));
+      const validPlayerIds = new Set(
+        (round.entries as Array<{ playerId: string }>).map((entry) => entry.playerId)
+      );
 
       if (!playerId || !validPlayerIds.has(playerId)) {
         return NextResponse.json({ error: "Player not found in this round." }, { status: 400 });
@@ -47,7 +49,7 @@ export async function POST(
         ? paidPlayerIds.filter((id) => id !== playerId)
         : [...paidPlayerIds, playerId].sort((a, b) => a.localeCompare(b));
 
-      const updatedRound = await prisma.round.update({
+      const updatedRound = await (prisma as any).round.update({
         where: { id },
         data: {
           paidPlayerIds: nextPaidIds
@@ -68,7 +70,7 @@ export async function POST(
         return NextResponse.json({ ok: true, isPayoutLocked: true });
       }
 
-      const updatedRound = await prisma.round.update({
+      const updatedRound = await (prisma as any).round.update({
         where: { id },
         data: {
           isPayoutLocked: true

@@ -58,50 +58,58 @@ export default async function LeaderboardPage() {
     {
       key: "front",
       label: "Front paid",
-      allocated: payoutPredictions.frontProjectedTotal,
+      allocated: payoutPredictions.frontProjectedTotal + payoutPredictions.frontBarRemainder,
       pot: payoutPredictions.frontPot,
-      difference: payoutPredictions.frontDifference
+      difference: payoutPredictions.frontDifference,
+      bar: payoutPredictions.frontBarRemainder
     },
     {
       key: "back",
       label: "Back paid",
-      allocated: payoutPredictions.backProjectedTotal,
+      allocated: payoutPredictions.backProjectedTotal + payoutPredictions.backBarRemainder,
       pot: payoutPredictions.backPot,
-      difference: payoutPredictions.backDifference
+      difference: payoutPredictions.backDifference,
+      bar: payoutPredictions.backBarRemainder
     },
     {
       key: "total",
       label: "Total paid",
-      allocated: payoutPredictions.totalProjectedTotal,
+      allocated: payoutPredictions.totalProjectedTotal + payoutPredictions.totalBarRemainder,
       pot: payoutPredictions.totalPot,
-      difference: payoutPredictions.totalDifference
+      difference: payoutPredictions.totalDifference,
+      bar: payoutPredictions.totalBarRemainder
     },
     {
       key: "indy",
       label: "Indy paid",
-      allocated: payoutPredictions.indyProjectedTotal,
+      allocated: payoutPredictions.indyProjectedTotal + payoutPredictions.indyBarRemainder,
       pot: payoutPredictions.indyPot,
-      difference: payoutPredictions.indyDifference
+      difference: payoutPredictions.indyDifference,
+      bar: payoutPredictions.indyBarRemainder
     },
     {
       key: "skins",
       label: "Skins paid",
-      allocated: payoutPredictions.skinsProjectedTotal,
+      allocated: payoutPredictions.skinsProjectedTotal + payoutPredictions.skinsBarRemainder,
       pot: payoutPredictions.skinsPot,
-      difference: payoutPredictions.skinsDifference
+      difference: payoutPredictions.skinsDifference,
+      bar: payoutPredictions.skinsBarRemainder
     },
     {
       key: "overall",
       label: "Overall allocated",
-      allocated: payoutPredictions.projectedPayoutTotal,
+      allocated: payoutPredictions.projectedPayoutTotal + payoutPredictions.barRemainder,
       pot: payoutPredictions.overallPot,
-      difference: payoutPredictions.overallDifference
+      difference: payoutPredictions.overallDifference,
+      bar: payoutPredictions.barRemainder
     }
   ] as const;
   const awardedSkins = data.money.skins.holes
     .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
     .map((hole) => {
-      const winner = data.entries.find((entry) => entry.playerId === hole.winnerPlayerId);
+      const winner = data.entries.find(
+        (entry: (typeof data.entries)[number]) => entry.playerId === hole.winnerPlayerId
+      );
       const resultLabel = getSkinResultLabel(winner?.holeScores[hole.holeNumber - 1]) ?? "Birdie";
 
       return {
@@ -293,6 +301,7 @@ export default async function LeaderboardPage() {
           isPayoutLocked={Boolean(data.round.isPayoutLocked)}
           initialPaidPlayerIds={data.round.paidPlayerIds ?? []}
           players={payoutPredictions.players}
+          barRemainder={payoutPredictions.barRemainder}
           moneyCurrentlyInPlay={payoutPredictions.moneyCurrentlyInPlay}
           unsettledSkinsValue={payoutPredictions.unsettledSkinsValue}
           isBalanced={payoutPredictions.isBalanced}

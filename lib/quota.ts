@@ -211,6 +211,12 @@ export type PayoutPredictionsSummary = {
   totalProjectedTotal: number;
   indyProjectedTotal: number;
   skinsProjectedTotal: number;
+  frontBarRemainder: number;
+  backBarRemainder: number;
+  totalBarRemainder: number;
+  indyBarRemainder: number;
+  skinsBarRemainder: number;
+  barRemainder: number;
   frontPot: number;
   backPot: number;
   totalPot: number;
@@ -599,6 +605,10 @@ function roundCurrency(value: number) {
 
 function isCurrencyMatch(allocated: number, pot: number) {
   return roundCurrency(allocated) === roundCurrency(pot);
+}
+
+function floorWholeDollar(value: number) {
+  return Math.floor(roundCurrency(value));
 }
 
 function splitCurrencyAcrossKeys(total: number, keys: string[]) {
@@ -1174,6 +1184,27 @@ export function calculatePayoutPredictions(
     });
   });
 
+  function applyRoundedAllocations(
+    allocations: Map<string, number>,
+    category: "front" | "back" | "total" | "indy" | "skins"
+  ) {
+    allocations.forEach((amount, playerId) => {
+      const player = players.get(playerId);
+      if (player) {
+        player[category] = floorWholeDollar(amount);
+      }
+    });
+
+    const originalTotal = roundCurrency(
+      Array.from(allocations.values()).reduce((sum, amount) => sum + amount, 0)
+    );
+    const roundedTotal = roundCurrency(
+      Array.from(players.values()).reduce((sum, player) => sum + player[category], 0)
+    );
+
+    return roundCurrency(originalTotal - roundedTotal);
+  }
+
   const frontAllocations = includeTeamPayouts
     ? allocateTeamPotToPlayers(rows, teams, "frontPlusMinus", sideGames.teamPots.frontPot)
     : new Map<string, number>();
@@ -1184,41 +1215,26 @@ export function calculatePayoutPredictions(
     ? allocateTeamPotToPlayers(rows, teams, "totalPlusMinus", sideGames.teamPots.totalPot)
     : new Map<string, number>();
 
-  frontAllocations.forEach((amount, playerId) => {
-    const player = players.get(playerId);
-    if (player) {
-      player.front = amount;
-    }
-  });
-  backAllocations.forEach((amount, playerId) => {
-    const player = players.get(playerId);
-    if (player) {
-      player.back = amount;
-    }
-  });
-  totalAllocations.forEach((amount, playerId) => {
-    const player = players.get(playerId);
-    if (player) {
-      player.total = amount;
-    }
-  });
+  const frontBarRemainder = applyRoundedAllocations(frontAllocations, "front");
+  const backBarRemainder = applyRoundedAllocations(backAllocations, "back");
+  const totalBarRemainder = applyRoundedAllocations(totalAllocations, "total");
 
   if (includeIndividualPayouts) {
-    sideGames.individualPayouts.forEach((payout) => {
-      const player = players.get(payout.playerId);
-      if (player) {
-        player.indy = payout.payout;
-      }
-    });
+    const indyAllocations = new Map(
+      sideGames.individualPayouts.map((payout) => [payout.playerId, payout.payout])
+    );
+    var indyBarRemainder = applyRoundedAllocations(indyAllocations, "indy");
+  } else {
+    var indyBarRemainder = 0;
   }
 
   if (includeSkinsPayouts) {
-    sideGames.skins.winners.forEach((winner) => {
-      const player = players.get(winner.playerId);
-      if (player) {
-        player.skins = winner.payout;
-      }
-    });
+    const skinsAllocations = new Map(
+      sideGames.skins.winners.map((winner) => [winner.playerId, winner.payout])
+    );
+    var skinsBarRemainder = applyRoundedAllocations(skinsAllocations, "skins");
+  } else {
+    var skinsBarRemainder = 0;
   }
 
   const projectedPlayers = Array.from(players.values())
@@ -1260,20 +1276,28 @@ export function calculatePayoutPredictions(
   const skinsPot = includeSkinsPayouts
     ? roundCurrency(sideGames.skins.winners.length ? sideGames.skins.totalPot : 0)
     : 0;
+  const barRemainder = roundCurrency(
+    frontBarRemainder +
+      backBarRemainder +
+      totalBarRemainder +
+      indyBarRemainder +
+      skinsBarRemainder
+  );
   const moneyCurrentlyInPlay = roundCurrency(
     frontProjectedTotal +
       backProjectedTotal +
       totalProjectedTotal +
       indyProjectedTotal +
-      skinsProjectedTotal
+      skinsProjectedTotal +
+      barRemainder
   );
   const overallPot = roundCurrency(frontPot + backPot + totalPot + indyPot + skinsPot);
-  const frontDifference = roundCurrency(frontProjectedTotal - frontPot);
-  const backDifference = roundCurrency(backProjectedTotal - backPot);
-  const totalDifference = roundCurrency(totalProjectedTotal - totalPot);
-  const indyDifference = roundCurrency(indyProjectedTotal - indyPot);
-  const skinsDifference = roundCurrency(skinsProjectedTotal - skinsPot);
-  const overallDifference = roundCurrency(projectedPayoutTotal - overallPot);
+  const frontDifference = roundCurrency(frontProjectedTotal + frontBarRemainder - frontPot);
+  const backDifference = roundCurrency(backProjectedTotal + backBarRemainder - backPot);
+  const totalDifference = roundCurrency(totalProjectedTotal + totalBarRemainder - totalPot);
+  const indyDifference = roundCurrency(indyProjectedTotal + indyBarRemainder - indyPot);
+  const skinsDifference = roundCurrency(skinsProjectedTotal + skinsBarRemainder - skinsPot);
+  const overallDifference = roundCurrency(projectedPayoutTotal + barRemainder - overallPot);
   const unsettledSkinsValue = roundCurrency(
     Math.max(0, sideGames.skins.totalPot - skinsProjectedTotal)
   );
@@ -1311,6 +1335,12 @@ export function calculatePayoutPredictions(
     totalProjectedTotal,
     indyProjectedTotal,
     skinsProjectedTotal,
+    frontBarRemainder,
+    backBarRemainder,
+    totalBarRemainder,
+    indyBarRemainder,
+    skinsBarRemainder,
+    barRemainder,
     frontPot,
     backPot,
     totalPot,
