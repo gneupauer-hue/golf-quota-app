@@ -17,6 +17,7 @@ type SetupPlayer = {
 };
 
 const expectedCapacities = new Map<number, number[]>([
+  [4, [2, 2]],
   [6, [3, 3]],
   [7, [3, 4]],
   [8, [4, 4]],
@@ -99,7 +100,7 @@ for (const [playerCount, capacities] of expectedCapacities) {
 }
 
 test("unsupported Match counts do not invent team formats", () => {
-  for (const playerCount of [4, 5, 17, 18]) {
+  for (const playerCount of [5, 17, 18]) {
     assert.deepEqual(getTeamFormats(playerCount), []);
   }
 });

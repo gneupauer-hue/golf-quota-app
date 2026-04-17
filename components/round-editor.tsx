@@ -1413,7 +1413,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 </p>
                 {!activeSetupFormat ? (
                   <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/65">
-                    Match mode supports fixed 3-player and 4-player team formats for 6 through 16 players.
+                    Match mode supports fixed team formats for 4 players and for 6 through 16 players. Two-man teams are only allowed for the special 4-player format.
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">

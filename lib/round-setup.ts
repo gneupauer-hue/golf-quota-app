@@ -122,6 +122,7 @@ export function getTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
 }
 
 const fixedMatchTeamFormats = new Map<number, number[]>([
+  [4, [2, 2]],
   [6, [3, 3]],
   [7, [3, 4]],
   [8, [4, 4]],
