@@ -1186,7 +1186,8 @@ export function calculatePayoutPredictions(
 
   function applyRoundedAllocations(
     allocations: Map<string, number>,
-    category: "front" | "back" | "total" | "indy" | "skins"
+    category: "front" | "back" | "total" | "indy" | "skins",
+    pot: number
   ) {
     allocations.forEach((amount, playerId) => {
       const player = players.get(playerId);
@@ -1195,14 +1196,11 @@ export function calculatePayoutPredictions(
       }
     });
 
-    const originalTotal = roundCurrency(
-      Array.from(allocations.values()).reduce((sum, amount) => sum + amount, 0)
-    );
     const roundedTotal = roundCurrency(
       Array.from(players.values()).reduce((sum, player) => sum + player[category], 0)
     );
 
-    return roundCurrency(originalTotal - roundedTotal);
+    return roundCurrency(Math.max(0, pot - roundedTotal));
   }
 
   const frontAllocations = includeTeamPayouts
@@ -1214,16 +1212,39 @@ export function calculatePayoutPredictions(
   const totalAllocations = includeTeamPayouts
     ? allocateTeamPotToPlayers(rows, teams, "totalPlusMinus", sideGames.teamPots.totalPot)
     : new Map<string, number>();
+  const frontPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.frontPot) : 0;
+  const backPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.backPot) : 0;
+  const totalPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.totalPot) : 0;
+  const indyPot = includeIndividualPayouts ? roundCurrency(sideGames.overallPot.indyPot) : 0;
+  const skinsPot = includeSkinsPayouts
+    ? roundCurrency(sideGames.skins.winners.length ? sideGames.skins.totalPot : 0)
+    : 0;
 
-  const frontBarRemainder = applyRoundedAllocations(frontAllocations, "front");
-  const backBarRemainder = applyRoundedAllocations(backAllocations, "back");
-  const totalBarRemainder = applyRoundedAllocations(totalAllocations, "total");
+  const frontBarRemainder = applyRoundedAllocations(
+    frontAllocations,
+    "front",
+    frontPot
+  );
+  const backBarRemainder = applyRoundedAllocations(
+    backAllocations,
+    "back",
+    backPot
+  );
+  const totalBarRemainder = applyRoundedAllocations(
+    totalAllocations,
+    "total",
+    totalPot
+  );
 
   if (includeIndividualPayouts) {
     const indyAllocations = new Map(
       sideGames.individualPayouts.map((payout) => [payout.playerId, payout.payout])
     );
-    var indyBarRemainder = applyRoundedAllocations(indyAllocations, "indy");
+    var indyBarRemainder = applyRoundedAllocations(
+      indyAllocations,
+      "indy",
+      indyPot
+    );
   } else {
     var indyBarRemainder = 0;
   }
@@ -1232,7 +1253,11 @@ export function calculatePayoutPredictions(
     const skinsAllocations = new Map(
       sideGames.skins.winners.map((winner) => [winner.playerId, winner.payout])
     );
-    var skinsBarRemainder = applyRoundedAllocations(skinsAllocations, "skins");
+    var skinsBarRemainder = applyRoundedAllocations(
+      skinsAllocations,
+      "skins",
+      skinsPot
+    );
   } else {
     var skinsBarRemainder = 0;
   }
@@ -1269,13 +1294,6 @@ export function calculatePayoutPredictions(
   const projectedPayoutTotal = roundCurrency(
     projectedPlayers.reduce((sum, player) => sum + player.projectedTotal, 0)
   );
-  const frontPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.frontPot) : 0;
-  const backPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.backPot) : 0;
-  const totalPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.totalPot) : 0;
-  const indyPot = includeIndividualPayouts ? roundCurrency(sideGames.overallPot.indyPot) : 0;
-  const skinsPot = includeSkinsPayouts
-    ? roundCurrency(sideGames.skins.winners.length ? sideGames.skins.totalPot : 0)
-    : 0;
   const barRemainder = roundCurrency(
     frontBarRemainder +
       backBarRemainder +
@@ -1299,31 +1317,37 @@ export function calculatePayoutPredictions(
   const skinsDifference = roundCurrency(skinsProjectedTotal + skinsBarRemainder - skinsPot);
   const overallDifference = roundCurrency(projectedPayoutTotal + barRemainder - overallPot);
   const unsettledSkinsValue = roundCurrency(
-    Math.max(0, sideGames.skins.totalPot - skinsProjectedTotal)
+    Math.max(0, sideGames.skins.totalPot - skinsProjectedTotal - skinsBarRemainder)
   );
   const mismatchedCategories: PayoutPredictionsSummary["mismatchedCategories"] = [];
 
-  if (!isCurrencyMatch(frontProjectedTotal, frontPot)) mismatchedCategories.push("front");
-  if (!isCurrencyMatch(backProjectedTotal, backPot)) mismatchedCategories.push("back");
-  if (!isCurrencyMatch(totalProjectedTotal, totalPot)) mismatchedCategories.push("total");
-  if (!isCurrencyMatch(indyProjectedTotal, indyPot)) mismatchedCategories.push("indy");
-  if (!isCurrencyMatch(skinsProjectedTotal, skinsPot)) mismatchedCategories.push("skins");
-  if (!isCurrencyMatch(projectedPayoutTotal, overallPot)) mismatchedCategories.push("overall");
+  if (!isCurrencyMatch(frontProjectedTotal + frontBarRemainder, frontPot)) mismatchedCategories.push("front");
+  if (!isCurrencyMatch(backProjectedTotal + backBarRemainder, backPot)) mismatchedCategories.push("back");
+  if (!isCurrencyMatch(totalProjectedTotal + totalBarRemainder, totalPot)) mismatchedCategories.push("total");
+  if (!isCurrencyMatch(indyProjectedTotal + indyBarRemainder, indyPot)) mismatchedCategories.push("indy");
+  if (!isCurrencyMatch(skinsProjectedTotal + skinsBarRemainder, skinsPot)) mismatchedCategories.push("skins");
+  if (!isCurrencyMatch(projectedPayoutTotal + barRemainder, overallPot)) mismatchedCategories.push("overall");
 
   if (mismatchedCategories.length) {
     console.warn("Payout reconciliation mismatch detected", {
       mismatchedCategories,
       frontProjectedTotal,
+      frontBarRemainder,
       frontPot,
       backProjectedTotal,
+      backBarRemainder,
       backPot,
       totalProjectedTotal,
+      totalBarRemainder,
       totalPot,
       indyProjectedTotal,
+      indyBarRemainder,
       indyPot,
       skinsProjectedTotal,
+      skinsBarRemainder,
       skinsPot,
       projectedPayoutTotal,
+      barRemainder,
       overallPot
     });
   }

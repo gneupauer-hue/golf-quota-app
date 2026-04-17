@@ -155,3 +155,41 @@ test("when no good skins are won yet, skins remain unsettled instead of mismatch
   assert.equal(payoutPredictions.isBalanced, true);
   assert.deepEqual(payoutPredictions.mismatchedCategories, []);
 });
+
+test("fractional split payouts floor players first and send the exact remainder to the bar", () => {
+  const rows: CalculatedRoundRow[] = [
+    buildRow({ id: "p1", name: "Gary", team: "A", frontNine: 20, backNine: 18, frontQuota: 15, backQuota: 15, birdieHole: 0 }),
+    buildRow({ id: "p2", name: "Billy", team: "A", frontNine: 20, backNine: 17, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p3", name: "Chad", team: "A", frontNine: 19, backNine: 16, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p4", name: "Jeff", team: "B", frontNine: 20, backNine: 14, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p5", name: "Ryan", team: "B", frontNine: 20, backNine: 13, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p6", name: "Scott", team: "B", frontNine: 19, backNine: 12, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p7", name: "Bob", team: "C", frontNine: 20, backNine: 11, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p8", name: "Lou", team: "C", frontNine: 20, backNine: 10, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p9", name: "Mike", team: "C", frontNine: 19, backNine: 9, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p10", name: "Pat", team: "D", frontNine: 14, backNine: 20, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p11", name: "Tony", team: "D", frontNine: 13, backNine: 19, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p12", name: "Jake", team: "D", frontNine: 12, backNine: 18, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p13", name: "Matt", team: "D", frontNine: 11, backNine: 17, frontQuota: 15, backQuota: 15 })
+  ];
+
+  const payoutPredictions = calculatePayoutPredictions(rows);
+
+  for (const player of payoutPredictions.players) {
+    assert.equal(Number.isInteger(player.front), true);
+    assert.equal(Number.isInteger(player.back), true);
+    assert.equal(Number.isInteger(player.total), true);
+    assert.equal(Number.isInteger(player.indy), true);
+    assert.equal(Number.isInteger(player.skins), true);
+    assert.equal(Number.isInteger(player.projectedTotal), true);
+  }
+
+  assert.equal(payoutPredictions.frontProjectedTotal + payoutPredictions.frontBarRemainder, payoutPredictions.frontPot);
+  assert.equal(payoutPredictions.backProjectedTotal + payoutPredictions.backBarRemainder, payoutPredictions.backPot);
+  assert.equal(payoutPredictions.totalProjectedTotal + payoutPredictions.totalBarRemainder, payoutPredictions.totalPot);
+  assert.equal(payoutPredictions.indyProjectedTotal + payoutPredictions.indyBarRemainder, payoutPredictions.indyPot);
+  assert.equal(payoutPredictions.skinsProjectedTotal + payoutPredictions.skinsBarRemainder, payoutPredictions.skinsPot);
+  assert.equal(payoutPredictions.projectedPayoutTotal + payoutPredictions.barRemainder, payoutPredictions.overallPot);
+  assert.equal(payoutPredictions.isBalanced, true);
+  assert.deepEqual(payoutPredictions.mismatchedCategories, []);
+});
