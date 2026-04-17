@@ -2129,7 +2129,6 @@ function RoundTabView({
         </button>
       </SectionCard>
 
-      <PlayerBuyInSection buyIns={playerBuyIns} mode="MATCH_QUOTA" />
       <BuyInStatusSection
         roundId={roundId}
         buyIns={playerBuyIns}
@@ -2253,7 +2252,6 @@ function SkinsOnlyRoundTab({
         </div>
       </SectionCard>
 
-      <PlayerBuyInSection buyIns={playerBuyIns} mode="SKINS_ONLY" />
       <BuyInStatusSection
         roundId={roundId}
         buyIns={playerBuyIns}
@@ -2517,81 +2515,6 @@ function SkinsOnlyLeadersTab({
   );
 }
 
-function PlayerBuyInSection({
-  buyIns,
-  mode
-}: {
-  buyIns: PlayerBuyInSummary;
-  mode: RoundMode;
-}) {
-  if (!buyIns.players.length) {
-    return null;
-  }
-
-  const teamLabel = mode === "MATCH_QUOTA" ? "Team" : null;
-  const summaryText =
-    buyIns.everyoneOwesSame && buyIns.commonTotal != null
-      ? `Each player owes ${formatCurrency(buyIns.commonTotal)} today.`
-      : buyIns.teamContributionVaries
-        ? "Team contribution varies by team size. Indy and skins stay even for everyone."
-        : "Player totals are calculated from the live pots for this round.";
-
-  return (
-    <SectionCard className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-            Player Buy-In
-          </p>
-          <h3 className="mt-1 text-lg font-semibold">How much each guy owes today</h3>
-          <p className="mt-1 text-sm text-ink/65">{summaryText}</p>
-        </div>
-        {buyIns.everyoneOwesSame && buyIns.commonTotal != null ? (
-          <div className="rounded-2xl bg-canvas px-4 py-3 text-right">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Each Player</p>
-            <p className="mt-1 text-2xl font-semibold">{formatCurrency(buyIns.commonTotal)}</p>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="space-y-2">
-        {buyIns.players.map((player) => {
-          const parts = [
-            teamLabel && player.teamOwed > 0 ? `${teamLabel} ${formatCurrency(player.teamOwed)}` : null,
-            player.indyOwed > 0 ? `Indy ${formatCurrency(player.indyOwed)}` : null,
-            player.skinsOwed > 0 ? `Skins ${formatCurrency(player.skinsOwed)}` : null
-          ].filter(Boolean) as string[];
-
-          return (
-            <div
-              key={player.playerId}
-              className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-3"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-base font-semibold text-ink">{player.playerName}</p>
-                  <p className="mt-1 text-sm text-ink/65">{parts.join(" · ")}</p>
-                  {mode === "MATCH_QUOTA" && buyIns.teamContributionVaries && player.teamOwed > 0 ? (
-                    <p className="mt-1 text-xs text-ink/55">
-                      {`Team split ${formatCurrency(player.teamFrontOwed)} front · ${formatCurrency(player.teamBackOwed)} back · ${formatCurrency(player.teamTotalOwed)} total`}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Owed</p>
-                  <p className="mt-1 text-xl font-semibold text-pine">
-                    {formatCurrency(player.totalOwed)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </SectionCard>
-  );
-}
-
 function BuyInStatusSection({
   roundId,
   buyIns,
@@ -2615,12 +2538,11 @@ function BuyInStatusSection({
     0
   );
   const totalOwed = buyIns.players.reduce((sum, player) => sum + player.totalOwed, 0);
-  const paidInCount = buyIns.players.filter((player) => paidInPlayerIds.includes(player.playerId)).length;
+  const unpaidPlayers = buyIns.players.filter((player) => !paidInPlayerIds.includes(player.playerId));
 
-  function togglePaidIn(playerId: string) {
+  function markPaid(playerId: string) {
     startTransition(async () => {
       try {
-        setMessage("");
         const response = await fetch(`/api/rounds/${roundId}/settlement`, {
           method: "POST",
           headers: {
@@ -2638,7 +2560,6 @@ function BuyInStatusSection({
         }
 
         setPaidInPlayerIds(result.buyInPaidPlayerIds ?? []);
-        setMessage("Buy-in status updated.");
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not update buy-in status.");
@@ -2651,11 +2572,13 @@ function BuyInStatusSection({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-            Buy-In Status
+            Players Owing
           </p>
-          <h3 className="mt-1 text-lg font-semibold">Pot paid in</h3>
+          <h3 className="mt-1 text-lg font-semibold">Who still owes money?</h3>
           <p className="mt-1 text-sm text-ink/65">
-            {`${paidInCount} of ${buyIns.players.length} players paid in`}
+            {unpaidPlayers.length
+              ? `${unpaidPlayers.length} player${unpaidPlayers.length === 1 ? "" : "s"} still owe into today's pot.`
+              : "All players are paid in for this round."}
           </p>
         </div>
         <div className="rounded-2xl bg-canvas px-4 py-3 text-right">
@@ -2668,50 +2591,35 @@ function BuyInStatusSection({
 
       {message ? <p className="text-sm font-medium text-ink/70">{message}</p> : null}
 
-      <div className="space-y-2">
-        {buyIns.players.map((player) => {
-          const isPaidIn = paidInPlayerIds.includes(player.playerId);
-          return (
+      {unpaidPlayers.length ? (
+        <div className="space-y-2">
+          {unpaidPlayers.map((player) => (
             <div
               key={player.playerId}
-              className={classNames(
-                "rounded-[22px] border px-4 py-3",
-                isPaidIn ? "border-[#5A9764] bg-[#E2F4E6]" : "border-ink/10 bg-canvas"
-              )}
+              className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-3"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-base font-semibold text-ink">{player.playerName}</p>
-                    <span
-                      className={classNames(
-                        "rounded-full px-2.5 py-1 text-xs font-semibold",
-                        isPaidIn
-                          ? "bg-white/80 text-pine"
-                          : "bg-white text-ink/70"
-                      )}
-                    >
-                      {isPaidIn ? "Paid In" : "Not Paid In"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-ink/65">{`Owes ${formatCurrency(player.totalOwed)}`}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-ink">{player.playerName}</p>
+                  <p className="mt-1 text-sm text-ink/65">{formatCurrency(player.totalOwed)}</p>
                 </div>
                 <button
                   type="button"
                   disabled={isPending}
-                  onClick={() => togglePaidIn(player.playerId)}
-                  className={classNames(
-                    "min-h-11 rounded-2xl px-4 text-sm font-semibold disabled:opacity-45",
-                    isPaidIn ? "club-btn-secondary" : "club-btn-primary"
-                  )}
+                  onClick={() => markPaid(player.playerId)}
+                  className="club-btn-primary min-h-11 rounded-2xl px-4 text-sm font-semibold disabled:opacity-45"
                 >
-                  {isPaidIn ? "Unmark Paid In" : "Mark as Paid In"}
+                  Mark Paid
                 </button>
               </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-[22px] border border-[#5A9764]/25 bg-[#E2F4E6] px-4 py-4 text-center">
+          <p className="text-base font-semibold text-pine">All players paid in 👍</p>
+        </div>
+      )}
     </SectionCard>
   );
 }
