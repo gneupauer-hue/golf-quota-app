@@ -1994,20 +1994,6 @@ function RoundTabView({
   onDeleteRound: () => void;
   onOpenTeam: (team: TeamCode) => void;
 }) {
-  const awardedSkins = sideGames.skins.holes
-    .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
-    .map((hole) => {
-      const winner = rows.find((row) => row.playerId === hole.winnerPlayerId);
-      const score = winner?.holeScores[hole.holeNumber - 1] ?? null;
-      const resultLabel = getSkinResultLabel(score) ?? "Birdie";
-      return {
-        holeNumber: hole.holeNumber,
-        winnerName: hole.winnerName ?? winner?.playerName ?? "-",
-        resultLabel,
-        value: sideGames.skins.valuePerSkin * hole.sharesCaptured
-      };
-    });
-
   return (
     <div className="space-y-4">
       <SectionCard className="space-y-3">
@@ -2034,32 +2020,6 @@ function RoundTabView({
         >
           {isTestRound ? "Delete Test Round" : "Cancel Current Round"}
         </button>
-      </SectionCard>
-
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Good Skins</p>
-        <div className="space-y-1">
-          {awardedSkins.length ? (
-            awardedSkins.map((skin) => (
-              <div key={`${skin.holeNumber}-${skin.winnerName}`} className="flex items-center justify-between gap-3 rounded-2xl bg-canvas px-3 py-2">
-                <p className="text-sm font-semibold text-ink">{`Hole ${skin.holeNumber} - ${skin.winnerName} (${skin.resultLabel})`}</p>
-                <span className="text-sm font-semibold text-pine">{formatCurrency(skin.value)}</span>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-ink/60">No current good skins.</p>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-2xl bg-canvas px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Carryover</p>
-            <p className="mt-1 text-xl font-semibold">{`${sideGames.skins.currentCarryoverCount} hole${sideGames.skins.currentCarryoverCount === 1 ? "" : "s"}`}</p>
-          </div>
-          <div className="rounded-2xl bg-canvas px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Pot</p>
-            <p className="mt-1 text-xl font-semibold">{formatCurrency(sideGames.skins.totalPot)}</p>
-          </div>
-        </div>
       </SectionCard>
 
       <div className="space-y-3">
@@ -2111,20 +2071,6 @@ function SkinsOnlyRoundTab({
   onDeleteRound: () => void;
   onOpenEntry: () => void;
 }) {
-  const awardedSkins = sideGames.skins.holes
-    .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
-    .map((hole) => {
-      const winner = rows.find((row) => row.playerId === hole.winnerPlayerId);
-      const score = winner?.holeScores[hole.holeNumber - 1] ?? null;
-      const resultLabel = getSkinResultLabel(score) ?? "Birdie";
-      return {
-        holeNumber: hole.holeNumber,
-        winnerName: hole.winnerName ?? winner?.playerName ?? "-",
-        resultLabel,
-        value: sideGames.skins.valuePerSkin * hole.sharesCaptured
-      };
-    });
-
   return (
     <div className="space-y-4">
       <SectionCard className="space-y-3">
@@ -2167,32 +2113,6 @@ function SkinsOnlyRoundTab({
           >
             Enter Scores
           </button>
-        </div>
-      </SectionCard>
-
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Current Good Skins</p>
-        <div className="space-y-1">
-          {awardedSkins.length ? (
-            awardedSkins.map((skin) => (
-              <div key={`${skin.holeNumber}-${skin.winnerName}`} className="flex items-center justify-between gap-3 rounded-2xl bg-canvas px-3 py-2">
-                <p className="text-sm font-semibold text-ink">{`Hole ${skin.holeNumber} - ${skin.winnerName} (${skin.resultLabel})`}</p>
-                <span className="text-sm font-semibold text-pine">{formatCurrency(skin.value)}</span>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-ink/60">No current good skins.</p>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-2xl bg-canvas px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Carryover</p>
-            <p className="mt-1 text-xl font-semibold">{`${sideGames.skins.currentCarryoverCount} hole${sideGames.skins.currentCarryoverCount === 1 ? "" : "s"}`}</p>
-          </div>
-          <div className="rounded-2xl bg-canvas px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Skins Pot</p>
-            <p className="mt-1 text-xl font-semibold">{formatCurrency(sideGames.skins.totalPot)}</p>
-          </div>
         </div>
       </SectionCard>
 
