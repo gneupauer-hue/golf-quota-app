@@ -45,6 +45,21 @@ export async function PUT(
       );
     }
 
+    const existingRound = await prisma.round.findUnique({
+      where: { id }
+    });
+
+    if (!existingRound) {
+      return NextResponse.json({ error: "Round not found." }, { status: 404 });
+    }
+
+    if ((existingRound as { isPayoutLocked?: boolean }).isPayoutLocked) {
+      return NextResponse.json(
+        { error: "Payouts are locked for this round." },
+        { status: 423 }
+      );
+    }
+
     const seen = new Set<string>();
 
     for (const entry of entries) {

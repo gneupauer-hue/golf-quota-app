@@ -18,6 +18,10 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
     redirect(`/rounds/${id}/results`);
   }
 
+  if (data.round.isPayoutLocked) {
+    redirect(`/rounds/${id}/results`);
+  }
+
   return (
     <RoundEditor
       round={data.round}

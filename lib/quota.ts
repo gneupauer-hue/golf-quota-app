@@ -211,9 +211,22 @@ export type PayoutPredictionsSummary = {
   totalProjectedTotal: number;
   indyProjectedTotal: number;
   skinsProjectedTotal: number;
+  frontPot: number;
+  backPot: number;
+  totalPot: number;
+  indyPot: number;
+  skinsPot: number;
+  frontDifference: number;
+  backDifference: number;
+  totalDifference: number;
+  indyDifference: number;
+  skinsDifference: number;
   moneyCurrentlyInPlay: number;
+  overallPot: number;
+  overallDifference: number;
   projectedPayoutTotal: number;
   unsettledSkinsValue: number;
+  mismatchedCategories: Array<"front" | "back" | "total" | "indy" | "skins" | "overall">;
   isBalanced: boolean;
 };
 
@@ -582,6 +595,10 @@ export function calculateLiveLeaders(rows: CalculatedRoundRow[]) {
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function isCurrencyMatch(allocated: number, pot: number) {
+  return roundCurrency(allocated) === roundCurrency(pot);
 }
 
 function splitCurrencyAcrossKeys(total: number, keys: string[]) {
@@ -1236,6 +1253,13 @@ export function calculatePayoutPredictions(
   const projectedPayoutTotal = roundCurrency(
     projectedPlayers.reduce((sum, player) => sum + player.projectedTotal, 0)
   );
+  const frontPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.frontPot) : 0;
+  const backPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.backPot) : 0;
+  const totalPot = includeTeamPayouts ? roundCurrency(sideGames.teamPots.totalPot) : 0;
+  const indyPot = includeIndividualPayouts ? roundCurrency(sideGames.overallPot.indyPot) : 0;
+  const skinsPot = includeSkinsPayouts
+    ? roundCurrency(sideGames.skins.winners.length ? sideGames.skins.totalPot : 0)
+    : 0;
   const moneyCurrentlyInPlay = roundCurrency(
     frontProjectedTotal +
       backProjectedTotal +
@@ -1243,9 +1267,42 @@ export function calculatePayoutPredictions(
       indyProjectedTotal +
       skinsProjectedTotal
   );
+  const overallPot = roundCurrency(frontPot + backPot + totalPot + indyPot + skinsPot);
+  const frontDifference = roundCurrency(frontProjectedTotal - frontPot);
+  const backDifference = roundCurrency(backProjectedTotal - backPot);
+  const totalDifference = roundCurrency(totalProjectedTotal - totalPot);
+  const indyDifference = roundCurrency(indyProjectedTotal - indyPot);
+  const skinsDifference = roundCurrency(skinsProjectedTotal - skinsPot);
+  const overallDifference = roundCurrency(projectedPayoutTotal - overallPot);
   const unsettledSkinsValue = roundCurrency(
     Math.max(0, sideGames.skins.totalPot - skinsProjectedTotal)
   );
+  const mismatchedCategories: PayoutPredictionsSummary["mismatchedCategories"] = [];
+
+  if (!isCurrencyMatch(frontProjectedTotal, frontPot)) mismatchedCategories.push("front");
+  if (!isCurrencyMatch(backProjectedTotal, backPot)) mismatchedCategories.push("back");
+  if (!isCurrencyMatch(totalProjectedTotal, totalPot)) mismatchedCategories.push("total");
+  if (!isCurrencyMatch(indyProjectedTotal, indyPot)) mismatchedCategories.push("indy");
+  if (!isCurrencyMatch(skinsProjectedTotal, skinsPot)) mismatchedCategories.push("skins");
+  if (!isCurrencyMatch(projectedPayoutTotal, overallPot)) mismatchedCategories.push("overall");
+
+  if (mismatchedCategories.length) {
+    console.warn("Payout reconciliation mismatch detected", {
+      mismatchedCategories,
+      frontProjectedTotal,
+      frontPot,
+      backProjectedTotal,
+      backPot,
+      totalProjectedTotal,
+      totalPot,
+      indyProjectedTotal,
+      indyPot,
+      skinsProjectedTotal,
+      skinsPot,
+      projectedPayoutTotal,
+      overallPot
+    });
+  }
 
   return {
     players: projectedPlayers,
@@ -1254,9 +1311,22 @@ export function calculatePayoutPredictions(
     totalProjectedTotal,
     indyProjectedTotal,
     skinsProjectedTotal,
+    frontPot,
+    backPot,
+    totalPot,
+    indyPot,
+    skinsPot,
+    frontDifference,
+    backDifference,
+    totalDifference,
+    indyDifference,
+    skinsDifference,
     moneyCurrentlyInPlay,
+    overallPot,
+    overallDifference,
     projectedPayoutTotal,
     unsettledSkinsValue,
-    isBalanced: projectedPayoutTotal === moneyCurrentlyInPlay
+    mismatchedCategories,
+    isBalanced: mismatchedCategories.length === 0
   };
 }

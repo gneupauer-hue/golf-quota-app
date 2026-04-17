@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LeaderboardPayoutPredictions } from "@/components/leaderboard-payout-predictions";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { getLeaderboardPageData } from "@/lib/data";
@@ -53,6 +54,50 @@ export default async function LeaderboardPage() {
     includeIndividualPayouts: !isSkinsOnly,
     includeSkinsPayouts: true
   });
+  const reconciliationRows = [
+    {
+      key: "front",
+      label: "Front paid",
+      allocated: payoutPredictions.frontProjectedTotal,
+      pot: payoutPredictions.frontPot,
+      difference: payoutPredictions.frontDifference
+    },
+    {
+      key: "back",
+      label: "Back paid",
+      allocated: payoutPredictions.backProjectedTotal,
+      pot: payoutPredictions.backPot,
+      difference: payoutPredictions.backDifference
+    },
+    {
+      key: "total",
+      label: "Total paid",
+      allocated: payoutPredictions.totalProjectedTotal,
+      pot: payoutPredictions.totalPot,
+      difference: payoutPredictions.totalDifference
+    },
+    {
+      key: "indy",
+      label: "Indy paid",
+      allocated: payoutPredictions.indyProjectedTotal,
+      pot: payoutPredictions.indyPot,
+      difference: payoutPredictions.indyDifference
+    },
+    {
+      key: "skins",
+      label: "Skins paid",
+      allocated: payoutPredictions.skinsProjectedTotal,
+      pot: payoutPredictions.skinsPot,
+      difference: payoutPredictions.skinsDifference
+    },
+    {
+      key: "overall",
+      label: "Overall allocated",
+      allocated: payoutPredictions.projectedPayoutTotal,
+      pot: payoutPredictions.overallPot,
+      difference: payoutPredictions.overallDifference
+    }
+  ] as const;
   const awardedSkins = data.money.skins.holes
     .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
     .map((hole) => {
@@ -243,141 +288,17 @@ export default async function LeaderboardPage() {
       </section>
 
       <SectionCard className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/55">
-              Payout Predictions
-            </p>
-            <h3 className="mt-1 text-xl font-semibold tracking-tight text-ink">
-              Live payout sheet
-            </h3>
-            <p className="mt-1 text-sm text-ink/65">
-              Every projected dollar is traceable to Front, Back, Total, Indy, or
-              Skins.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-3 py-2 text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
-              Current In Play
-            </p>
-            <p className="mt-1 text-lg font-bold text-ink">
-              {formatCurrency(payoutPredictions.moneyCurrentlyInPlay)}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          {payoutPredictions.players.map((player) => (
-            <details
-              key={player.playerId}
-              className="overflow-hidden rounded-[22px] border border-[color:var(--club-card-border)] bg-white"
-            >
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4">
-                <div>
-                  <p className="text-base font-semibold text-ink">{player.playerName}</p>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-ink/55">
-                    Tap for payout breakdown
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
-                    Projected Total
-                  </p>
-                  <p className="mt-1 text-xl font-bold text-[color:var(--club-green)]">
-                    {formatCurrency(player.projectedTotal)}
-                  </p>
-                </div>
-              </summary>
-              <div className="border-t border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-4 py-4">
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "Front", value: player.front },
-                    { label: "Back", value: player.back },
-                    { label: "Total", value: player.total },
-                    { label: "Indy", value: player.indy },
-                    { label: "Skins", value: player.skins },
-                    { label: "Projected Total", value: player.projectedTotal, emphasize: true }
-                  ].map((item) => (
-                    <div
-                      key={item.label}
-                      className={`rounded-2xl border px-3 py-3 ${
-                        item.emphasize
-                          ? "border-[color:var(--club-green)] bg-[color:var(--club-cream)]"
-                          : "border-[color:var(--club-card-border)] bg-white"
-                      }`}
-                    >
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
-                        {item.label}
-                      </p>
-                      <p
-                        className={`mt-1 text-lg font-bold ${
-                          item.emphasize ? "text-[color:var(--club-green)]" : "text-ink"
-                        }`}
-                      >
-                        {formatCurrency(item.value)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </details>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {[
-            { label: "Front", value: payoutPredictions.frontProjectedTotal },
-            { label: "Back", value: payoutPredictions.backProjectedTotal },
-            { label: "Total", value: payoutPredictions.totalProjectedTotal },
-            { label: "Indy", value: payoutPredictions.indyProjectedTotal },
-            { label: "Skins", value: payoutPredictions.skinsProjectedTotal },
-            { label: "Unsettled Skins", value: payoutPredictions.unsettledSkinsValue }
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="rounded-2xl border border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-3 py-3"
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
-                {item.label}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-ink">{formatCurrency(item.value)}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-[22px] border border-[color:var(--club-card-border)] bg-[color:var(--club-cream)] px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/55">
-                Settlement Check
-              </p>
-              <p className="mt-1 text-sm text-ink/70">
-                Projected payouts should reconcile to the money currently in play.
-              </p>
-            </div>
-            <span className="club-pill">
-              {payoutPredictions.isBalanced ? "Balanced" : "Check totals"}
-            </span>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-2xl bg-white px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
-                Players Total
-              </p>
-              <p className="mt-1 text-lg font-bold text-ink">
-                {formatCurrency(payoutPredictions.projectedPayoutTotal)}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
-                Money In Play
-              </p>
-              <p className="mt-1 text-lg font-bold text-ink">
-                {formatCurrency(payoutPredictions.moneyCurrentlyInPlay)}
-              </p>
-            </div>
-          </div>
-        </div>
+        <LeaderboardPayoutPredictions
+          roundId={data.round.id}
+          isPayoutLocked={Boolean(data.round.isPayoutLocked)}
+          initialPaidPlayerIds={data.round.paidPlayerIds ?? []}
+          players={payoutPredictions.players}
+          moneyCurrentlyInPlay={payoutPredictions.moneyCurrentlyInPlay}
+          unsettledSkinsValue={payoutPredictions.unsettledSkinsValue}
+          isBalanced={payoutPredictions.isBalanced}
+          mismatchedCategories={payoutPredictions.mismatchedCategories}
+          reconciliationRows={reconciliationRows}
+        />
       </SectionCard>
     </div>
   );

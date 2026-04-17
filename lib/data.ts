@@ -15,6 +15,18 @@ function normalizeRoundMode(value: string): RoundMode {
   return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
 }
 
+function getRoundSettlementState(round: unknown) {
+  const settlementRound = round as {
+    isPayoutLocked?: boolean;
+    paidPlayerIds?: string[];
+  };
+
+  return {
+    isPayoutLocked: settlementRound.isPayoutLocked ?? false,
+    paidPlayerIds: settlementRound.paidPlayerIds ?? []
+  };
+}
+
 export async function getPlayersForSelection() {
   return prisma.player.findMany({
     orderBy: [{ isRegular: "desc" }, { isActive: "desc" }, { name: "asc" }],
@@ -139,25 +151,30 @@ export async function getRoundsList() {
     orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }]
   });
 
-  return rounds.map((round) => ({
+  return rounds.map((round) => {
+    const settlement = getRoundSettlementState(round);
+
+    return {
       id: round.id,
       roundName: round.roundName,
       roundDate: round.roundDate,
       roundMode: normalizeRoundMode(round.roundMode),
       isTestRound: round.isTestRound,
+      isPayoutLocked: settlement.isPayoutLocked,
       notes: round.notes,
       teamCount: round.teamCount,
       lockedAt: round.lockedAt,
       startedAt: round.startedAt,
       completedAt: round.completedAt,
       entryCount: round.entries.length,
-    leader: round.entries[0]
-      ? {
-          name: round.entries[0].player.name,
-          plusMinus: round.entries[0].plusMinus
-        }
-      : null
-  }));
+      leader: round.entries[0]
+        ? {
+            name: round.entries[0].player.name,
+            plusMinus: round.entries[0].plusMinus
+          }
+        : null
+    };
+  });
 }
 
 export async function getPastGamesList() {
@@ -185,25 +202,30 @@ export async function getPastGamesList() {
     orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }]
   });
 
-  return rounds.map((round) => ({
-    id: round.id,
-    roundName: round.roundName,
-    roundDate: round.roundDate,
-    roundMode: normalizeRoundMode(round.roundMode),
-    isTestRound: round.isTestRound,
-    notes: round.notes,
-    teamCount: round.teamCount,
-    lockedAt: round.lockedAt,
-    startedAt: round.startedAt,
-    completedAt: round.completedAt,
-    entryCount: round.entries.length,
-    leader: round.entries[0]
-      ? {
-          name: round.entries[0].player.name,
-          plusMinus: round.entries[0].plusMinus
-        }
-      : null
-  }));
+  return rounds.map((round) => {
+    const settlement = getRoundSettlementState(round);
+
+    return {
+      id: round.id,
+      roundName: round.roundName,
+      roundDate: round.roundDate,
+      roundMode: normalizeRoundMode(round.roundMode),
+      isTestRound: round.isTestRound,
+      isPayoutLocked: settlement.isPayoutLocked,
+      notes: round.notes,
+      teamCount: round.teamCount,
+      lockedAt: round.lockedAt,
+      startedAt: round.startedAt,
+      completedAt: round.completedAt,
+      entryCount: round.entries.length,
+      leader: round.entries[0]
+        ? {
+            name: round.entries[0].player.name,
+            plusMinus: round.entries[0].plusMinus
+          }
+        : null
+    };
+  });
 }
 
 export async function getCurrentRoundId() {
@@ -304,6 +326,8 @@ export async function getRoundEditorData(roundId: string) {
   const teamStandings = calculateTeamStandings(calculatedEntries);
   const liveLeaders = calculateLiveLeaders(calculatedEntries);
 
+  const settlement = getRoundSettlementState(round);
+
   return {
     round: {
       id: round.id,
@@ -311,6 +335,8 @@ export async function getRoundEditorData(roundId: string) {
       roundDate: round.roundDate.toISOString(),
       roundMode: normalizeRoundMode(round.roundMode),
       isTestRound: round.isTestRound,
+      isPayoutLocked: settlement.isPayoutLocked,
+      paidPlayerIds: settlement.paidPlayerIds,
       notes: round.notes ?? "",
       teamCount: round.teamCount ?? null,
       lockedAt: round.lockedAt?.toISOString() ?? null,
@@ -389,6 +415,8 @@ export async function getRoundResultsData(roundId: string) {
     rank: entry.rank
   }));
 
+  const settlement = getRoundSettlementState(round);
+
   return {
     round: {
       id: round.id,
@@ -396,6 +424,8 @@ export async function getRoundResultsData(roundId: string) {
       roundDate: round.roundDate,
       roundMode: normalizeRoundMode(round.roundMode),
       isTestRound: round.isTestRound,
+      isPayoutLocked: settlement.isPayoutLocked,
+      paidPlayerIds: settlement.paidPlayerIds,
       notes: round.notes,
       completedAt: round.completedAt
     },

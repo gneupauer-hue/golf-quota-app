@@ -97,10 +97,17 @@ test("payout predictions produce a traceable per-player breakdown and reconcile 
   assert.equal(payoutPredictions.totalProjectedTotal, 80);
   assert.equal(payoutPredictions.indyProjectedTotal, 80);
   assert.equal(payoutPredictions.skinsProjectedTotal, 80);
+  assert.equal(payoutPredictions.frontPot, 40);
+  assert.equal(payoutPredictions.backPot, 40);
+  assert.equal(payoutPredictions.totalPot, 80);
+  assert.equal(payoutPredictions.indyPot, 80);
+  assert.equal(payoutPredictions.skinsPot, 80);
   assert.equal(payoutPredictions.moneyCurrentlyInPlay, 320);
+  assert.equal(payoutPredictions.overallPot, 320);
   assert.equal(payoutPredictions.projectedPayoutTotal, 320);
   assert.equal(payoutPredictions.unsettledSkinsValue, 0);
   assert.equal(payoutPredictions.isBalanced, true);
+  assert.deepEqual(payoutPredictions.mismatchedCategories, []);
 });
 
 test("skins-only payout predictions exclude team and indy money while keeping current good skins", () => {
@@ -122,6 +129,29 @@ test("skins-only payout predictions exclude team and indy money while keeping cu
   assert.equal(payoutPredictions.totalProjectedTotal, 0);
   assert.equal(payoutPredictions.indyProjectedTotal, 0);
   assert.equal(payoutPredictions.skinsProjectedTotal, 40);
+  assert.equal(payoutPredictions.skinsPot, 40);
   assert.equal(payoutPredictions.moneyCurrentlyInPlay, 40);
+  assert.equal(payoutPredictions.overallPot, 40);
   assert.equal(payoutPredictions.projectedPayoutTotal, 40);
+});
+
+test("when no good skins are won yet, skins remain unsettled instead of mismatching reconciliation", () => {
+  const rows: CalculatedRoundRow[] = [
+    buildRow({ id: "p1", name: "Gary", team: "A", frontNine: 18, backNine: 18, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p2", name: "Billy", team: "A", frontNine: 18, backNine: 18, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p3", name: "Chad", team: "B", frontNine: 18, backNine: 18, frontQuota: 15, backQuota: 15 }),
+    buildRow({ id: "p4", name: "Jeff", team: "B", frontNine: 18, backNine: 18, frontQuota: 15, backQuota: 15 })
+  ];
+
+  const payoutPredictions = calculatePayoutPredictions(rows, {
+    includeTeamPayouts: false,
+    includeIndividualPayouts: false,
+    includeSkinsPayouts: true
+  });
+
+  assert.equal(payoutPredictions.skinsProjectedTotal, 0);
+  assert.equal(payoutPredictions.skinsPot, 0);
+  assert.equal(payoutPredictions.unsettledSkinsValue, 40);
+  assert.equal(payoutPredictions.isBalanced, true);
+  assert.deepEqual(payoutPredictions.mismatchedCategories, []);
 });
