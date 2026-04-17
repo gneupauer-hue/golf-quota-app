@@ -195,6 +195,7 @@ export type IndividualPayoutProjection = {
 
 const birdieOrBetterValues = new Set<number>([4, 6]);
 const individualPayoutTable: Record<number, number[]> = {
+  4: [20],
   6: [40, 20],
   7: [45, 25],
   8: [55, 25],
@@ -568,36 +569,15 @@ function formatPlaceLabel(startPlace: number, endPlace: number) {
 }
 
 function getPlacesPaid(playerCount: number) {
-  return Math.max(1, Math.ceil(playerCount * 0.25));
+  return individualPayoutTable[playerCount]?.length ?? 0;
 }
 
-function getIndividualPayoutTable(playerCount: number, individualPot: number) {
+function getIndividualPayoutTable(playerCount: number) {
   const exactTable = individualPayoutTable[playerCount];
   if (exactTable) {
     return exactTable;
   }
-
-  const placesPaid = getPlacesPaid(playerCount);
-  if (placesPaid === 1) {
-    return [individualPot];
-  }
-  if (placesPaid === 2) {
-    return [roundCurrency(individualPot * 0.67), roundCurrency(individualPot * 0.33)];
-  }
-  if (placesPaid === 3) {
-    return [
-      roundCurrency(individualPot * 0.6),
-      roundCurrency(individualPot * 0.3),
-      roundCurrency(individualPot * 0.1)
-    ];
-  }
-
-  return [
-    roundCurrency(individualPot * 0.5),
-    roundCurrency(individualPot * 0.3),
-    roundCurrency(individualPot * 0.15),
-    roundCurrency(individualPot * 0.05)
-  ];
+  return [];
 }
 
 function buildRankedGroups(rows: CalculatedRoundRow[]) {
@@ -646,9 +626,8 @@ function buildRankedGroups(rows: CalculatedRoundRow[]) {
 }
 
 function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
-  const individualPot = rows.length * 10;
   const placesPaid = getPlacesPaid(rows.length);
-  const payoutTable = getIndividualPayoutTable(rows.length, individualPot);
+  const payoutTable = getIndividualPayoutTable(rows.length);
   const rankedGroups = buildRankedGroups(rows);
   const payouts: SideGameResults["individualPayouts"] = [];
   const payoutByPlace = new Map<number, { place: number; payout: number; playerNames: string[] }>();
