@@ -3,6 +3,8 @@ import { resolveActiveRound } from "@/lib/active-round";
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
+  calculatePayoutPredictions,
+  calculatePlayerBuyIns,
   calculateSideGameResults,
   calculateTeamStandings,
   holeFieldNames,
@@ -10,6 +12,7 @@ import {
   type TeamCode
 } from "@/lib/quota";
 import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
+import { getSeasonConfig } from "@/lib/season";
 
 function normalizeRoundMode(value: string): RoundMode {
   return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
@@ -28,6 +31,12 @@ function getRoundSettlementState(round: unknown) {
     buyInPaidPlayerIds: settlementRound.buyInPaidPlayerIds ?? []
   };
 }
+
+function roundCurrency(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+export type SeasonStatsSort = "net" | "improved" | "rounds" | "quota";
 
 export async function getPlayersForSelection() {
   return prisma.player.findMany({
@@ -135,6 +144,247 @@ export async function getCurrentQuotaRows() {
     lastRoundDate: player.roundEntries[0]?.round.roundDate ?? null,
     lastScore: player.roundEntries[0]?.totalPoints ?? null
   }));
+}
+
+export async function getSeasonStatsData(sortBy: SeasonStatsSort = "net") {
+  const seasonConfig = await getSeasonConfig(prisma);
+  const seasonStartDate = seasonConfig.seasonStartDate;
+
+  const [players, rounds] = await Promise.all([
+    prisma.player.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        quota: true,
+        currentQuota: true,
+        startingQuota: true,
+        isRegular: true,
+        isActive: true
+      }
+    }),
+    (prisma as any).round.findMany({
+      where: {
+        completedAt: {
+          not: null,
+          gt: seasonStartDate
+        },
+        canceledAt: null,
+        isTestRound: false
+      },
+      include: {
+        entries: {
+          include: {
+            player: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
+          orderBy: {
+            rank: "asc"
+          }
+        }
+      },
+      orderBy: [{ completedAt: "asc" }, { roundDate: "asc" }, { createdAt: "asc" }]
+    })
+  ]);
+
+  const statsByPlayer = new Map(
+    players.map((player) => [
+      player.id,
+      {
+        playerId: player.id,
+        playerName: player.name,
+        isRegular: player.isRegular,
+        isActive: player.isActive,
+        roundsPlayed: 0,
+        currentQuota: player.quota ?? player.currentQuota ?? player.startingQuota,
+        startingQuota: null as number | null,
+        quotaChange: 0,
+        totalPaidIn: 0,
+        totalPaidOut: 0,
+        netWinnings: 0,
+        totalSkinsWinnings: 0,
+        totalIndyWinnings: 0,
+        totalFrontWinnings: 0,
+        totalBackWinnings: 0,
+        totalTotalMatchWinnings: 0,
+        skinsCount: 0,
+        indyCashes: 0,
+        indyWins: 0,
+        teamWins: 0
+      }
+    ])
+  );
+
+  for (const round of rounds as any[]) {
+    const roundMode = normalizeRoundMode(round.roundMode);
+    const entries = (round.entries as any[]).map((entry: any) => ({
+      id: entry.id,
+      playerId: entry.playerId,
+      playerName: entry.player.name,
+      team: (entry.team as TeamCode | null) ?? null,
+      holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
+      startQuota: entry.startQuota,
+      frontQuota: entry.frontQuota,
+      backQuota: entry.backQuota,
+      frontNine: entry.frontNine,
+      backNine: entry.backNine,
+      frontPlusMinus: entry.frontPlusMinus,
+      backPlusMinus: entry.backPlusMinus,
+      totalPoints: entry.totalPoints,
+      plusMinus: entry.plusMinus,
+      nextQuota: entry.nextQuota,
+      rank: entry.rank
+    }));
+
+    const buyIns = calculatePlayerBuyIns(entries, roundMode);
+    const buyInMap = new Map(buyIns.players.map((player) => [player.playerId, player]));
+    const payouts = calculatePayoutPredictions(entries, {
+      includeTeamPayouts: roundMode !== "SKINS_ONLY",
+      includeIndividualPayouts: roundMode !== "SKINS_ONLY",
+      includeSkinsPayouts: true
+    });
+    const payoutMap = new Map(payouts.players.map((player) => [player.playerId, player]));
+    const sideGames = calculateSideGameResults(entries);
+    const skinsWinnerMap = new Map(
+      sideGames.skins.winners.map((winner) => [winner.playerId, winner.skinsWon])
+    );
+    const indyCashSet = new Set(
+      sideGames.individualPayouts.filter((entry) => entry.payout > 0).map((entry) => entry.playerId)
+    );
+    const indyWinSet = new Set(
+      sideGames.individualPayouts
+        .filter((entry) => entry.payout > 0 && entry.rank === 1)
+        .map((entry) => entry.playerId)
+    );
+
+    for (const entry of entries) {
+      const stats = statsByPlayer.get(entry.playerId);
+      if (!stats) {
+        continue;
+      }
+
+      if (stats.startingQuota == null) {
+        stats.startingQuota = entry.startQuota;
+      }
+
+      stats.roundsPlayed += 1;
+
+      const buyIn = buyInMap.get(entry.playerId);
+      const payout = payoutMap.get(entry.playerId);
+
+      stats.totalPaidIn += buyIn?.totalOwed ?? 0;
+      stats.totalFrontWinnings += payout?.front ?? 0;
+      stats.totalBackWinnings += payout?.back ?? 0;
+      stats.totalTotalMatchWinnings += payout?.total ?? 0;
+      stats.totalIndyWinnings += payout?.indy ?? 0;
+      stats.totalSkinsWinnings += payout?.skins ?? 0;
+      stats.totalPaidOut += payout?.projectedTotal ?? 0;
+      stats.skinsCount += skinsWinnerMap.get(entry.playerId) ?? 0;
+      stats.indyCashes += indyCashSet.has(entry.playerId) ? 1 : 0;
+      stats.indyWins += indyWinSet.has(entry.playerId) ? 1 : 0;
+      stats.teamWins += Number((payout?.front ?? 0) > 0);
+      stats.teamWins += Number((payout?.back ?? 0) > 0);
+      stats.teamWins += Number((payout?.total ?? 0) > 0);
+    }
+  }
+
+  const playerStats = Array.from(statsByPlayer.values()).map((stats) => {
+    const startingQuota = stats.startingQuota ?? stats.currentQuota;
+    const totalPaidIn = roundCurrency(stats.totalPaidIn);
+    const totalPaidOut = roundCurrency(stats.totalPaidOut);
+    const totalSkinsWinnings = roundCurrency(stats.totalSkinsWinnings);
+    const totalIndyWinnings = roundCurrency(stats.totalIndyWinnings);
+    const totalFrontWinnings = roundCurrency(stats.totalFrontWinnings);
+    const totalBackWinnings = roundCurrency(stats.totalBackWinnings);
+    const totalTotalMatchWinnings = roundCurrency(stats.totalTotalMatchWinnings);
+    const netWinnings = roundCurrency(totalPaidOut - totalPaidIn);
+    const quotaChange = startingQuota - stats.currentQuota;
+
+    return {
+      ...stats,
+      startingQuota,
+      quotaChange,
+      totalPaidIn,
+      totalPaidOut,
+      netWinnings,
+      totalSkinsWinnings,
+      totalIndyWinnings,
+      totalFrontWinnings,
+      totalBackWinnings,
+      totalTotalMatchWinnings
+    };
+  });
+
+  const compareByName = (left: { playerName: string }, right: { playerName: string }) =>
+    left.playerName.localeCompare(right.playerName);
+
+  const sortedStats = [...playerStats].sort((left, right) => {
+    if (sortBy === "improved") {
+      if (right.quotaChange !== left.quotaChange) return right.quotaChange - left.quotaChange;
+      if (right.netWinnings !== left.netWinnings) return right.netWinnings - left.netWinnings;
+      return compareByName(left, right);
+    }
+
+    if (sortBy === "rounds") {
+      if (right.roundsPlayed !== left.roundsPlayed) return right.roundsPlayed - left.roundsPlayed;
+      if (right.netWinnings !== left.netWinnings) return right.netWinnings - left.netWinnings;
+      return compareByName(left, right);
+    }
+
+    if (sortBy === "quota") {
+      if (left.currentQuota !== right.currentQuota) return left.currentQuota - right.currentQuota;
+      if (right.quotaChange !== left.quotaChange) return right.quotaChange - left.quotaChange;
+      return compareByName(left, right);
+    }
+
+    if (right.netWinnings !== left.netWinnings) return right.netWinnings - left.netWinnings;
+    if (right.totalPaidOut !== left.totalPaidOut) return right.totalPaidOut - left.totalPaidOut;
+    return compareByName(left, right);
+  });
+
+  const playersWithRounds = playerStats.filter((player) => player.roundsPlayed > 0);
+  const pickLeader = <T,>(items: T[], compare: (left: T, right: T) => number) =>
+    [...items].sort(compare)[0] ?? null;
+
+  return {
+    seasonStartDate: seasonConfig.seasonStartDate,
+    sortBy,
+    summary: {
+      moneyLeader: pickLeader(playersWithRounds, (left, right) => {
+        const value =
+          right.netWinnings - left.netWinnings ||
+          right.totalPaidOut - left.totalPaidOut ||
+          compareByName(left as { playerName: string }, right as { playerName: string });
+        return value;
+      }),
+      mostImproved: pickLeader(playersWithRounds, (left, right) => {
+        const value =
+          right.quotaChange - left.quotaChange ||
+          right.netWinnings - left.netWinnings ||
+          compareByName(left as { playerName: string }, right as { playerName: string });
+        return value;
+      }),
+      skinsLeader: pickLeader(playersWithRounds, (left, right) => {
+        const value =
+          right.totalSkinsWinnings - left.totalSkinsWinnings ||
+          right.skinsCount - left.skinsCount ||
+          compareByName(left as { playerName: string }, right as { playerName: string });
+        return value;
+      }),
+      mostRoundsPlayed: pickLeader(playersWithRounds, (left, right) => {
+        const value =
+          right.roundsPlayed - left.roundsPlayed ||
+          right.netWinnings - left.netWinnings ||
+          compareByName(left as { playerName: string }, right as { playerName: string });
+        return value;
+      })
+    },
+    players: sortedStats
+  };
 }
 
 export async function getRoundsList() {

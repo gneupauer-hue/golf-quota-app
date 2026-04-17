@@ -46,6 +46,13 @@ model Round {
   @@index([roundDate, createdAt])
 }
 
+model SeasonConfig {
+  id              Int      @id
+  seasonStartDate DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model RoundEntry {
   id             String @id @default(cuid())
   roundId        String
