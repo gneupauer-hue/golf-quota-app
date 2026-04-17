@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { LeaderboardPayoutPredictions } from "@/components/leaderboard-payout-predictions";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
-import { formatPlusMinus, type TeamCode } from "@/lib/quota";
+import { calculatePayoutPredictions, formatPlusMinus, type TeamCode } from "@/lib/quota";
 import { classNames, formatDisplayDate } from "@/lib/utils";
 
 type ResultsData = {
@@ -9,6 +10,9 @@ type ResultsData = {
     id: string;
     roundName: string;
     roundDate: Date | string;
+    roundMode: "MATCH_QUOTA" | "SKINS_ONLY";
+    isPayoutLocked: boolean;
+    paidPlayerIds: string[];
     notes: string | null;
     completedAt: Date | string | null;
   };
@@ -17,9 +21,14 @@ type ResultsData = {
     playerId: string;
     playerName: string;
     team: TeamCode | null;
+    holeScores: Array<number | null>;
     startQuota: number;
+    frontQuota: number;
+    backQuota: number;
     frontNine: number;
     backNine: number;
+    frontPlusMinus: number;
+    backPlusMinus: number;
     totalPoints: number;
     plusMinus: number;
     nextQuota: number;
@@ -167,11 +176,67 @@ export function RoundResults({ data }: { data: ResultsData }) {
     { place: 2 as const, leader: data.leaders.second },
     { place: 3 as const, leader: data.leaders.third }
   ];
+  const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
+  const payoutPredictions = calculatePayoutPredictions(data.entries, {
+    includeTeamPayouts: !isSkinsOnly,
+    includeIndividualPayouts: !isSkinsOnly,
+    includeSkinsPayouts: true
+  });
+  const reconciliationRows = [
+    {
+      key: "front" as const,
+      label: "Front paid",
+      allocated: payoutPredictions.frontProjectedTotal + payoutPredictions.frontBarRemainder,
+      pot: payoutPredictions.frontPot,
+      difference: payoutPredictions.frontDifference,
+      bar: payoutPredictions.frontBarRemainder
+    },
+    {
+      key: "back" as const,
+      label: "Back paid",
+      allocated: payoutPredictions.backProjectedTotal + payoutPredictions.backBarRemainder,
+      pot: payoutPredictions.backPot,
+      difference: payoutPredictions.backDifference,
+      bar: payoutPredictions.backBarRemainder
+    },
+    {
+      key: "total" as const,
+      label: "Total paid",
+      allocated: payoutPredictions.totalProjectedTotal + payoutPredictions.totalBarRemainder,
+      pot: payoutPredictions.totalPot,
+      difference: payoutPredictions.totalDifference,
+      bar: payoutPredictions.totalBarRemainder
+    },
+    {
+      key: "indy" as const,
+      label: "Indy paid",
+      allocated: payoutPredictions.indyProjectedTotal + payoutPredictions.indyBarRemainder,
+      pot: payoutPredictions.indyPot,
+      difference: payoutPredictions.indyDifference,
+      bar: payoutPredictions.indyBarRemainder
+    },
+    {
+      key: "skins" as const,
+      label: "Skins paid",
+      allocated: payoutPredictions.skinsProjectedTotal + payoutPredictions.skinsBarRemainder,
+      pot: payoutPredictions.skinsPot,
+      difference: payoutPredictions.skinsDifference,
+      bar: payoutPredictions.skinsBarRemainder
+    },
+    {
+      key: "overall" as const,
+      label: "Overall allocated",
+      allocated: payoutPredictions.projectedPayoutTotal + payoutPredictions.barRemainder,
+      pot: payoutPredictions.overallPot,
+      difference: payoutPredictions.overallDifference,
+      bar: payoutPredictions.barRemainder
+    }
+  ];
 
   return (
     <div className="space-y-4 pb-10">
       <PageTitle
-        title={`${data.round.roundName} Scoreboard`}
+        title={`${data.round.roundName} Results`}
         subtitle={`Round date ${formatDisplayDate(data.round.roundDate)}`}
         action={
           <Link
@@ -183,67 +248,79 @@ export function RoundResults({ data }: { data: ResultsData }) {
         }
       />
 
-      {!hasLeaderboardData ? (
-        <SectionCard className="space-y-3">
-          <h3 className="text-lg font-semibold">Scoreboard unavailable</h3>
-          <p className="text-sm text-ink/65">
-            We could not load team or player result data for this round.
-          </p>
-        </SectionCard>
-      ) : null}
-
-      <SectionCard className="space-y-3 bg-ink text-white">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
-            Winners
-          </p>
-          <h3 className="mt-1 text-2xl font-semibold tracking-tight">Round scoreboard</h3>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            {
-              label: "Front",
-              winner: data.leaders.frontTeam ? `Team ${data.leaders.frontTeam.team}` : "-",
-              score: data.leaders.frontTeam ? formatPlusMinus(data.leaders.frontTeam.frontPlusMinus) : "-"
-            },
-            {
-              label: "Back",
-              winner: data.leaders.backTeam ? `Team ${data.leaders.backTeam.team}` : "-",
-              score: data.leaders.backTeam ? formatPlusMinus(data.leaders.backTeam.backPlusMinus) : "-"
-            },
-            {
-              label: "Total",
-              winner: data.leaders.totalTeam ? `Team ${data.leaders.totalTeam.team}` : "-",
-              score: data.leaders.totalTeam ? formatPlusMinus(data.leaders.totalTeam.totalPlusMinus) : "-"
-            }
-          ].map((item) => (
-            <div key={item.label} className="rounded-2xl bg-white/10 px-3 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">{item.label}</p>
-              <p className="mt-1 text-sm font-semibold">{item.winner}</p>
-              <p className="mt-1 text-lg font-semibold">{item.score}</p>
-            </div>
-          ))}
-        </div>
-        <div className="grid gap-2">
-          <div className="rounded-2xl bg-white/10 px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Leader Group (Top 25%)</p>
-            <p className="mt-1 text-sm font-semibold">
-              {data.leaders.leaderGroup.length
-                ? data.leaders.leaderGroup.map((player) => `${player.playerName} ${formatPlusMinus(player.plusMinus)}`).join(" | ")
-                : "-"}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-white/10 px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Payout Positions (Top 25%)</p>
-            <p className="mt-1 text-sm font-semibold">
-              {data.leaders.payoutGroup.length
-                ? data.leaders.payoutGroup.map((player) => `${player.playerName} ${formatPlusMinus(player.plusMinus)}`).join(" | ")
-                : "-"}
-            </p>
-          </div>
-        </div>
+      <SectionCard className="space-y-3">
+        <LeaderboardPayoutPredictions
+          roundId={data.round.id}
+          isPayoutLocked={Boolean(data.round.isPayoutLocked)}
+          initialPaidPlayerIds={data.round.paidPlayerIds ?? []}
+          players={payoutPredictions.players}
+          barRemainder={payoutPredictions.barRemainder}
+          moneyCurrentlyInPlay={payoutPredictions.moneyCurrentlyInPlay}
+          unsettledSkinsValue={payoutPredictions.unsettledSkinsValue}
+          isBalanced={payoutPredictions.isBalanced}
+          mismatchedCategories={payoutPredictions.mismatchedCategories}
+          reconciliationRows={reconciliationRows}
+          eyebrow="Results"
+          title="Final payout results"
+          description="Settlement view for the completed round. Only paid players and winning categories are shown."
+          moneyLabel="Final In Play"
+        />
       </SectionCard>
+
+      {hasLeaderboardData ? (
+        <>
+          <SectionCard className="space-y-3 bg-ink text-white">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
+                Scoreboard
+              </p>
+              <h3 className="mt-1 text-2xl font-semibold tracking-tight">Final standings</h3>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {
+                  label: "Front",
+                  winner: data.leaders.frontTeam ? `Team ${data.leaders.frontTeam.team}` : "-",
+                  score: data.leaders.frontTeam ? formatPlusMinus(data.leaders.frontTeam.frontPlusMinus) : "-"
+                },
+                {
+                  label: "Back",
+                  winner: data.leaders.backTeam ? `Team ${data.leaders.backTeam.team}` : "-",
+                  score: data.leaders.backTeam ? formatPlusMinus(data.leaders.backTeam.backPlusMinus) : "-"
+                },
+                {
+                  label: "Total",
+                  winner: data.leaders.totalTeam ? `Team ${data.leaders.totalTeam.team}` : "-",
+                  score: data.leaders.totalTeam ? formatPlusMinus(data.leaders.totalTeam.totalPlusMinus) : "-"
+                }
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl bg-white/10 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">{item.label}</p>
+                  <p className="mt-1 text-sm font-semibold">{item.winner}</p>
+                  <p className="mt-1 text-lg font-semibold">{item.score}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-2">
+              <div className="rounded-2xl bg-white/10 px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Leader Group (Top 25%)</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {data.leaders.leaderGroup.length
+                    ? data.leaders.leaderGroup.map((player) => `${player.playerName} ${formatPlusMinus(player.plusMinus)}`).join(" | ")
+                    : "-"}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">Payout Positions (Top 25%)</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {data.leaders.payoutGroup.length
+                    ? data.leaders.payoutGroup.map((player) => `${player.playerName} ${formatPlusMinus(player.plusMinus)}`).join(" | ")
+                    : "-"}
+                </p>
+              </div>
+            </div>
+          </SectionCard>
 
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
@@ -573,6 +650,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
           </div>
         )}
       </SectionCard>
+        </>
+      ) : null}
     </div>
   );
 }

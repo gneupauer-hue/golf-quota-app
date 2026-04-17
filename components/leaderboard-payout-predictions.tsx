@@ -42,7 +42,11 @@ export function LeaderboardPayoutPredictions({
   unsettledSkinsValue,
   isBalanced,
   mismatchedCategories,
-  reconciliationRows
+  reconciliationRows,
+  eyebrow = "Payout Predictions",
+  title = "Live payout sheet",
+  description = "Every projected dollar is traceable to Front, Back, Total, Indy, or Skins.",
+  moneyLabel = "Current In Play"
 }: {
   roundId: string;
   isPayoutLocked: boolean;
@@ -54,6 +58,10 @@ export function LeaderboardPayoutPredictions({
   isBalanced: boolean;
   mismatchedCategories: string[];
   reconciliationRows: readonly ReconciliationRow[];
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+  moneyLabel?: string;
 }) {
   const router = useRouter();
   const [paidPlayerIds, setPaidPlayerIds] = useState(initialPaidPlayerIds);
@@ -156,13 +164,13 @@ export function LeaderboardPayoutPredictions({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/55">
-            Payout Predictions
+            {eyebrow}
           </p>
           <h3 className="mt-1 text-xl font-semibold tracking-tight text-ink">
-            Live payout sheet
+            {title}
           </h3>
           <p className="mt-1 text-sm text-ink/65">
-            Every projected dollar is traceable to Front, Back, Total, Indy, or Skins.
+            {description}
           </p>
           <p className="mt-2 text-sm font-semibold text-ink">
             {`${paidCount} of ${payingPlayers.length} players paid`}
@@ -171,7 +179,7 @@ export function LeaderboardPayoutPredictions({
         <div className="space-y-2 text-right">
           <div className="rounded-2xl border border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
-              Current In Play
+              {moneyLabel}
             </p>
             <p className="mt-1 text-lg font-bold text-ink">{formatCurrency(moneyCurrentlyInPlay)}</p>
           </div>
