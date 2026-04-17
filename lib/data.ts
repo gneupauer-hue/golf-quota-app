@@ -419,6 +419,20 @@ export async function getRoundResultsData(roundId: string) {
   }));
 
   const settlement = getRoundSettlementState(round);
+  console.info("[scoreboard] getRoundResultsData", {
+    roundId,
+    roundName: round.roundName,
+    completedAt: round.completedAt,
+    entryCount: entries.length,
+    teamCount: calculateTeamStandings(entries).length,
+    playerScores: entries.map((entry) => ({
+      playerId: entry.playerId,
+      playerName: entry.playerName,
+      team: entry.team,
+      totalPoints: entry.totalPoints,
+      plusMinus: entry.plusMinus
+    }))
+  });
 
   return {
     round: {

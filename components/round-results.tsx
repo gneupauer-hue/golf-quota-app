@@ -143,6 +143,25 @@ function formatCurrency(value: number) {
 }
 
 export function RoundResults({ data }: { data: ResultsData }) {
+  const hasEntries = data.entries.length > 0;
+  const hasTeams = data.teamStandings.length > 0;
+  const hasLeaderboardData =
+    hasEntries ||
+    hasTeams ||
+    data.leaders.first != null ||
+    data.leaders.second != null ||
+    data.leaders.third != null;
+
+  console.info("[scoreboard] round-results", {
+    roundId: data.round.id,
+    roundName: data.round.roundName,
+    completedAt: data.round.completedAt,
+    entryCount: data.entries.length,
+    teamCount: data.teamStandings.length,
+    leaderGroupCount: data.leaders.leaderGroup.length,
+    payoutGroupCount: data.leaders.payoutGroup.length
+  });
+
   const podium = [
     { place: 1 as const, leader: data.leaders.first },
     { place: 2 as const, leader: data.leaders.second },
@@ -163,6 +182,15 @@ export function RoundResults({ data }: { data: ResultsData }) {
           </Link>
         }
       />
+
+      {!hasLeaderboardData ? (
+        <SectionCard className="space-y-3">
+          <h3 className="text-lg font-semibold">Scoreboard unavailable</h3>
+          <p className="text-sm text-ink/65">
+            We could not load team or player result data for this round.
+          </p>
+        </SectionCard>
+      ) : null}
 
       <SectionCard className="space-y-3 bg-ink text-white">
         <div>
@@ -396,136 +424,154 @@ export function RoundResults({ data }: { data: ResultsData }) {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
           Team Standings
         </p>
-        <div className="space-y-2">
-          {data.teamStandings.map((team) => {
-            const winningFront = data.leaders.frontTeam?.team === team.team;
-            const winningBack = data.leaders.backTeam?.team === team.team;
-            const winningTotal = data.leaders.totalTeam?.team === team.team;
+        {data.teamStandings.length ? (
+          <div className="space-y-2">
+            {data.teamStandings.map((team) => {
+              const winningFront = data.leaders.frontTeam?.team === team.team;
+              const winningBack = data.leaders.backTeam?.team === team.team;
+              const winningTotal = data.leaders.totalTeam?.team === team.team;
 
-            return (
-              <div
-                key={team.team}
-                className={classNames(
-                  "rounded-[22px] border px-4 py-3",
-                  winningTotal ? "border-[#5A9764] bg-[#E2F4E6]" : "border-ink/10 bg-canvas"
-                )}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-base font-semibold">{`Team ${team.team}`}</p>
-                    <p className="mt-1 text-xs text-ink/60">{team.players.join(", ")}</p>
+              return (
+                <div
+                  key={team.team}
+                  className={classNames(
+                    "rounded-[22px] border px-4 py-3",
+                    winningTotal ? "border-[#5A9764] bg-[#E2F4E6]" : "border-ink/10 bg-canvas"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold">{`Team ${team.team}`}</p>
+                      <p className="mt-1 text-xs text-ink/60">{team.players.join(", ")}</p>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {winningFront ? (
+                        <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-pine">
+                          Front Winner
+                        </span>
+                      ) : null}
+                      {winningBack ? (
+                        <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-pine">
+                          Back Winner
+                        </span>
+                      ) : null}
+                      {winningTotal ? (
+                        <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-pine">
+                          Total Winner
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {winningFront ? (
-                      <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-pine">
-                        Front Winner
-                      </span>
-                    ) : null}
-                    {winningBack ? (
-                      <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-pine">
-                        Back Winner
-                      </span>
-                    ) : null}
-                    {winningTotal ? (
-                      <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-pine">
-                        Total Winner
-                      </span>
-                    ) : null}
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className={classNames("rounded-2xl px-3 py-2", winningFront ? "bg-[#E2F4E6]" : "bg-white/80")}>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Players</p>
+                      <p className="mt-1 text-base font-semibold">{team.players.length}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Points</p>
+                      <p className="mt-1 text-lg font-semibold">{team.frontPoints}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Quota</p>
+                      <p className="mt-1 text-base font-semibold">{team.frontQuota}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Front +/-</p>
+                      <p className="mt-1 text-lg font-semibold">{formatPlusMinus(team.frontPlusMinus)}</p>
+                    </div>
+                    <div className={classNames("rounded-2xl px-3 py-2", winningBack ? "bg-[#E2F4E6]" : "bg-white/80")}>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Points</p>
+                      <p className="mt-1 text-lg font-semibold">{team.backPoints}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Quota</p>
+                      <p className="mt-1 text-base font-semibold">{team.backQuota}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Back +/-</p>
+                      <p className="mt-1 text-lg font-semibold">{formatPlusMinus(team.backPlusMinus)}</p>
+                    </div>
+                    <div className={classNames("rounded-2xl px-3 py-2", winningTotal ? "bg-[#E2F4E6]" : "bg-white/80")}>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Points</p>
+                      <p className="mt-1 text-lg font-semibold">{team.totalPoints}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Quota</p>
+                      <p className="mt-1 text-base font-semibold">{team.totalQuota}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Total +/-</p>
+                      <p className="mt-1 text-lg font-semibold">{formatPlusMinus(team.totalPlusMinus)}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <div className={classNames("rounded-2xl px-3 py-2", winningFront ? "bg-[#E2F4E6]" : "bg-white/80")}>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Players</p>
-                    <p className="mt-1 text-base font-semibold">{team.players.length}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Points</p>
-                    <p className="mt-1 text-lg font-semibold">{team.frontPoints}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Quota</p>
-                    <p className="mt-1 text-base font-semibold">{team.frontQuota}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Front +/-</p>
-                    <p className="mt-1 text-lg font-semibold">{formatPlusMinus(team.frontPlusMinus)}</p>
-                  </div>
-                  <div className={classNames("rounded-2xl px-3 py-2", winningBack ? "bg-[#E2F4E6]" : "bg-white/80")}>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Points</p>
-                    <p className="mt-1 text-lg font-semibold">{team.backPoints}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Quota</p>
-                    <p className="mt-1 text-base font-semibold">{team.backQuota}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Back +/-</p>
-                    <p className="mt-1 text-lg font-semibold">{formatPlusMinus(team.backPlusMinus)}</p>
-                  </div>
-                  <div className={classNames("rounded-2xl px-3 py-2", winningTotal ? "bg-[#E2F4E6]" : "bg-white/80")}>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Points</p>
-                    <p className="mt-1 text-lg font-semibold">{team.totalPoints}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Quota</p>
-                    <p className="mt-1 text-base font-semibold">{team.totalQuota}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-ink/45">Total +/-</p>
-                    <p className="mt-1 text-lg font-semibold">{formatPlusMinus(team.totalPlusMinus)}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-4">
+            <p className="text-sm font-semibold text-ink">Scoreboard unavailable</p>
+            <p className="mt-1 text-xs text-ink/65">
+              Team results are missing for this round.
+            </p>
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
           Individual Standings
         </p>
-        <div className="space-y-2">
-          {data.entries.map((entry) => (
-            <div
-              key={entry.id}
-              className={classNames("rounded-[22px] border px-4 py-3", entryTone(entry.rank, entry.plusMinus))}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-base font-semibold">{entry.playerName}</p>
-                  <p className="mt-1 text-xs text-ink/60">
-                    {`Rank ${entry.rank} | Team ${entry.team ?? "-"}`}
-                    {data.leaders.leaderGroup.some((player) => player.playerName === entry.playerName) ? " | Leader" : ""}
-                    {data.leaders.payoutGroup.some((player) => player.playerName === entry.playerName) ? " | Payout Position" : ""}
-                  </p>
+        {data.entries.length ? (
+          <div className="space-y-2">
+            {data.entries.map((entry) => (
+              <div
+                key={entry.id}
+                className={classNames("rounded-[22px] border px-4 py-3", entryTone(entry.rank, entry.plusMinus))}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold">{entry.playerName}</p>
+                    <p className="mt-1 text-xs text-ink/60">
+                      {`Rank ${entry.rank} | Team ${entry.team ?? "-"}`}
+                      {data.leaders.leaderGroup.some((player) => player.playerName === entry.playerName) ? " | Leader" : ""}
+                      {data.leaders.payoutGroup.some((player) => player.playerName === entry.playerName) ? " | Payout Position" : ""}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 px-4 py-2 text-center">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">+/-</p>
+                    <p className={classNames("mt-1 text-xl font-semibold", entry.plusMinus < 0 ? "text-danger" : "text-ink")}>
+                      {formatPlusMinus(entry.plusMinus)}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-2xl bg-white/80 px-4 py-2 text-center">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">+/-</p>
-                  <p className={classNames("mt-1 text-xl font-semibold", entry.plusMinus < 0 ? "text-danger" : "text-ink")}>
-                    {formatPlusMinus(entry.plusMinus)}
-                  </p>
-                </div>
-              </div>
 
-              <div className="mt-3 grid grid-cols-4 gap-2">
-                <div className="rounded-2xl bg-white/80 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Start</p>
-                  <p className="mt-1 text-lg font-semibold">{entry.startQuota}</p>
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  <div className="rounded-2xl bg-white/80 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Start</p>
+                    <p className="mt-1 text-lg font-semibold">{entry.startQuota}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front</p>
+                    <p className="mt-1 text-lg font-semibold">{entry.frontNine}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back</p>
+                    <p className="mt-1 text-lg font-semibold">{entry.backNine}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total</p>
+                    <p className="mt-1 text-lg font-semibold">{entry.totalPoints}</p>
+                  </div>
                 </div>
-                <div className="rounded-2xl bg-white/80 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front</p>
-                  <p className="mt-1 text-lg font-semibold">{entry.frontNine}</p>
-                </div>
-                <div className="rounded-2xl bg-white/80 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back</p>
-                  <p className="mt-1 text-lg font-semibold">{entry.backNine}</p>
-                </div>
-                <div className="rounded-2xl bg-white/80 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total</p>
-                  <p className="mt-1 text-lg font-semibold">{entry.totalPoints}</p>
-                </div>
-              </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div className="rounded-2xl bg-white/80 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Next Quota</p>
-                  <p className="mt-1 text-lg font-semibold">{entry.nextQuota}</p>
-                </div>
-                <div className="rounded-2xl bg-white/80 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Team</p>
-                  <p className="mt-1 text-lg font-semibold">{entry.team ?? "-"}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl bg-white/80 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Next Quota</p>
+                    <p className="mt-1 text-lg font-semibold">{entry.nextQuota}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Team</p>
+                    <p className="mt-1 text-lg font-semibold">{entry.team ?? "-"}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-4">
+            <p className="text-sm font-semibold text-ink">Scoreboard unavailable</p>
+            <p className="mt-1 text-xs text-ink/65">
+              Player standings are missing for this round.
+            </p>
+          </div>
+        )}
       </SectionCard>
     </div>
   );
