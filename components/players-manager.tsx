@@ -1,9 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import {
-  livePlayerQuotaResetConfirmation
-} from "@/lib/live-player-quota-reset";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { classNames } from "@/lib/utils";
@@ -40,8 +37,6 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [isQuotaResetOpen, setIsQuotaResetOpen] = useState(false);
-  const [quotaResetConfirmation, setQuotaResetConfirmation] = useState("");
   const hasPlayers = players.length > 0;
 
   const groupedPlayers = useMemo(() => {
@@ -76,11 +71,6 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
   function closeEditor() {
     setIsEditorOpen(false);
     setForm(emptyForm);
-  }
-
-  function closeQuotaReset() {
-    setIsQuotaResetOpen(false);
-    setQuotaResetConfirmation("");
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -135,37 +125,6 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
 
       setPlayers(result.players);
       setMessage("Starter players are ready.");
-    });
-  }
-
-  function handleResetLivePlayerQuotas() {
-    setMessage("");
-
-    startTransition(async () => {
-      const response = await fetch("/api/players/reset-live-quotas", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          confirmation: quotaResetConfirmation
-        })
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        setMessage(result.error ?? "Could not reset live player quotas.");
-        return;
-      }
-
-      setPlayers(result.players);
-      closeQuotaReset();
-      setMessage(
-        result.notFound?.length
-          ? `Live quotas updated for ${result.updatedCount} players. Missing: ${result.notFound.join(", ")}`
-          : `Live quotas updated for ${result.updatedCount} players.`
-      );
     });
   }
 
@@ -229,18 +188,6 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                   onClick={handleCreateStarterPlayers}
                 >
                   {isPending ? "Restoring..." : "Restore Starter Players"}
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isPending}
-                  className="club-btn-danger min-h-12 w-full text-base disabled:opacity-60"
-                  onClick={() => {
-                    setMessage("");
-                    setIsQuotaResetOpen(true);
-                  }}
-                >
-                  Reset Live Player Quotas
                 </button>
               </div>
 
@@ -431,62 +378,6 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
         </div>
       ) : null}
 
-      {isQuotaResetOpen ? (
-        <div className="fixed inset-0 z-40 bg-ink/35 px-3 py-4">
-          <div className="mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-mist bg-white shadow-card">
-            <div className="border-b border-ink/10 px-5 py-4">
-              <h3 className="text-lg font-semibold text-ink">Reset Live Player Quotas</h3>
-              <p className="mt-1 text-sm text-ink/65">
-                This runs through the deployed app and updates existing player quota values in place by exact name.
-              </p>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="rounded-2xl border border-danger/20 bg-danger/8 px-4 py-4">
-                <p className="text-sm font-semibold text-ink">
-                  Type <span className="font-bold">{livePlayerQuotaResetConfirmation}</span> to confirm.
-                </p>
-                <p className="mt-2 text-sm text-ink/70">
-                  This updates only the single live <span className="font-semibold">quota</span> field. It does not create players, delete players, or rename anyone.
-                </p>
-              </div>
-
-              <label className="mt-4 block">
-                <span className="mb-2 block text-sm font-semibold text-ink">Confirmation</span>
-                <input
-                  className="club-input h-14"
-                  value={quotaResetConfirmation}
-                  onChange={(event) => setQuotaResetConfirmation(event.target.value)}
-                  placeholder={livePlayerQuotaResetConfirmation}
-                />
-              </label>
-            </div>
-
-            <div className="border-t border-mist px-5 py-4">
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  className="club-btn-secondary min-h-12 text-base"
-                  onClick={closeQuotaReset}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={
-                    isPending ||
-                    quotaResetConfirmation.trim() !== livePlayerQuotaResetConfirmation
-                  }
-                  className="club-btn-danger min-h-12 text-base disabled:opacity-60"
-                  onClick={handleResetLivePlayerQuotas}
-                >
-                  {isPending ? "Updating..." : "Run Live Reset"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
