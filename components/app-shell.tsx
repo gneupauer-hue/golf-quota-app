@@ -8,9 +8,9 @@ const links = [
   { href: "/", lines: ["Home"] },
   { href: "/leaderboard", lines: ["Leader", "Board"] },
   { href: "/current-round", lines: ["Current", "Round"] },
+  { href: "/season-stats", lines: ["Season", "Stats"] },
   { href: "/past-games", lines: ["Past", "Games"] },
   { href: "/players", lines: ["Players"] },
-  { href: "/season-stats", lines: ["Season"] }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
