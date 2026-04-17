@@ -2,7 +2,11 @@ import Link from "next/link";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { getLeaderboardPageData } from "@/lib/data";
-import { calculateIndividualPayoutProjection, formatPlusMinus } from "@/lib/quota";
+import {
+  calculateIndividualPayoutProjection,
+  calculatePayoutPredictions,
+  formatPlusMinus
+} from "@/lib/quota";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -29,7 +33,9 @@ export default async function LeaderboardPage() {
         <PageTitle title="Leaderboard" subtitle="Live standings and projections for the current round." />
         <SectionCard className="space-y-3">
           <h3 className="text-lg font-semibold">No current round</h3>
-          <p className="text-sm text-ink/65">Start a round to see live team leaders, individual projections, and skins updates.</p>
+          <p className="text-sm text-ink/65">
+            Start a round to see live team leaders, individual projections, and skins updates.
+          </p>
           <Link href="/rounds/new" className="club-btn-primary min-h-12">
             New Round
           </Link>
@@ -42,6 +48,11 @@ export default async function LeaderboardPage() {
   const individualPayoutProjection = isSkinsOnly
     ? []
     : calculateIndividualPayoutProjection(data.entries);
+  const payoutPredictions = calculatePayoutPredictions(data.entries, {
+    includeTeamPayouts: !isSkinsOnly,
+    includeIndividualPayouts: !isSkinsOnly,
+    includeSkinsPayouts: true
+  });
   const awardedSkins = data.money.skins.holes
     .filter((hole) => hole.skinAwarded && hole.winnerPlayerId)
     .map((hole) => {
@@ -74,42 +85,55 @@ export default async function LeaderboardPage() {
 
       <section className="club-panel-dark space-y-3 px-4 py-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/80">Projections</p>
-          <h3 className="mt-1 text-xl font-semibold">{isSkinsOnly ? "Live skins and current winners" : "Estimated win chances"}</h3>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/80">
+            Projections
+          </p>
+          <h3 className="mt-1 text-xl font-semibold">
+            {isSkinsOnly ? "Live skins and current winners" : "Estimated win chances"}
+          </h3>
           <p className="mt-1 text-xs text-white/80">
             Estimates based on current margins and holes remaining.
           </p>
         </div>
         <div className="space-y-2">
-          {!isSkinsOnly ? [
-            { label: "Front", projection: data.projections.frontTeam },
-            { label: "Back", projection: data.projections.backTeam },
-            { label: "Total", projection: data.projections.totalTeam }
-          ].map((item) => (
-            <div key={item.label} className="rounded-2xl bg-white/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/75">{item.label}</p>
-                  <p className="mt-1 text-lg font-semibold">{item.projection?.leaderLabel ?? "-"}</p>
+          {!isSkinsOnly
+            ? [
+                { label: "Front", projection: data.projections.frontTeam },
+                { label: "Back", projection: data.projections.backTeam },
+                { label: "Total", projection: data.projections.totalTeam }
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl bg-white/10 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-white/75">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-lg font-semibold">
+                        {item.projection?.leaderLabel ?? "-"}
+                      </p>
+                      {item.projection ? (
+                        <p className="mt-1 text-xs text-white/80">{`Margin ${formatPlusMinus(item.projection.margin)} | ${item.projection.holesRemaining} holes left`}</p>
+                      ) : null}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-semibold">
+                        {item.projection ? `${item.projection.probability}%` : "-"}
+                      </p>
+                      <p className="mt-1 text-xs text-white/80">Win Probability</p>
+                    </div>
+                  </div>
                   {item.projection ? (
-                    <p className="mt-1 text-xs text-white/80">{`Margin ${formatPlusMinus(item.projection.margin)} | ${item.projection.holesRemaining} holes left`}</p>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-[#FFF1BF]"
+                        style={{ width: `${item.projection.probability}%` }}
+                      />
+                    </div>
                   ) : null}
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-semibold">{item.projection ? `${item.projection.probability}%` : "-"}</p>
-                  <p className="mt-1 text-xs text-white/80">Win Probability</p>
-                </div>
-              </div>
-              {item.projection ? (
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-[#FFF1BF]"
-                    style={{ width: `${item.projection.probability}%` }}
-                  />
-                </div>
-              ) : null}
-            </div>
-          )) : null}
+              ))
+            : null}
+
           {!isSkinsOnly ? (
             <div className="rounded-2xl bg-white/10 px-4 py-3">
               <div className="flex items-start justify-between gap-3">
@@ -123,7 +147,8 @@ export default async function LeaderboardPage() {
                       : "No paid spots projected yet"}
                   </p>
                   <p className="mt-1 text-xs text-white/80">
-                    Paid places use the app&apos;s existing top-25% payout table for this field size.
+                    Paid places and dollars come directly from the fixed payout table for
+                    this field size.
                   </p>
                 </div>
                 <div className="rounded-full bg-white/12 px-3 py-1.5 text-sm font-semibold text-white">
@@ -159,6 +184,7 @@ export default async function LeaderboardPage() {
               )}
             </div>
           ) : null}
+
           <div className="rounded-2xl bg-white/10 px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -193,7 +219,7 @@ export default async function LeaderboardPage() {
                     className="flex items-center justify-between gap-3 rounded-2xl bg-white/12 px-3 py-3"
                   >
                     <div>
-                      <p className="text-sm font-semibold text-white">{`Hole ${skin.holeNumber} — ${skin.winnerName}`}</p>
+                      <p className="text-sm font-semibold text-white">{`Hole ${skin.holeNumber} - ${skin.winnerName}`}</p>
                       <p className="mt-1 text-xs font-medium text-white/88">{skin.resultLabel}</p>
                     </div>
                     <p className="text-base font-bold text-[#F3E2BC]">
@@ -215,6 +241,144 @@ export default async function LeaderboardPage() {
           </div>
         </div>
       </section>
+
+      <SectionCard className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/55">
+              Payout Predictions
+            </p>
+            <h3 className="mt-1 text-xl font-semibold tracking-tight text-ink">
+              Live payout sheet
+            </h3>
+            <p className="mt-1 text-sm text-ink/65">
+              Every projected dollar is traceable to Front, Back, Total, Indy, or
+              Skins.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-3 py-2 text-right">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
+              Current In Play
+            </p>
+            <p className="mt-1 text-lg font-bold text-ink">
+              {formatCurrency(payoutPredictions.moneyCurrentlyInPlay)}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {payoutPredictions.players.map((player) => (
+            <details
+              key={player.playerId}
+              className="overflow-hidden rounded-[22px] border border-[color:var(--club-card-border)] bg-white"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4">
+                <div>
+                  <p className="text-base font-semibold text-ink">{player.playerName}</p>
+                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-ink/55">
+                    Tap for payout breakdown
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
+                    Projected Total
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-[color:var(--club-green)]">
+                    {formatCurrency(player.projectedTotal)}
+                  </p>
+                </div>
+              </summary>
+              <div className="border-t border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-4 py-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "Front", value: player.front },
+                    { label: "Back", value: player.back },
+                    { label: "Total", value: player.total },
+                    { label: "Indy", value: player.indy },
+                    { label: "Skins", value: player.skins },
+                    { label: "Projected Total", value: player.projectedTotal, emphasize: true }
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className={`rounded-2xl border px-3 py-3 ${
+                        item.emphasize
+                          ? "border-[color:var(--club-green)] bg-[color:var(--club-cream)]"
+                          : "border-[color:var(--club-card-border)] bg-white"
+                      }`}
+                    >
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
+                        {item.label}
+                      </p>
+                      <p
+                        className={`mt-1 text-lg font-bold ${
+                          item.emphasize ? "text-[color:var(--club-green)]" : "text-ink"
+                        }`}
+                      >
+                        {formatCurrency(item.value)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {[
+            { label: "Front", value: payoutPredictions.frontProjectedTotal },
+            { label: "Back", value: payoutPredictions.backProjectedTotal },
+            { label: "Total", value: payoutPredictions.totalProjectedTotal },
+            { label: "Indy", value: payoutPredictions.indyProjectedTotal },
+            { label: "Skins", value: payoutPredictions.skinsProjectedTotal },
+            { label: "Unsettled Skins", value: payoutPredictions.unsettledSkinsValue }
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-2xl border border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-3 py-3"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
+                {item.label}
+              </p>
+              <p className="mt-1 text-lg font-semibold text-ink">{formatCurrency(item.value)}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-[22px] border border-[color:var(--club-card-border)] bg-[color:var(--club-cream)] px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/55">
+                Settlement Check
+              </p>
+              <p className="mt-1 text-sm text-ink/70">
+                Projected payouts should reconcile to the money currently in play.
+              </p>
+            </div>
+            <span className="club-pill">
+              {payoutPredictions.isBalanced ? "Balanced" : "Check totals"}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-white px-3 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
+                Players Total
+              </p>
+              <p className="mt-1 text-lg font-bold text-ink">
+                {formatCurrency(payoutPredictions.projectedPayoutTotal)}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white px-3 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/55">
+                Money In Play
+              </p>
+              <p className="mt-1 text-lg font-bold text-ink">
+                {formatCurrency(payoutPredictions.moneyCurrentlyInPlay)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
     </div>
   );
 }

@@ -193,6 +193,30 @@ export type IndividualPayoutProjection = {
   holesRemaining: number;
 };
 
+export type PlayerPayoutPrediction = {
+  playerId: string;
+  playerName: string;
+  front: number;
+  back: number;
+  total: number;
+  indy: number;
+  skins: number;
+  projectedTotal: number;
+};
+
+export type PayoutPredictionsSummary = {
+  players: PlayerPayoutPrediction[];
+  frontProjectedTotal: number;
+  backProjectedTotal: number;
+  totalProjectedTotal: number;
+  indyProjectedTotal: number;
+  skinsProjectedTotal: number;
+  moneyCurrentlyInPlay: number;
+  projectedPayoutTotal: number;
+  unsettledSkinsValue: number;
+  isBalanced: boolean;
+};
+
 const birdieOrBetterValues = new Set<number>([4, 6]);
 const individualPayoutTable: Record<number, number[]> = {
   4: [20],
@@ -560,6 +584,27 @@ function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function splitCurrencyAcrossKeys(total: number, keys: string[]) {
+  const allocations = new Map<string, number>();
+  const uniqueKeys = [...new Set(keys)].sort((a, b) => a.localeCompare(b));
+
+  if (!uniqueKeys.length || total <= 0) {
+    return allocations;
+  }
+
+  const totalCents = Math.round(total * 100);
+  const base = Math.floor(totalCents / uniqueKeys.length);
+  let remainder = totalCents - base * uniqueKeys.length;
+
+  uniqueKeys.forEach((key) => {
+    const cents = base + (remainder > 0 ? 1 : 0);
+    remainder = Math.max(0, remainder - 1);
+    allocations.set(key, cents / 100);
+  });
+
+  return allocations;
+}
+
 function formatPlaceLabel(startPlace: number, endPlace: number) {
   if (startPlace === endPlace) {
     return `${startPlace}`;
@@ -676,6 +721,56 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
     payouts,
     payoutByPlace: Array.from(payoutByPlace.values()).sort((a, b) => a.place - b.place)
   };
+}
+
+function getProjectedWinningTeams(
+  teams: TeamStanding[],
+  key: keyof Pick<TeamStanding, "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus">
+) {
+  if (!teams.length) {
+    return [];
+  }
+
+  const bestScore = Math.max(...teams.map((team) => team[key]));
+  return teams
+    .filter((team) => team[key] === bestScore)
+    .sort((a, b) => a.team.localeCompare(b.team));
+}
+
+function allocateTeamPotToPlayers(
+  rows: CalculatedRoundRow[],
+  teams: TeamStanding[],
+  key: keyof Pick<TeamStanding, "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus">,
+  pot: number
+) {
+  const projectedTeams = getProjectedWinningTeams(teams, key);
+  const allocations = new Map<string, number>();
+
+  if (!projectedTeams.length || pot <= 0) {
+    return allocations;
+  }
+
+  const teamShares = splitCurrencyAcrossKeys(
+    pot,
+    projectedTeams.map((team) => team.team)
+  );
+
+  projectedTeams.forEach((team) => {
+    const teamRows = rows
+      .filter((row) => row.team === team.team)
+      .sort((a, b) => a.playerName.localeCompare(b.playerName));
+    const teamShare = teamShares.get(team.team) ?? 0;
+    const playerShares = splitCurrencyAcrossKeys(
+      teamShare,
+      teamRows.map((row) => row.playerId)
+    );
+
+    teamRows.forEach((row) => {
+      allocations.set(row.playerId, playerShares.get(row.playerId) ?? 0);
+    });
+  });
+
+  return allocations;
 }
 
 export function calculateGoodSkins(rows: CalculatedRoundRow[]): SkinsResult {
@@ -1021,4 +1116,147 @@ export function calculateIndividualPayoutProjection(
       } satisfies IndividualPayoutProjection;
     })
     .filter((value): value is IndividualPayoutProjection => value != null);
+}
+
+export function calculatePayoutPredictions(
+  rows: CalculatedRoundRow[],
+  options?: {
+    includeTeamPayouts?: boolean;
+    includeIndividualPayouts?: boolean;
+    includeSkinsPayouts?: boolean;
+  }
+): PayoutPredictionsSummary {
+  const includeTeamPayouts = options?.includeTeamPayouts ?? true;
+  const includeIndividualPayouts = options?.includeIndividualPayouts ?? true;
+  const includeSkinsPayouts = options?.includeSkinsPayouts ?? true;
+
+  const teams = calculateTeamStandings(rows);
+  const sideGames = calculateSideGameResults(rows);
+  const players = new Map<
+    string,
+    {
+      playerId: string;
+      playerName: string;
+      front: number;
+      back: number;
+      total: number;
+      indy: number;
+      skins: number;
+    }
+  >();
+
+  rows.forEach((row) => {
+    players.set(row.playerId, {
+      playerId: row.playerId,
+      playerName: row.playerName,
+      front: 0,
+      back: 0,
+      total: 0,
+      indy: 0,
+      skins: 0
+    });
+  });
+
+  const frontAllocations = includeTeamPayouts
+    ? allocateTeamPotToPlayers(rows, teams, "frontPlusMinus", sideGames.teamPots.frontPot)
+    : new Map<string, number>();
+  const backAllocations = includeTeamPayouts
+    ? allocateTeamPotToPlayers(rows, teams, "backPlusMinus", sideGames.teamPots.backPot)
+    : new Map<string, number>();
+  const totalAllocations = includeTeamPayouts
+    ? allocateTeamPotToPlayers(rows, teams, "totalPlusMinus", sideGames.teamPots.totalPot)
+    : new Map<string, number>();
+
+  frontAllocations.forEach((amount, playerId) => {
+    const player = players.get(playerId);
+    if (player) {
+      player.front = amount;
+    }
+  });
+  backAllocations.forEach((amount, playerId) => {
+    const player = players.get(playerId);
+    if (player) {
+      player.back = amount;
+    }
+  });
+  totalAllocations.forEach((amount, playerId) => {
+    const player = players.get(playerId);
+    if (player) {
+      player.total = amount;
+    }
+  });
+
+  if (includeIndividualPayouts) {
+    sideGames.individualPayouts.forEach((payout) => {
+      const player = players.get(payout.playerId);
+      if (player) {
+        player.indy = payout.payout;
+      }
+    });
+  }
+
+  if (includeSkinsPayouts) {
+    sideGames.skins.winners.forEach((winner) => {
+      const player = players.get(winner.playerId);
+      if (player) {
+        player.skins = winner.payout;
+      }
+    });
+  }
+
+  const projectedPlayers = Array.from(players.values())
+    .map((player) => ({
+      ...player,
+      projectedTotal: roundCurrency(
+        player.front + player.back + player.total + player.indy + player.skins
+      )
+    }))
+    .sort((a, b) => {
+      if (b.projectedTotal !== a.projectedTotal) {
+        return b.projectedTotal - a.projectedTotal;
+      }
+      return a.playerName.localeCompare(b.playerName);
+    });
+
+  const frontProjectedTotal = roundCurrency(
+    projectedPlayers.reduce((sum, player) => sum + player.front, 0)
+  );
+  const backProjectedTotal = roundCurrency(
+    projectedPlayers.reduce((sum, player) => sum + player.back, 0)
+  );
+  const totalProjectedTotal = roundCurrency(
+    projectedPlayers.reduce((sum, player) => sum + player.total, 0)
+  );
+  const indyProjectedTotal = roundCurrency(
+    projectedPlayers.reduce((sum, player) => sum + player.indy, 0)
+  );
+  const skinsProjectedTotal = roundCurrency(
+    projectedPlayers.reduce((sum, player) => sum + player.skins, 0)
+  );
+  const projectedPayoutTotal = roundCurrency(
+    projectedPlayers.reduce((sum, player) => sum + player.projectedTotal, 0)
+  );
+  const moneyCurrentlyInPlay = roundCurrency(
+    frontProjectedTotal +
+      backProjectedTotal +
+      totalProjectedTotal +
+      indyProjectedTotal +
+      skinsProjectedTotal
+  );
+  const unsettledSkinsValue = roundCurrency(
+    Math.max(0, sideGames.skins.totalPot - skinsProjectedTotal)
+  );
+
+  return {
+    players: projectedPlayers,
+    frontProjectedTotal,
+    backProjectedTotal,
+    totalProjectedTotal,
+    indyProjectedTotal,
+    skinsProjectedTotal,
+    moneyCurrentlyInPlay,
+    projectedPayoutTotal,
+    unsettledSkinsValue,
+    isBalanced: projectedPayoutTotal === moneyCurrentlyInPlay
+  };
 }
