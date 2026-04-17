@@ -235,25 +235,7 @@ export async function getCurrentRoundId() {
 
 async function getLeaderboardRoundId() {
   const activeRound = await resolveActiveRound(prisma);
-
-  if (activeRound?.id) {
-    return activeRound.id;
-  }
-
-  const latestCompletedRound = await prisma.round.findFirst({
-    where: {
-      completedAt: {
-        not: null
-      },
-      canceledAt: null
-    },
-    orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }],
-    select: {
-      id: true
-    }
-  });
-
-  return latestCompletedRound?.id ?? null;
+  return activeRound?.id ?? null;
 }
 
 export async function getLeaderboardPageData() {

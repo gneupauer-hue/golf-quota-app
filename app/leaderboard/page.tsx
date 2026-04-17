@@ -32,11 +32,14 @@ export default async function LeaderboardPage() {
   if (!data) {
     return (
       <div className="space-y-3">
-        <PageTitle title="Leaderboard" subtitle="Live standings and projections for the current round." />
-        <SectionCard className="space-y-3">
-          <h3 className="text-lg font-semibold">No current round</h3>
+        <PageTitle title="Leaderboard" subtitle="Live standings for the current round." />
+        <SectionCard className="space-y-2.5">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+            No Open Rounds
+          </p>
+          <h3 className="text-lg font-semibold text-ink">No active round</h3>
           <p className="text-sm text-ink/65">
-            Start a round to see live team leaders, individual projections, and skins updates.
+            Start a new round from Home when you&apos;re ready.
           </p>
           <Link href="/rounds/new" className="club-btn-primary min-h-12">
             New Round
