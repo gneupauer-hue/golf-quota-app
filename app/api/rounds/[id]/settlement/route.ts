@@ -27,6 +27,8 @@ export async function POST(
 
     const isPayoutLocked = (round as { isPayoutLocked?: boolean }).isPayoutLocked ?? false;
     const paidPlayerIds = (round as { paidPlayerIds?: string[] }).paidPlayerIds ?? [];
+    const buyInPaidPlayerIds =
+      (round as { buyInPaidPlayerIds?: string[] }).buyInPaidPlayerIds ?? [];
 
     if (action === "toggle-paid") {
       if (isPayoutLocked) {
@@ -62,6 +64,36 @@ export async function POST(
       return NextResponse.json({
         ok: true,
         paidPlayerIds: updatedRound.paidPlayerIds
+      });
+    }
+
+    if (action === "toggle-buy-in-paid") {
+      const playerId = String(body.playerId ?? "").trim();
+      const validPlayerIds = new Set(
+        (round.entries as Array<{ playerId: string }>).map((entry) => entry.playerId)
+      );
+
+      if (!playerId || !validPlayerIds.has(playerId)) {
+        return NextResponse.json({ error: "Player not found in this round." }, { status: 400 });
+      }
+
+      const nextPaidInIds = buyInPaidPlayerIds.includes(playerId)
+        ? buyInPaidPlayerIds.filter((id) => id !== playerId)
+        : [...buyInPaidPlayerIds, playerId].sort((a, b) => a.localeCompare(b));
+
+      const updatedRound = await (prisma as any).round.update({
+        where: { id },
+        data: {
+          buyInPaidPlayerIds: nextPaidInIds
+        },
+        select: {
+          buyInPaidPlayerIds: true
+        }
+      });
+
+      return NextResponse.json({
+        ok: true,
+        buyInPaidPlayerIds: updatedRound.buyInPaidPlayerIds
       });
     }
 

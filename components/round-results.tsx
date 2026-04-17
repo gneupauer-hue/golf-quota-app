@@ -278,6 +278,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
           title="Final payout results"
           description="Settlement view for the completed round. Only paid players and winning categories are shown."
           moneyLabel="Final In Play"
+          showRemainder
         />
       </SectionCard>
 

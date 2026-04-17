@@ -19,11 +19,13 @@ function getRoundSettlementState(round: unknown) {
   const settlementRound = round as {
     isPayoutLocked?: boolean;
     paidPlayerIds?: string[];
+    buyInPaidPlayerIds?: string[];
   };
 
   return {
     isPayoutLocked: settlementRound.isPayoutLocked ?? false,
-    paidPlayerIds: settlementRound.paidPlayerIds ?? []
+    paidPlayerIds: settlementRound.paidPlayerIds ?? [],
+    buyInPaidPlayerIds: settlementRound.buyInPaidPlayerIds ?? []
   };
 }
 
@@ -366,6 +368,7 @@ export async function getRoundEditorData(roundId: string) {
       roundMode: normalizeRoundMode(round.roundMode),
       isTestRound: round.isTestRound,
       isPayoutLocked: settlement.isPayoutLocked,
+      buyInPaidPlayerIds: settlement.buyInPaidPlayerIds,
       paidPlayerIds: settlement.paidPlayerIds,
       notes: round.notes ?? "",
       teamCount: round.teamCount ?? null,
@@ -472,6 +475,7 @@ export async function getRoundResultsData(roundId: string) {
       roundMode: normalizeRoundMode(round.roundMode),
       isTestRound: round.isTestRound,
       isPayoutLocked: settlement.isPayoutLocked,
+      buyInPaidPlayerIds: settlement.buyInPaidPlayerIds,
       paidPlayerIds: settlement.paidPlayerIds,
       notes: round.notes,
       completedAt: round.completedAt

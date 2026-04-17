@@ -74,6 +74,7 @@ type EditorProps = {
     roundDate: string;
     roundMode: RoundMode;
     isTestRound: boolean;
+    buyInPaidPlayerIds: string[];
     notes: string;
     teamCount: number | null;
     lockedAt: string | null;
@@ -214,6 +215,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
   const [notes, setNotes] = useState(round.notes);
   const [isTestRound, setIsTestRound] = useState(Boolean(round.isTestRound));
+  const [buyInPaidPlayerIds, setBuyInPaidPlayerIds] = useState<string[]>(
+    round.buyInPaidPlayerIds ?? []
+  );
   const [rows, setRows] = useState<RowState[]>(
     round.entries.map((entry) => ({
       playerId: entry.playerId,
@@ -1701,9 +1705,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
           {activeTab === "round" ? (
             isSkinsOnly ? (
-              <SkinsOnlyRoundTab rows={calculatedRows} sideGames={sideGames} playerBuyIns={playerBuyIns} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenEntry={openSkinsEntry} />
+              <SkinsOnlyRoundTab roundId={round.id} rows={calculatedRows} sideGames={sideGames} playerBuyIns={playerBuyIns} initialBuyInPaidPlayerIds={buyInPaidPlayerIds} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenEntry={openSkinsEntry} />
             ) : (
-              <RoundTabView rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} playerBuyIns={playerBuyIns} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenTeam={openTeam} />
+              <RoundTabView roundId={round.id} rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} playerBuyIns={playerBuyIns} initialBuyInPaidPlayerIds={buyInPaidPlayerIds} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenTeam={openTeam} />
             )
           ) : null}
           {activeTab === "leaders" ? (
@@ -2075,20 +2079,24 @@ function LeadersTab({
 }
 
 function RoundTabView({
+  roundId,
   rows,
   teamStandings,
   teamRowsByCode,
   sideGames,
   playerBuyIns,
+  initialBuyInPaidPlayerIds,
   isTestRound,
   onDeleteRound,
   onOpenTeam
 }: {
+  roundId: string;
   rows: CalculatedRoundRow[];
   teamStandings: TeamStanding[];
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
   sideGames: SideGameResults;
   playerBuyIns: PlayerBuyInSummary;
+  initialBuyInPaidPlayerIds: string[];
   isTestRound: boolean;
   onDeleteRound: () => void;
   onOpenTeam: (team: TeamCode) => void;
@@ -2122,6 +2130,11 @@ function RoundTabView({
       </SectionCard>
 
       <PlayerBuyInSection buyIns={playerBuyIns} mode="MATCH_QUOTA" />
+      <BuyInStatusSection
+        roundId={roundId}
+        buyIns={playerBuyIns}
+        initialBuyInPaidPlayerIds={initialBuyInPaidPlayerIds}
+      />
 
       <div className="space-y-3">
         {teamStandings.map((team) => {
@@ -2177,16 +2190,20 @@ function RoundTabView({
 }
 
 function SkinsOnlyRoundTab({
+  roundId,
   rows,
   sideGames,
   playerBuyIns,
+  initialBuyInPaidPlayerIds,
   isTestRound,
   onDeleteRound,
   onOpenEntry
 }: {
+  roundId: string;
   rows: CalculatedRoundRow[];
   sideGames: SideGameResults;
   playerBuyIns: PlayerBuyInSummary;
+  initialBuyInPaidPlayerIds: string[];
   isTestRound: boolean;
   onDeleteRound: () => void;
   onOpenEntry: () => void;
@@ -2237,6 +2254,11 @@ function SkinsOnlyRoundTab({
       </SectionCard>
 
       <PlayerBuyInSection buyIns={playerBuyIns} mode="SKINS_ONLY" />
+      <BuyInStatusSection
+        roundId={roundId}
+        buyIns={playerBuyIns}
+        initialBuyInPaidPlayerIds={initialBuyInPaidPlayerIds}
+      />
 
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Players</p>
@@ -2561,6 +2583,130 @@ function PlayerBuyInSection({
                     {formatCurrency(player.totalOwed)}
                   </p>
                 </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
+
+function BuyInStatusSection({
+  roundId,
+  buyIns,
+  initialBuyInPaidPlayerIds
+}: {
+  roundId: string;
+  buyIns: PlayerBuyInSummary;
+  initialBuyInPaidPlayerIds: string[];
+}) {
+  const router = useRouter();
+  const [paidInPlayerIds, setPaidInPlayerIds] = useState(initialBuyInPaidPlayerIds);
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  if (!buyIns.players.length) {
+    return null;
+  }
+
+  const collectedTotal = buyIns.players.reduce(
+    (sum, player) => sum + (paidInPlayerIds.includes(player.playerId) ? player.totalOwed : 0),
+    0
+  );
+  const totalOwed = buyIns.players.reduce((sum, player) => sum + player.totalOwed, 0);
+  const paidInCount = buyIns.players.filter((player) => paidInPlayerIds.includes(player.playerId)).length;
+
+  function togglePaidIn(playerId: string) {
+    startTransition(async () => {
+      try {
+        setMessage("");
+        const response = await fetch(`/api/rounds/${roundId}/settlement`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            action: "toggle-buy-in-paid",
+            playerId
+          })
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not update buy-in status.");
+        }
+
+        setPaidInPlayerIds(result.buyInPaidPlayerIds ?? []);
+        setMessage("Buy-in status updated.");
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not update buy-in status.");
+      }
+    });
+  }
+
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+            Buy-In Status
+          </p>
+          <h3 className="mt-1 text-lg font-semibold">Pot paid in</h3>
+          <p className="mt-1 text-sm text-ink/65">
+            {`${paidInCount} of ${buyIns.players.length} players paid in`}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-canvas px-4 py-3 text-right">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Collected</p>
+          <p className="mt-1 text-xl font-semibold">
+            {`${formatCurrency(collectedTotal)} / ${formatCurrency(totalOwed)}`}
+          </p>
+        </div>
+      </div>
+
+      {message ? <p className="text-sm font-medium text-ink/70">{message}</p> : null}
+
+      <div className="space-y-2">
+        {buyIns.players.map((player) => {
+          const isPaidIn = paidInPlayerIds.includes(player.playerId);
+          return (
+            <div
+              key={player.playerId}
+              className={classNames(
+                "rounded-[22px] border px-4 py-3",
+                isPaidIn ? "border-[#5A9764] bg-[#E2F4E6]" : "border-ink/10 bg-canvas"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-semibold text-ink">{player.playerName}</p>
+                    <span
+                      className={classNames(
+                        "rounded-full px-2.5 py-1 text-xs font-semibold",
+                        isPaidIn
+                          ? "bg-white/80 text-pine"
+                          : "bg-white text-ink/70"
+                      )}
+                    >
+                      {isPaidIn ? "Paid In" : "Not Paid In"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-ink/65">{`Owes ${formatCurrency(player.totalOwed)}`}</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => togglePaidIn(player.playerId)}
+                  className={classNames(
+                    "min-h-11 rounded-2xl px-4 text-sm font-semibold disabled:opacity-45",
+                    isPaidIn ? "club-btn-secondary" : "club-btn-primary"
+                  )}
+                >
+                  {isPaidIn ? "Unmark Paid In" : "Mark as Paid In"}
+                </button>
               </div>
             </div>
           );

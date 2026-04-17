@@ -29,6 +29,7 @@ model Round {
   isTestRound    Boolean            @default(false)
   isPayoutLocked Boolean            @default(false)
   paidPlayerIds  String[]           @default([])
+  buyInPaidPlayerIds String[]       @default([])
   notes          String?
   teamCount      Int?
   lockedAt       DateTime?

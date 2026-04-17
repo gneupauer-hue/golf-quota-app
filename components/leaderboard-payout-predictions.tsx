@@ -46,7 +46,8 @@ export function LeaderboardPayoutPredictions({
   eyebrow = "Payout Predictions",
   title = "Live payout sheet",
   description = "Every projected dollar is traceable to Front, Back, Total, Indy, or Skins.",
-  moneyLabel = "Current In Play"
+  moneyLabel = "Current In Play",
+  showRemainder = false
 }: {
   roundId: string;
   isPayoutLocked: boolean;
@@ -62,6 +63,7 @@ export function LeaderboardPayoutPredictions({
   title?: string;
   description?: string;
   moneyLabel?: string;
+  showRemainder?: boolean;
 }) {
   const router = useRouter();
   const [paidPlayerIds, setPaidPlayerIds] = useState(initialPaidPlayerIds);
@@ -97,6 +99,13 @@ export function LeaderboardPayoutPredictions({
   );
 
   const paidCount = payingPlayers.filter((player) => player.isPaid).length;
+  const displayRows = reconciliationRows.map((row) => ({
+    ...row,
+    displayAllocated: showRemainder ? row.allocated : roundCurrency(row.allocated - row.bar),
+    displayDifference: showRemainder
+      ? row.difference
+      : roundCurrency(row.allocated - row.bar - row.pot)
+  }));
 
   function handleTogglePaid(playerId: string) {
     startTransition(async () => {
@@ -262,13 +271,13 @@ export function LeaderboardPayoutPredictions({
               </div>
             </details>
           ))}
-          {barRemainder > 0 ? (
+          {showRemainder && barRemainder > 0 ? (
             <div className="rounded-[22px] border border-[color:var(--club-card-border)] bg-[color:var(--club-cream)] px-4 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-base font-semibold text-ink">Bar</p>
+                  <p className="text-base font-semibold text-ink">Amount Left Over</p>
                   <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-ink/55">
-                    Rounded remainder
+                    Possible tip to bartender
                   </p>
                 </div>
                 <p className="text-xl font-bold text-[color:var(--club-green)]">
@@ -310,16 +319,22 @@ export function LeaderboardPayoutPredictions({
               Payout Reconciliation
             </p>
             <p className="mt-1 text-sm text-ink/70">
-              Each payout category is verified against its pot.
+              {showRemainder
+                ? "Each payout category is verified against its pot."
+                : "Live payouts are shown against the real pots. Any rounded remainder is held until the round is complete."}
             </p>
           </div>
           <span className="club-pill">
-            {isBalanced ? "Payouts fully reconciled" : "Payout mismatch detected"}
+            {showRemainder
+              ? isBalanced
+                ? "Payouts fully reconciled"
+                : "Payout mismatch detected"
+              : "Live projection"}
           </span>
         </div>
         <div className="mt-3 space-y-2">
-          {reconciliationRows.map((row) => {
-            const mismatch = row.difference !== 0;
+          {displayRows.map((row) => {
+            const mismatch = showRemainder && row.displayDifference !== 0;
 
             return (
               <div
@@ -334,24 +349,24 @@ export function LeaderboardPayoutPredictions({
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-ink">{row.label}</p>
                   <p className="text-base font-bold text-ink">
-                    {`${formatCurrency(row.allocated)} / ${formatCurrency(row.pot)}`}
+                    {`${formatCurrency(row.displayAllocated)} / ${formatCurrency(row.pot)}`}
                   </p>
                 </div>
-                {row.bar > 0 ? (
+                {showRemainder && row.bar > 0 ? (
                   <p className="mt-1 text-xs font-medium text-ink/75">
-                    {`Includes ${formatCurrency(row.bar)} to Bar`}
+                    {`Includes ${formatCurrency(row.bar)} amount left over`}
                   </p>
                 ) : null}
                 {mismatch ? (
                   <p className="mt-1 text-xs font-medium text-ink/75">
-                    {`Off by ${formatCurrency(Math.abs(row.difference))} ${row.difference > 0 ? "over" : "under"}`}
+                    {`Off by ${formatCurrency(Math.abs(row.displayDifference))} ${row.displayDifference > 0 ? "over" : "under"}`}
                   </p>
                 ) : null}
               </div>
             );
           })}
         </div>
-        {!isBalanced ? (
+        {showRemainder && !isBalanced ? (
           <p className="mt-3 text-xs font-medium text-ink/70">
             {`Mismatch in: ${mismatchedCategories.join(", ")}`}
           </p>
@@ -359,4 +374,8 @@ export function LeaderboardPayoutPredictions({
       </div>
     </div>
   );
+}
+
+function roundCurrency(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
