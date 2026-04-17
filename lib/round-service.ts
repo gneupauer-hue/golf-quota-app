@@ -380,9 +380,6 @@ export async function createOrReplaceRoundEntries(
     throw new Error("Hole scores must be entered in order without skipping.");
   }
 
-  const allEntriesComplete =
-    input.entries.length > 0 && input.entries.every((entry) => isRoundRowComplete(entry.holes));
-
   await tx.round.update({
     where: { id: input.roundId },
     data: {
@@ -394,7 +391,7 @@ export async function createOrReplaceRoundEntries(
       teamCount: input.roundMode === "SKINS_ONLY" ? null : input.teamCount ?? null,
       lockedAt: input.lockedAt ?? null,
       startedAt: input.startedAt ?? null,
-      completedAt: input.forceComplete || allEntriesComplete ? new Date() : null
+      completedAt: input.forceComplete ? new Date() : null
     }
   });
 

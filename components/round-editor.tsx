@@ -199,6 +199,14 @@ function getTeamProgress(rows: Array<CalculatedRoundRow>) {
   return 18;
 }
 
+function hasRecordedFinalHole(holeScores: Array<number | null>) {
+  return holeScores[17] != null;
+}
+
+function isTeamFinished(rows: Array<CalculatedRoundRow>) {
+  return rows.length > 0 && rows.every((row) => hasRecordedFinalHole(row.holeScores));
+}
+
 export function RoundEditor({ round, players, quotaSnapshot, groups: initialGroups }: EditorProps) {
   const router = useRouter();
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
@@ -923,13 +931,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     });
   }
 
-  function saveRound(
-    messageText = completedRound
-      ? isTestRound
-        ? "Test round completed. Player quotas were not updated."
-        : "Round completed and quotas updated."
-      : "Round saved."
-  ) {
+  function saveRound(messageText = "Round saved.") {
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
       return;
@@ -1124,6 +1126,41 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
+    if (holeNumber === 18) {
+      const wantsReview = window.confirm(
+        "Would you like to double-check your scores?\n\nPress OK for Yes, or Cancel for No."
+      );
+
+      if (wantsReview) {
+        startTransition(async () => {
+          try {
+            const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
+            await persistRound();
+            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+            setSkinsEntryOpen(false);
+            setActiveTab("round");
+            setToast(skinToastMessage ?? "Hole 18 saved");
+            setMessage("Scores saved. Review the round before submitting when you're ready.");
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : "Could not save skins scores.");
+          }
+        });
+        return;
+      }
+
+      const shouldSubmit = window.confirm(
+        "Are you sure you want to submit this round?\n\nPress OK to Submit Round, or Cancel to keep reviewing."
+      );
+
+      if (!shouldSubmit) {
+        setMessage("Round submission canceled.");
+        return;
+      }
+
+      completeRound();
+      return;
+    }
+
     const nextHole = Math.min(18, holeNumber + 1);
 
     startTransition(async () => {
@@ -1157,6 +1194,58 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
+      return;
+    }
+
+    if (holeNumber === 18) {
+      if (!completedRound) {
+        startTransition(async () => {
+          try {
+            const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
+            await persistRound();
+            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+            setSelectedTeam(null);
+            setActiveTab("round");
+            setToast(skinToastMessage ?? "Hole 18 saved");
+            setMessage(`Team ${team} is complete. Finish the remaining teams before submitting the round.`);
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : "Could not save team scores.");
+          }
+        });
+        return;
+      }
+
+      const wantsReview = window.confirm(
+        "Would you like to double-check your scores?\n\nPress OK for Yes, or Cancel for No."
+      );
+
+      if (wantsReview) {
+        startTransition(async () => {
+          try {
+            const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
+            await persistRound();
+            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+            setSelectedTeam(null);
+            setActiveTab("round");
+            setToast(skinToastMessage ?? "Hole 18 saved");
+            setMessage("Scores saved. Review the round before submitting when you're ready.");
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : "Could not save team scores.");
+          }
+        });
+        return;
+      }
+
+      const shouldSubmit = window.confirm(
+        "Are you sure you want to submit this round?\n\nPress OK to Submit Round, or Cancel to keep reviewing."
+      );
+
+      if (!shouldSubmit) {
+        setMessage("Round submission canceled.");
+        return;
+      }
+
+      completeRound();
       return;
     }
 
@@ -1673,6 +1762,7 @@ function TeamScoreEntry({
   onBackToTeams: () => void;
 }) {
   const activeHoleIndex = activeHole - 1;
+  const isFinalHole = activeHole === 18;
 
   return (
     <div className="space-y-4 pb-32">
@@ -1697,7 +1787,11 @@ function TeamScoreEntry({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Live Entry</p>
             <h3 className="mt-1 text-2xl font-semibold">{`Team ${team}`}</h3>
-            <p className="mt-1 text-sm text-ink/60">Tap one score per player. Save moves this team to the next hole.</p>
+            <p className="mt-1 text-sm text-ink/60">
+              {isFinalHole
+                ? "Tap one score per player, then review and submit the round when you are ready."
+                : "Tap one score per player. Save moves this team to the next hole."}
+            </p>
           </div>
           <div className="rounded-[22px] bg-canvas px-4 py-3 text-right">
             <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Hole</p>
@@ -1759,7 +1853,7 @@ function TeamScoreEntry({
             Previous Hole
           </button>
           <button type="button" onClick={() => onSaveHole(team)} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
-            {isPending ? "Saving..." : activeHole === 18 ? "Save Hole" : "Save + Next Hole"}
+            {isPending ? (isFinalHole ? "Working..." : "Saving...") : isFinalHole ? "Submit Final Score" : "Save + Next Hole"}
           </button>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -2024,17 +2118,34 @@ function RoundTabView({
 
       <div className="space-y-3">
         {teamStandings.map((team) => {
-          const progress = getTeamProgress(teamRowsByCode.get(team.team) ?? []);
+          const teamRows = teamRowsByCode.get(team.team) ?? [];
+          const progress = getTeamProgress(teamRows);
+          const teamComplete = isTeamFinished(teamRows);
           return (
             <button key={team.team} type="button" onClick={() => onOpenTeam(team.team)} className="w-full rounded-[28px] border border-ink/10 bg-white/90 px-4 py-4 text-left shadow-card">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
                   <p className="mt-1 text-sm text-ink/60">{team.players.join(", ")}</p>
+                  {teamComplete ? (
+                    <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
+                      <span aria-hidden="true">✔</span>
+                      Team Complete
+                    </span>
+                  ) : null}
                 </div>
-                <div className="rounded-2xl bg-canvas px-4 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Next Hole</p>
-                  <p className="mt-1 text-2xl font-semibold">{Math.min(progress + 1, 18)}</p>
+                <div
+                  className={classNames(
+                    "rounded-2xl px-4 py-3 text-center",
+                    teamComplete ? "bg-[#E2F4E6]" : "bg-canvas"
+                  )}
+                >
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">
+                    {teamComplete ? "Status" : "Next Hole"}
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {teamComplete ? "Completed" : Math.min(progress + 1, 18)}
+                  </p>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -2119,18 +2230,31 @@ function SkinsOnlyRoundTab({
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Players</p>
         <div className="space-y-2">
-          {rows.map((row) => (
-            <div key={row.playerId} className="flex items-center justify-between rounded-2xl bg-canvas px-4 py-3">
-              <div>
-                <p className="text-base font-semibold">{row.playerName}</p>
-                <p className="mt-1 text-xs text-ink/60">{`${row.totalPoints} points`}</p>
+          {rows.map((row) => {
+            const completedHoles = row.holeScores.filter((score) => score != null).length;
+            const playerComplete = hasRecordedFinalHole(row.holeScores);
+
+            return (
+              <div key={row.playerId} className="flex items-center justify-between rounded-2xl bg-canvas px-4 py-3">
+                <div>
+                  <p className="text-base font-semibold">{row.playerName}</p>
+                  <p className="mt-1 text-xs text-ink/60">{`${row.totalPoints} points`}</p>
+                  {playerComplete ? (
+                    <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
+                      <span aria-hidden="true">✔</span>
+                      Completed
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-semibold">{row.totalPoints}</p>
+                  <p className="mt-1 text-xs text-ink/60">
+                    {playerComplete ? "Completed" : `Next Hole ${Math.min(completedHoles + 1, 18)}`}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-semibold">{row.totalPoints}</p>
-                <p className="mt-1 text-xs text-ink/60">{`${row.holeScores.filter((score) => score != null).length}/18 holes`}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </SectionCard>
     </div>
@@ -2169,6 +2293,7 @@ function SkinsOnlyScoreEntry({
   onBackToRound: () => void;
 }) {
   const activeHoleIndex = activeHole - 1;
+  const isFinalHole = activeHole === 18;
 
   return (
     <div className="space-y-4 pb-32">
@@ -2193,7 +2318,11 @@ function SkinsOnlyScoreEntry({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Live Entry</p>
             <h3 className="mt-1 text-2xl font-semibold">Skins Only</h3>
-            <p className="mt-1 text-sm text-ink/60">Tap one score per player. Save moves the game to the next hole.</p>
+            <p className="mt-1 text-sm text-ink/60">
+              {isFinalHole
+                ? "Tap one score per player, then review and submit the round when you are ready."
+                : "Tap one score per player. Save moves the game to the next hole."}
+            </p>
           </div>
           <div className="rounded-[22px] bg-canvas px-4 py-3 text-right">
             <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Hole</p>
@@ -2245,7 +2374,7 @@ function SkinsOnlyScoreEntry({
             Previous Hole
           </button>
           <button type="button" onClick={onSaveHole} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
-            {isPending ? "Saving..." : activeHole === 18 ? "Save Hole" : "Save + Next Hole"}
+            {isPending ? (isFinalHole ? "Working..." : "Saving...") : isFinalHole ? "Submit Final Score" : "Save + Next Hole"}
           </button>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -2373,6 +2502,7 @@ function PlayersTab({
         const rankTone = getRankTone(row);
         const skinsWinner = sideGames.skins.winners.find((winner) => winner.playerId === row.playerId);
         const birdiesOrBetter = row.holeScores.filter((score) => score === 4 || score === 6).length;
+        const playerComplete = hasRecordedFinalHole(row.holeScores);
 
         return (
           <SectionCard key={row.playerId} className={classNames("space-y-3 border", rankTone === "first" ? "border-[#5A9764] bg-[#E2F4E6]" : rankTone === "second" ? "border-[#D5B154] bg-[#FFF1BF]" : rankTone === "third" ? "border-[#D37A47] bg-[#FCE0D2]" : row.plusMinus < 0 ? "border-[#D7655D] bg-[#FCE5E2]" : "border-white/70 bg-white/85")}>
@@ -2382,6 +2512,12 @@ function PlayersTab({
                 <p className="mt-1 text-sm text-ink/60">
                   {isSkinsOnly ? `Total ${row.totalPoints} points` : `Team ${row.team ?? "-"} | Rank ${row.rank}`}
                 </p>
+                {playerComplete ? (
+                  <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
+                    <span aria-hidden="true">✔</span>
+                    Completed
+                  </span>
+                ) : null}
               </div>
               {isSkinsOnly ? null : (
                 <div className="rounded-2xl bg-white/80 px-4 py-3 text-center">
