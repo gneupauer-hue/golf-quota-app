@@ -65,6 +65,14 @@ export async function PUT(
     for (const entry of entries) {
       const playerId = String(entry.playerId ?? "").trim();
       const team = entry.team == null || entry.team === "" ? null : String(entry.team);
+      const frontSubmittedAt =
+        entry.frontSubmittedAt == null || entry.frontSubmittedAt === ""
+          ? null
+          : new Date(String(entry.frontSubmittedAt));
+      const backSubmittedAt =
+        entry.backSubmittedAt == null || entry.backSubmittedAt === ""
+          ? null
+          : new Date(String(entry.backSubmittedAt));
       const holes = Array.isArray(entry.holes)
         ? (entry.holes as unknown[]).map((value: unknown) =>
             value == null || value === "" ? null : Number(value)
@@ -105,6 +113,20 @@ export async function PUT(
         );
       }
 
+      if (frontSubmittedAt && Number.isNaN(frontSubmittedAt.getTime())) {
+        return NextResponse.json(
+          { error: "Front-nine submission time is invalid." },
+          { status: 400 }
+        );
+      }
+
+      if (backSubmittedAt && Number.isNaN(backSubmittedAt.getTime())) {
+        return NextResponse.json(
+          { error: "Back-nine submission time is invalid." },
+          { status: 400 }
+        );
+      }
+
       seen.add(playerId);
     }
 
@@ -131,6 +153,14 @@ export async function PUT(
               ? null
               : Number(entry.groupNumber),
           teeTime: entry.teeTime == null || entry.teeTime === "" ? null : String(entry.teeTime),
+          frontSubmittedAt:
+            entry.frontSubmittedAt == null || entry.frontSubmittedAt === ""
+              ? null
+              : new Date(String(entry.frontSubmittedAt)),
+          backSubmittedAt:
+            entry.backSubmittedAt == null || entry.backSubmittedAt === ""
+              ? null
+              : new Date(String(entry.backSubmittedAt)),
           holes: Array.isArray(entry.holes)
             ? (entry.holes as unknown[]).map((value: unknown) =>
                 value == null || value === "" ? null : Number(value)

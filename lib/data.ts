@@ -591,13 +591,15 @@ export async function getRoundEditorData(roundId: string) {
   const quotaSnapshot = await getQuotaSnapshotBeforeRound(prisma, roundId);
 
   const calculatedEntries = (round.entries as any[]).map((entry: any) => ({
-    id: entry.id,
-    playerId: entry.playerId,
-    playerName: entry.player.name,
-    team: (entry.team as TeamCode | null) ?? null,
-    groupNumber: entry.groupNumber,
-    teeTime: entry.teeTime,
-    holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
+      id: entry.id,
+      playerId: entry.playerId,
+      playerName: entry.player.name,
+      team: (entry.team as TeamCode | null) ?? null,
+      groupNumber: entry.groupNumber,
+      teeTime: entry.teeTime,
+      frontSubmittedAt: entry.frontSubmittedAt?.toISOString() ?? null,
+      backSubmittedAt: entry.backSubmittedAt?.toISOString() ?? null,
+      holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
     frontQuota: entry.frontQuota,
     backQuota: entry.backQuota,
     frontNine: entry.frontNine,

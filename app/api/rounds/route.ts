@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { resolveActiveRound } from "@/lib/active-round";
 import { prisma } from "@/lib/prisma";
 import type { RoundMode } from "@/lib/quota";
-import { getSeasonStartDate } from "@/lib/season";
 import { formatRoundNameFromDate } from "@/lib/utils";
 
 export async function POST(request: Request) {
@@ -31,10 +30,6 @@ export async function POST(request: Request) {
         },
         { status: 409 }
       );
-    }
-
-    if (!isTestRound) {
-      await getSeasonStartDate(prisma);
     }
 
     const round = await prisma.round.create({

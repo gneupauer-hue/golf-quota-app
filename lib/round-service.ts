@@ -19,6 +19,8 @@ type HoleEntryPayload = {
   team: TeamCode | null;
   groupNumber?: number | null;
   teeTime?: string | null;
+  frontSubmittedAt?: Date | null;
+  backSubmittedAt?: Date | null;
   holes: Array<number | null>;
 };
 
@@ -188,6 +190,18 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
 }
 
 export async function finalizeRound(tx: Tx, roundId: string) {
+  const pendingBackNine = await tx.roundEntry.count({
+    where: {
+      roundId,
+      backSubmittedAt: null
+    }
+  });
+
+  if (pendingBackNine > 0) {
+    throw new Error("All players must submit their back nine before completing the round.");
+  }
+
+  await syncRoundComputedState(tx, roundId);
   await tx.round.update({
     where: { id: roundId },
     data: {
@@ -400,6 +414,16 @@ export async function createOrReplaceRoundEntries(
     throw new Error("Hole scores must be entered in order without skipping.");
   }
 
+  const existingEntries = await tx.roundEntry.findMany({
+    where: { roundId: input.roundId },
+    select: {
+      id: true,
+      playerId: true
+    }
+  });
+
+  const existingByPlayerId = new Map(existingEntries.map((entry) => [entry.playerId, entry]));
+
   await tx.round.update({
     where: { id: input.roundId },
     data: {
@@ -415,39 +439,64 @@ export async function createOrReplaceRoundEntries(
     }
   });
 
-  await tx.roundEntry.deleteMany({
-    where: { roundId: input.roundId }
-  });
+  const nextPlayerIds = new Set(input.entries.map((entry) => entry.playerId));
 
-  if (input.entries.length) {
-    await tx.roundEntry.createMany({
-      data: input.entries.map((entry) => {
-        const { frontNine, backNine, totalPoints } = calculateTotals(entry.holes);
+  const removedEntryIds = existingEntries
+    .filter((entry) => !nextPlayerIds.has(entry.playerId))
+    .map((entry) => entry.id);
 
-        return {
-          roundId: input.roundId,
-          playerId: entry.playerId,
-          team: entry.team,
-          groupNumber: entry.groupNumber ?? null,
-          teeTime: entry.teeTime ?? null,
-          startQuota: 0,
-          ...buildHoleFields(entry.holes),
-          frontQuota: 0,
-          backQuota: 0,
-          frontNine,
-          backNine,
-          frontPlusMinus: 0,
-          backPlusMinus: 0,
-          totalPoints,
-          plusMinus: 0,
-          nextQuota: 0,
-          rank: 0
-        };
-      })
+  if (removedEntryIds.length) {
+    await tx.roundEntry.deleteMany({
+      where: {
+        id: {
+          in: removedEntryIds
+        }
+      }
     });
   }
 
-  await syncRoundComputedState(tx, input.roundId);
-  await recomputeHistoricalState(tx);
-  await syncRoundComputedState(tx, input.roundId);
+  for (const entry of input.entries) {
+    const { frontNine, backNine, totalPoints } = calculateTotals(entry.holes);
+    const existingEntry = existingByPlayerId.get(entry.playerId);
+    const baseData = {
+      team: entry.team,
+      groupNumber: entry.groupNumber ?? null,
+      teeTime: entry.teeTime ?? null,
+      frontSubmittedAt: entry.frontSubmittedAt ?? null,
+      backSubmittedAt: entry.backSubmittedAt ?? null,
+      ...buildHoleFields(entry.holes),
+      frontNine,
+      backNine,
+      totalPoints
+    };
+
+    if (existingEntry) {
+      await tx.roundEntry.update({
+        where: { id: existingEntry.id },
+        data: baseData
+      });
+    } else {
+      await tx.roundEntry.create({
+        data: {
+          roundId: input.roundId,
+          playerId: entry.playerId,
+          startQuota: 0,
+          frontQuota: 0,
+          backQuota: 0,
+          frontPlusMinus: 0,
+          backPlusMinus: 0,
+          plusMinus: 0,
+          nextQuota: 0,
+          rank: 0,
+          ...baseData
+        }
+      });
+    }
+  }
+
+  if (input.forceComplete) {
+    await syncRoundComputedState(tx, input.roundId);
+    await recomputeHistoricalState(tx);
+    await syncRoundComputedState(tx, input.roundId);
+  }
 }

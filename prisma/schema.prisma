@@ -54,13 +54,15 @@ model SeasonConfig {
 }
 
 model RoundEntry {
-  id             String @id @default(cuid())
-  roundId        String
-  playerId       String
-  team           String?
-  groupNumber    Int?
-  teeTime        String?
-  startQuota     Int
+    id             String @id @default(cuid())
+    roundId        String
+    playerId       String
+    team           String?
+    groupNumber    Int?
+    teeTime        String?
+    frontSubmittedAt DateTime?
+    backSubmittedAt  DateTime?
+    startQuota     Int
   hole1          Int?
   hole2          Int?
   hole3          Int?

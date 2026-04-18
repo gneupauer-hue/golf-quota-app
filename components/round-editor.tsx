@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { MatchRoundView, SkinsOnlyRoundView } from "@/components/active-round-view";
 import { PageTitle } from "@/components/page-title";
 import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
@@ -29,7 +30,6 @@ import {
   getRankTone,
   hasSequentialHoleEntry,
   holeNumbers,
-  isRoundRowComplete,
   teamOptions,
   type CalculatedRoundRow,
   type RoundMode,
@@ -57,6 +57,8 @@ type EditorEntry = {
   groupNumber: number | null;
   teeTime: string | null;
   holeScores: Array<number | null>;
+  frontSubmittedAt: string | null;
+  backSubmittedAt: string | null;
   frontNine: number;
   backNine: number;
   totalPoints: number;
@@ -96,16 +98,14 @@ type RowState = {
   groupNumber: number | null;
   teeTime: string | null;
   holeScores: Array<number | null>;
+  frontSubmittedAt: string | null;
+  backSubmittedAt: string | null;
 };
 
-type RoundTab = "round" | "leaders" | "players" | "settings";
-
-const roundTabs: Array<{ id: RoundTab; label: string }> = [
-  { id: "round", label: "Round" },
-  { id: "leaders", label: "Leaders" },
-  { id: "players", label: "Players" },
-  { id: "settings", label: "Settings" }
-];
+type SaveState = {
+  tone: "idle" | "saving" | "saved" | "failed";
+  message: string;
+};
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -134,41 +134,6 @@ function TestRoundBadge({ subtle = false }: { subtle?: boolean }) {
       Test Round
     </div>
   );
-}
-
-function getSkinResultLabel(score: number | null | undefined) {
-  if (score === 6) return "Eagle";
-  if (score === 4) return "Birdie";
-  return null;
-}
-
-function getSkinToastMessage(
-  previousSkins: SideGameResults["skins"],
-  nextSkins: SideGameResults["skins"],
-  rows: CalculatedRoundRow[]
-) {
-  const previousByHole = new Map(previousSkins.holes.map((hole) => [hole.holeNumber, hole]));
-  const nextByHole = new Map(nextSkins.holes.map((hole) => [hole.holeNumber, hole]));
-
-  for (const hole of nextSkins.holes) {
-    const previous = previousByHole.get(hole.holeNumber);
-    if (hole.skinAwarded && (!previous?.skinAwarded || previous.winnerPlayerId !== hole.winnerPlayerId)) {
-      const winner = rows.find((row) => row.playerId === hole.winnerPlayerId);
-      const resultLabel = getSkinResultLabel(winner?.holeScores[hole.holeNumber - 1]);
-      return resultLabel
-        ? `Skin live: ${hole.winnerName} on Hole ${hole.holeNumber} (${resultLabel})`
-        : `Skin live: ${hole.winnerName} on Hole ${hole.holeNumber}`;
-    }
-  }
-
-  for (const hole of previousSkins.holes) {
-    const next = nextByHole.get(hole.holeNumber);
-    if (hole.skinAwarded && (!next || !next.skinAwarded) && next?.carryover) {
-      return `Hole ${hole.holeNumber} now carries over`;
-    }
-  }
-
-  return null;
 }
 
 function teamLeaderValue(team: TeamStanding, section: "front" | "back" | "total") {
@@ -205,6 +170,26 @@ function hasRecordedFinalHole(holeScores: Array<number | null>) {
   return holeScores[17] != null;
 }
 
+function hasSubmittedFrontNine(row: Pick<RowState, "frontSubmittedAt">) {
+  return Boolean(row.frontSubmittedAt);
+}
+
+function hasSubmittedBackNine(row: Pick<RowState, "backSubmittedAt">) {
+  return Boolean(row.backSubmittedAt);
+}
+
+function hasCompletedSegment(holeScores: Array<number | null>, startIndex: number, endIndex: number) {
+  return holeScores.slice(startIndex, endIndex).every((score) => score != null);
+}
+
+function formatTimeLabel(value: string | null) {
+  if (!value) return null;
+  return new Date(value).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
 function isTeamFinished(rows: Array<CalculatedRoundRow>) {
   return rows.length > 0 && rows.every((row) => hasRecordedFinalHole(row.holeScores));
 }
@@ -223,6 +208,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       team: entry.team,
       groupNumber: entry.groupNumber,
       teeTime: entry.teeTime,
+      frontSubmittedAt: entry.frontSubmittedAt,
+      backSubmittedAt: entry.backSubmittedAt,
       holeScores:
         entry.holeScores.length === 18
           ? entry.holeScores
@@ -235,6 +222,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       team: entry.team,
       groupNumber: entry.groupNumber,
       teeTime: entry.teeTime,
+      frontSubmittedAt: entry.frontSubmittedAt,
+      backSubmittedAt: entry.backSubmittedAt,
       holeScores:
         entry.holeScores.length === 18
           ? entry.holeScores
@@ -250,12 +239,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [selectedFormatKey, setSelectedFormatKey] = useState("");
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
-  const [activeTab, setActiveTab] = useState<RoundTab>(round.lockedAt ? "round" : "settings");
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
   const [activeHoleByTeam, setActiveHoleByTeam] = useState<Partial<Record<TeamCode, number>>>({});
   const [skinsActiveHole, setSkinsActiveHole] = useState(1);
   const [skinsEntryOpen, setSkinsEntryOpen] = useState(false);
   const [selectedSetupPlayerId, setSelectedSetupPlayerId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>({ tone: "idle", message: "" });
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const derivedRoundName = formatRoundNameFromDate(roundDate);
   const isSkinsOnly = gameMode === "SKINS_ONLY";
 
@@ -405,41 +395,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     );
   }, [playersById, quotaSnapshot, rows]);
 
-  const liveLeaders = useMemo(() => calculateLiveLeaders(calculatedRows), [calculatedRows]);
-  const liveProjections = useMemo(() => calculateLiveProjections(calculatedRows), [calculatedRows]);
   const teamStandings = useMemo(() => calculateTeamStandings(calculatedRows), [calculatedRows]);
-  const sideGames = useMemo(() => calculateSideGameResults(calculatedRows), [calculatedRows]);
   const playerBuyIns = useMemo(() => calculatePlayerBuyIns(calculatedRows, gameMode), [calculatedRows, gameMode]);
-  const savedCalculatedRows = useMemo(() => {
-    return calculateRoundRows(
-      savedRows
-        .map((row) => {
-          const player = playersById.get(row.playerId);
-          if (!player) return null;
-          return {
-            playerId: row.playerId,
-            playerName: player.name,
-            team: row.team,
-      startQuota: quotaSnapshot[row.playerId] ?? player.quota,
-            holeScores: row.holeScores
-          };
-        })
-        .filter(Boolean) as Array<{
-        playerId: string;
-        playerName: string;
-        team: TeamCode | null;
-        startQuota: number;
-        holeScores: Array<number | null>;
-      }>
-    );
-  }, [playersById, quotaSnapshot, savedRows]);
-  const savedSideGames = useMemo(() => calculateSideGameResults(savedCalculatedRows), [savedCalculatedRows]);
   const invalidSequence = rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
-  const completedRound = rows.length > 0 && rows.every((row) => isRoundRowComplete(row.holeScores));
   const hasSavedScores = useMemo(
     () => rows.some((row) => row.holeScores.some((score) => score != null)),
     [rows]
   );
+  const allFrontSubmitted = rows.length > 0 && rows.every((row) => hasSubmittedFrontNine(row));
+  const allBackSubmitted = rows.length > 0 && rows.every((row) => hasSubmittedBackNine(row));
 
   const setupValidation = useMemo(() => {
     if (isSkinsOnly) {
@@ -670,6 +634,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         team: row.team,
         groupNumber: row.groupNumber,
         teeTime: row.teeTime,
+        frontSubmittedAt: row.frontSubmittedAt,
+        backSubmittedAt: row.backSubmittedAt,
         holes: row.holeScores
       }))
     };
@@ -693,6 +659,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         team: null,
         groupNumber: null,
         teeTime: null,
+        frontSubmittedAt: null,
+        backSubmittedAt: null,
         holeScores: Array.from({ length: 18 }, () => null)
       }
     ]);
@@ -708,6 +676,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   function updateHole(playerId: string, holeIndex: number, value: number) {
+    setSaveState({ tone: "idle", message: "" });
     setRows((current) =>
       current.map((row) =>
         row.playerId === playerId
@@ -720,6 +689,113 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           : row
       )
     );
+  }
+
+  function setSaving(messageText: string) {
+    setSaveState({ tone: "saving", message: messageText });
+  }
+
+  function setSaved(messageText: string) {
+    setSaveState({ tone: "saved", message: messageText });
+    setLastSavedAt(new Date().toISOString());
+  }
+
+  function setSaveFailed(messageText: string) {
+    setSaveState({ tone: "failed", message: messageText });
+  }
+
+  async function submitSegment(playerId: string, segment: "front" | "back") {
+    const playerRow = rows.find((row) => row.playerId === playerId);
+    if (!playerRow) {
+      setMessage("Player entry not found.");
+      return;
+    }
+
+    if (segment === "front" && !hasCompletedSegment(playerRow.holeScores, 0, 9)) {
+      setMessage("Save holes 1 through 9 before submitting the front nine.");
+      return;
+    }
+
+    if (segment === "back") {
+      if (!playerRow.frontSubmittedAt) {
+        setMessage("Submit the front nine before submitting the back nine.");
+        return;
+      }
+
+      if (!hasCompletedSegment(playerRow.holeScores, 9, 18)) {
+        setMessage("Save holes 10 through 18 before submitting the back nine.");
+        return;
+      }
+    }
+
+    const confirmed = window.confirm(
+      segment === "front"
+        ? "Are you sure you want to submit your front nine?"
+        : "Are you sure you want to submit your back nine?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const submittedAt = new Date().toISOString();
+    const nextRows = rows.map((row) =>
+      row.playerId === playerId
+        ? {
+            ...row,
+            frontSubmittedAt: segment === "front" ? submittedAt : row.frontSubmittedAt,
+            backSubmittedAt: segment === "back" ? submittedAt : row.backSubmittedAt
+          }
+        : row
+    );
+
+    startTransition(async () => {
+      try {
+        setMessage("");
+        setSaving(segment === "front" ? "Saving and submitting front nine..." : "Saving and submitting back nine...");
+        await persistRound(nextRows);
+        const response = await fetch(`/api/rounds/${round.id}/submit-segment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerId, segment })
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not submit this segment.");
+        }
+
+        setRows(nextRows);
+        setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        if (segment === "front") {
+          setSaved(result.allFrontSubmitted ? "Front nine submitted. Front result is now ready." : "Front nine submitted.");
+          setMessage(
+            result.allFrontSubmitted
+              ? "All front nines are in. Front-nine result is ready below."
+              : "Front nine submitted."
+          );
+        } else if (result.completed) {
+          setSaved("Back nine submitted. Final results saved.");
+          router.push(`/rounds/${round.id}/results`);
+          router.refresh();
+          return;
+        } else {
+          setSaved("Back nine submitted.");
+          setMessage(
+            result.allBackSubmitted
+              ? "All back nines are in. Final results are ready."
+              : "Back nine submitted."
+          );
+        }
+
+        router.refresh();
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Could not submit this segment.";
+        setSaveFailed(errorMessage);
+        setMessage(errorMessage);
+      }
+    });
   }
 
   function autoBuildTeams(nextFormat = activeSetupFormat) {
@@ -940,16 +1016,21 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   function saveRound(messageText = "Round saved.") {
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
+      setSaveFailed("Save failed. Finish holes in order first.");
       return;
     }
 
     startTransition(async () => {
       try {
+        setSaving("Saving...");
         await persistRound();
         setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setMessage(messageText);
+        setSaved("Saved");
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not save round.");
+        const errorMessage = error instanceof Error ? error.message : "Could not save round.";
+        setMessage(errorMessage);
+        setSaveFailed(errorMessage);
       }
     });
   }
@@ -1044,7 +1125,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         setStartedAt(now);
         setShowSetup(false);
         setSelectedTeam(null);
-        setActiveTab("round");
         setMessage(isSkinsOnly ? "Skins game ready for live scoring." : "Round locked and ready for live scoring.");
         router.push("/current-round");
         router.refresh();
@@ -1086,12 +1166,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setSkinsActiveHole(nextHole);
   }
 
-  function viewLeaders() {
-    setSelectedTeam(null);
-    setSkinsEntryOpen(false);
-    setActiveTab("leaders");
-  }
-
   function setActiveHole(team: TeamCode, hole: number) {
     setActiveHoleByTeam((current) => ({
       ...current,
@@ -1129,41 +1203,27 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
+      setSaveFailed("Save failed. Finish holes in order first.");
       return;
     }
 
     if (holeNumber === 18) {
-      const wantsReview = window.confirm(
-        "Would you like to double-check your scores?\n\nPress OK for Yes, or Cancel for No."
-      );
-
-      if (wantsReview) {
-        startTransition(async () => {
-          try {
-            const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
-            await persistRound();
-            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-            setSkinsEntryOpen(false);
-            setActiveTab("round");
-            setToast(skinToastMessage ?? "Hole 18 saved");
-            setMessage("Scores saved. Review the round before submitting when you're ready.");
-          } catch (error) {
-            setMessage(error instanceof Error ? error.message : "Could not save skins scores.");
-          }
-        });
-        return;
-      }
-
-      const shouldSubmit = window.confirm(
-        "Are you sure you want to submit this round?\n\nPress OK to Submit Round, or Cancel to keep reviewing."
-      );
-
-      if (!shouldSubmit) {
-        setMessage("Round submission canceled.");
-        return;
-      }
-
-      completeRound();
+      startTransition(async () => {
+        try {
+          setSaving("Saving hole 18...");
+          await persistRound();
+          setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+          setSkinsEntryOpen(false);
+          setToast("Hole 18 saved");
+          setMessage("Hole 18 saved. Submit each player's back nine from the round status list.");
+          setSaved("Hole 18 saved");
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Could not save skins scores.";
+          setMessage(errorMessage);
+          setSaveFailed(errorMessage);
+        }
+      });
       return;
     }
 
@@ -1171,14 +1231,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     startTransition(async () => {
       try {
-        const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
+        setSaving(`Saving hole ${holeNumber}...`);
         await persistRound();
         setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setSkinsActiveHole(nextHole);
-        setToast(skinToastMessage ?? "Hole saved");
+        setToast("Hole saved");
         setMessage("");
+        setSaved("Hole saved");
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not save skins scores.");
+        const errorMessage =
+          error instanceof Error ? error.message : "Could not save skins scores.";
+        setMessage(errorMessage);
+        setSaveFailed(errorMessage);
       }
     });
   }
@@ -1200,58 +1264,29 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
+      setSaveFailed("Save failed. Finish holes in order first.");
       return;
     }
 
     if (holeNumber === 18) {
-      if (!completedRound) {
-        startTransition(async () => {
-          try {
-            const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
-            await persistRound();
-            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-            setSelectedTeam(null);
-            setActiveTab("round");
-            setToast(skinToastMessage ?? "Hole 18 saved");
-            setMessage(`Team ${team} is complete. Finish the remaining teams before submitting the round.`);
-          } catch (error) {
-            setMessage(error instanceof Error ? error.message : "Could not save team scores.");
-          }
-        });
-        return;
-      }
-
-      const wantsReview = window.confirm(
-        "Would you like to double-check your scores?\n\nPress OK for Yes, or Cancel for No."
-      );
-
-      if (wantsReview) {
-        startTransition(async () => {
-          try {
-            const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
-            await persistRound();
-            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-            setSelectedTeam(null);
-            setActiveTab("round");
-            setToast(skinToastMessage ?? "Hole 18 saved");
-            setMessage("Scores saved. Review the round before submitting when you're ready.");
-          } catch (error) {
-            setMessage(error instanceof Error ? error.message : "Could not save team scores.");
-          }
-        });
-        return;
-      }
-
-      const shouldSubmit = window.confirm(
-        "Are you sure you want to submit this round?\n\nPress OK to Submit Round, or Cancel to keep reviewing."
-      );
-
-      if (!shouldSubmit) {
-        setMessage("Round submission canceled.");
-        return;
-      }
-
-      completeRound();
+      startTransition(async () => {
+        try {
+          setSaving("Saving hole 18...");
+          await persistRound();
+          setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+          setSelectedTeam(null);
+          setToast("Hole 18 saved");
+          setMessage(
+            `Team ${team} finished hole 18. Submit each player's back nine from the round status list.`
+          );
+          setSaved("Hole 18 saved");
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Could not save team scores.";
+          setMessage(errorMessage);
+          setSaveFailed(errorMessage);
+        }
+      });
       return;
     }
 
@@ -1259,17 +1294,21 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     startTransition(async () => {
       try {
-        const skinToastMessage = getSkinToastMessage(savedSideGames.skins, sideGames.skins, calculatedRows);
+        setSaving(`Saving hole ${holeNumber}...`);
         await persistRound();
         setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setActiveHoleByTeam((current) => ({
           ...current,
           [team]: nextHole
         }));
-        setToast(skinToastMessage ?? "Hole saved");
+        setToast("Hole saved");
         setMessage("");
+        setSaved("Hole saved");
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not save team scores.");
+        const errorMessage =
+          error instanceof Error ? error.message : "Could not save team scores.";
+        setMessage(errorMessage);
+        setSaveFailed(errorMessage);
       }
     });
   }
@@ -1295,13 +1334,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         rows={calculatedRows}
         message={message}
         toast={toast}
+        saveState={saveState}
         isPending={isPending}
         canGoBack={canGoBack}
         canSaveHole={canSaveHole}
         onUpdateHole={updateHole}
         onPreviousHole={() => setSkinsActiveHole((current) => Math.max(1, current - 1))}
         onSaveHole={saveSkinsHole}
-        onViewLeaders={viewLeaders}
         onSelectHole={(hole) => setSkinsActiveHole(Math.max(1, Math.min(18, hole)))}
         onBackToRound={() => setSkinsEntryOpen(false)}
       />
@@ -1327,6 +1366,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         playersById={playersById}
         message={message}
         toast={toast}
+        saveState={saveState}
         isPending={isPending}
         canGoBack={canGoBack}
         canSaveHole={canSaveHole}
@@ -1334,7 +1374,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         onUpdateHole={updateHole}
         onPreviousHole={goToPreviousHole}
         onSaveHole={saveTeamHole}
-        onViewLeaders={viewLeaders}
         onSelectHole={setActiveHole}
         onSwitchTeam={switchTeam}
         onBackToTeams={() => setSelectedTeam(null)}
@@ -1690,35 +1729,38 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             </SectionCard>
           ) : null}
         </>
+      ) : isSkinsOnly ? (
+        <SkinsOnlyRoundView
+          roundId={round.id}
+          rows={calculatedRows}
+          rowStates={rows}
+          playerBuyIns={playerBuyIns}
+          initialBuyInPaidPlayerIds={buyInPaidPlayerIds}
+          isTestRound={isTestRound}
+          saveState={saveState}
+          lastSavedAt={lastSavedAt}
+          onDeleteRound={deleteRound}
+          onForceDeleteRound={forceDeleteRound}
+          onOpenEntry={openSkinsEntry}
+          onSubmitSegment={submitSegment}
+        />
       ) : (
-        <>
-          <nav className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-white/80 bg-white/96 p-2 shadow-card backdrop-blur">
-            <div className="grid grid-cols-4 gap-2">
-              {roundTabs.map((tab) => (
-                <button key={tab.id} type="button" onClick={() => { setActiveTab(tab.id); setSelectedTeam(null); }} className={classNames("min-h-14 rounded-[22px] px-2 text-sm font-semibold transition", activeTab === tab.id ? "bg-ink text-white" : "bg-canvas text-ink")}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </nav>
-
-          {activeTab === "round" ? (
-            isSkinsOnly ? (
-              <SkinsOnlyRoundTab roundId={round.id} rows={calculatedRows} sideGames={sideGames} playerBuyIns={playerBuyIns} initialBuyInPaidPlayerIds={buyInPaidPlayerIds} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenEntry={openSkinsEntry} />
-            ) : (
-              <RoundTabView roundId={round.id} rows={calculatedRows} teamStandings={teamStandings} teamRowsByCode={teamRowsByCode} sideGames={sideGames} playerBuyIns={playerBuyIns} initialBuyInPaidPlayerIds={buyInPaidPlayerIds} isTestRound={isTestRound} onDeleteRound={deleteRound} onOpenTeam={openTeam} />
-            )
-          ) : null}
-          {activeTab === "leaders" ? (
-            isSkinsOnly ? (
-              <SkinsOnlyLeadersTab sideGames={sideGames} projections={liveProjections} onOpenRound={() => setActiveTab("round")} />
-            ) : (
-              <LeadersTab rows={calculatedRows} leaders={liveLeaders} projections={liveProjections} teamStandings={teamStandings} sideGames={sideGames} onOpenRound={() => setActiveTab("round")} />
-            )
-          ) : null}
-          {activeTab === "players" ? <PlayersTab rows={calculatedRows} leaders={liveLeaders} sideGames={sideGames} mode={gameMode} /> : null}
-          {activeTab === "settings" ? <SettingsTab roundId={round.id} roundName={derivedRoundName} roundDate={roundDate} notes={notes} isTestRound={isTestRound} setRoundDate={setRoundDate} setNotes={setNotes} setIsTestRound={setIsTestRound} sideGames={sideGames} isPending={isPending} isStarted={Boolean(startedAt || lockedAt)} hasSavedScores={hasSavedScores} onSave={saveSettings} onCompleteRound={completeRound} onDeleteRound={deleteRound} onForceDeleteRound={forceDeleteRound} /> : null}
-        </>
+        <MatchRoundView
+          roundId={round.id}
+          rows={calculatedRows}
+          rowStates={rows}
+          teamStandings={teamStandings}
+          teamRowsByCode={teamRowsByCode}
+          playerBuyIns={playerBuyIns}
+          initialBuyInPaidPlayerIds={buyInPaidPlayerIds}
+          isTestRound={isTestRound}
+          saveState={saveState}
+          lastSavedAt={lastSavedAt}
+          onDeleteRound={deleteRound}
+          onForceDeleteRound={forceDeleteRound}
+          onOpenTeam={openTeam}
+          onSubmitSegment={submitSegment}
+        />
       )}
 
       {message && !selectedTeam && !showSetup ? <p className="px-2 text-center text-sm font-medium text-pine">{message}</p> : null}
@@ -1735,6 +1777,7 @@ function TeamScoreEntry({
   playersById,
   message,
   toast,
+  saveState,
   isPending,
   canGoBack,
   canSaveHole,
@@ -1742,7 +1785,6 @@ function TeamScoreEntry({
   onUpdateHole,
   onPreviousHole,
   onSaveHole,
-  onViewLeaders,
   onSelectHole,
   onSwitchTeam,
   onBackToTeams
@@ -1755,6 +1797,7 @@ function TeamScoreEntry({
   playersById: Map<string, PlayerOption>;
   message: string;
   toast: string;
+  saveState: SaveState;
   isPending: boolean;
   canGoBack: boolean;
   canSaveHole: boolean;
@@ -1762,7 +1805,6 @@ function TeamScoreEntry({
   onUpdateHole: (playerId: string, holeIndex: number, value: number) => void;
   onPreviousHole: (team: TeamCode) => void;
   onSaveHole: (team: TeamCode) => void;
-  onViewLeaders: () => void;
   onSelectHole: (team: TeamCode, hole: number) => void;
   onSwitchTeam: (direction: -1 | 1) => void;
   onBackToTeams: () => void;
@@ -1858,19 +1900,30 @@ function TeamScoreEntry({
           <button type="button" onClick={() => onPreviousHole(team)} disabled={isPending || !canGoBack} className="min-h-14 rounded-[22px] border border-ink/10 bg-canvas px-4 text-base font-semibold text-ink disabled:opacity-45">
             Previous Hole
           </button>
-          <button type="button" onClick={() => onSaveHole(team)} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
-            {isPending ? (isFinalHole ? "Working..." : "Saving...") : isFinalHole ? "Submit Final Score" : "Save + Next Hole"}
-          </button>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button type="button" onClick={onViewLeaders} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
-            View Leaders
-          </button>
-          <button type="button" onClick={onBackToTeams} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
-            Back To Teams
-          </button>
-        </div>
-        {availableTeams.length > 1 ? (
+            <button type="button" onClick={() => onSaveHole(team)} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
+            {isPending ? "Saving..." : isFinalHole ? "Save Hole 18" : "Save + Next Hole"}
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-2">
+            <button type="button" onClick={onBackToTeams} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
+              Back To Teams
+            </button>
+          </div>
+          {saveState.message ? (
+            <p
+              className={classNames(
+                "mt-2 text-center text-sm font-semibold",
+                saveState.tone === "failed"
+                  ? "text-danger"
+                  : saveState.tone === "saved"
+                    ? "text-pine"
+                    : "text-ink/70"
+              )}
+            >
+              {saveState.message}
+            </p>
+          ) : null}
+          {availableTeams.length > 1 ? (
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button type="button" onClick={() => onSwitchTeam(-1)} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
               Previous Team
@@ -2297,13 +2350,13 @@ function SkinsOnlyScoreEntry({
   rows,
   message,
   toast,
+  saveState,
   isPending,
   canGoBack,
   canSaveHole,
   onUpdateHole,
   onPreviousHole,
   onSaveHole,
-  onViewLeaders,
   onSelectHole,
   onBackToRound
 }: {
@@ -2312,13 +2365,13 @@ function SkinsOnlyScoreEntry({
   rows: CalculatedRoundRow[];
   message: string;
   toast: string;
+  saveState: SaveState;
   isPending: boolean;
   canGoBack: boolean;
   canSaveHole: boolean;
   onUpdateHole: (playerId: string, holeIndex: number, value: number) => void;
   onPreviousHole: () => void;
   onSaveHole: () => void;
-  onViewLeaders: () => void;
   onSelectHole: (hole: number) => void;
   onBackToRound: () => void;
 }) {
@@ -2403,19 +2456,30 @@ function SkinsOnlyScoreEntry({
           <button type="button" onClick={onPreviousHole} disabled={isPending || !canGoBack} className="min-h-14 rounded-[22px] border border-ink/10 bg-canvas px-4 text-base font-semibold text-ink disabled:opacity-45">
             Previous Hole
           </button>
-          <button type="button" onClick={onSaveHole} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
-            {isPending ? (isFinalHole ? "Working..." : "Saving...") : isFinalHole ? "Submit Final Score" : "Save + Next Hole"}
-          </button>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button type="button" onClick={onViewLeaders} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
-            View Leaders
-          </button>
-          <button type="button" onClick={onBackToRound} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
-            Back To Round
-          </button>
-        </div>
-        {toast ? <p className="mt-2 text-center text-sm font-semibold text-pine">{toast}</p> : null}
+            <button type="button" onClick={onSaveHole} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
+            {isPending ? "Saving..." : isFinalHole ? "Save Hole 18" : "Save + Next Hole"}
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-2">
+            <button type="button" onClick={onBackToRound} className="min-h-12 rounded-[22px] border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink">
+              Back To Round
+            </button>
+          </div>
+          {saveState.message ? (
+            <p
+              className={classNames(
+                "mt-2 text-center text-sm font-semibold",
+                saveState.tone === "failed"
+                  ? "text-danger"
+                  : saveState.tone === "saved"
+                    ? "text-pine"
+                    : "text-ink/70"
+              )}
+            >
+              {saveState.message}
+            </p>
+          ) : null}
+          {toast ? <p className="mt-2 text-center text-sm font-semibold text-pine">{toast}</p> : null}
         {message ? <p className="mt-1 text-center text-xs font-medium text-ink/60">{message}</p> : null}
       </div>
     </div>

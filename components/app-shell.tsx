@@ -6,9 +6,7 @@ import { classNames } from "@/lib/utils";
 
 const links = [
   { href: "/", lines: ["Home"] },
-  { href: "/leaderboard", lines: ["Leader", "Board"] },
   { href: "/current-round", lines: ["Current", "Round"] },
-  { href: "/season-stats", lines: ["Season", "Stats"] },
   { href: "/past-games", lines: ["Past", "Games"] },
   { href: "/players", lines: ["Players"] },
 ];
@@ -32,7 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav className="fixed bottom-3 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-mist bg-card p-2 shadow-card">
-        <ul className="grid grid-cols-6 gap-1.5">
+        <ul className="grid grid-cols-4 gap-1.5">
           {links.map((link) => {
             const active =
               pathname === link.href ||
