@@ -1373,14 +1373,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         {unassignedSetupPlayers.map((player) => {
                           const isSelected = selectedSetupPlayerId === player.playerId;
                           return (
-                            <button
+                            <div
                               key={player.playerId}
-                              type="button"
                               className={classNames(
-                                "w-full rounded-2xl px-4 py-3 text-left",
+                                "rounded-2xl px-4 py-3",
                                 isSelected ? "bg-ink text-white" : "bg-white text-ink"
                               )}
-                              onClick={() => handleSetupPlayerTap(player.playerId)}
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div>
@@ -1389,11 +1387,42 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                     {`Quota ${player.quota}`}
                                   </p>
                                 </div>
-                                <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", isSelected ? "bg-white text-ink" : "bg-canvas text-ink/70")}>
-                                  {isSelected ? "Selected" : "Tap To Assign"}
-                                </span>
                               </div>
-                            </button>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={classNames(
+                                    "text-xs font-semibold uppercase tracking-[0.16em]",
+                                    isSelected ? "text-white/75" : "text-ink/55"
+                                  )}
+                                >
+                                  Assign to team
+                                </span>
+                                {setupTeamCodes.map((team) => {
+                                  const target = setupTeams.find((candidate) => candidate.team === team);
+                                  const targetIsFull =
+                                    (target?.players.length ?? 0) >= (target?.capacity ?? 0);
+
+                                  return (
+                                    <button
+                                      key={team}
+                                      type="button"
+                                      disabled={targetIsFull}
+                                      className={classNames(
+                                        "min-h-10 rounded-full px-3 text-xs font-semibold",
+                                        targetIsFull
+                                          ? "bg-ink/10 text-ink/35"
+                                          : isSelected
+                                            ? "bg-white text-ink"
+                                            : "bg-canvas text-ink"
+                                      )}
+                                      onClick={() => assignSetupPlayer(player.playerId, team)}
+                                    >
+                                      {targetIsFull ? `Team ${team} Full` : `Team ${team}`}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
@@ -1457,16 +1486,16 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                 onClick={() => handleSetupPlayerTap(player.playerId)}
                               >
                                 <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <p className="text-base font-semibold">{player.playerName}</p>
-                                    <p className={classNames("mt-1 text-xs", isSelected ? "text-white/75" : "text-ink/55")}>
-                                      {`Quota ${player.quota}`}
-                                    </p>
-                                  </div>
-                                  <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", isSelected ? "bg-white text-ink" : "bg-canvas text-ink/70")}>
-                                    {isSelected ? "Selected" : "Tap To Move"}
-                                  </span>
+                                <div>
+                                  <p className="text-base font-semibold">{player.playerName}</p>
+                                  <p className={classNames("mt-1 text-xs", isSelected ? "text-white/75" : "text-ink/55")}>
+                                    {`Assigned to Team ${team.team} · Quota ${player.quota}`}
+                                  </p>
                                 </div>
+                                <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", isSelected ? "bg-white text-ink" : "bg-canvas text-ink/70")}>
+                                  {isSelected ? "Selected" : "Reassign"}
+                                </span>
+                              </div>
                                 {isSelected ? (
                                   <div className="mt-3 flex flex-wrap gap-2">
                                     {setupTeamCodes
