@@ -37,6 +37,11 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isEditUnlocked, setIsEditUnlocked] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [pendingEditPlayer, setPendingEditPlayer] = useState<PlayerItem | null>(null);
+  const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const hasPlayers = players.length > 0;
 
   const groupedPlayers = useMemo(() => {
@@ -55,7 +60,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
     setMessage("");
   }
 
-  function handleEdit(player: PlayerItem) {
+  function openEditorForPlayer(player: PlayerItem) {
     setForm({
       id: player.id,
       name: player.name,
@@ -68,14 +73,68 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
     setMessage("");
   }
 
+  function handleEdit(player: PlayerItem) {
+    if (!isEditUnlocked) {
+      setPendingEditPlayer(player);
+      setPasswordInput("");
+      setPasswordMessage("");
+      setIsUnlockOpen(true);
+      return;
+    }
+
+    openEditorForPlayer(player);
+  }
+
   function closeEditor() {
     setIsEditorOpen(false);
     setForm(emptyForm);
   }
 
+  function closeUnlock() {
+    setIsUnlockOpen(false);
+    setPendingEditPlayer(null);
+    setPasswordInput("");
+    setPasswordMessage("");
+  }
+
+  function handleUnlockEdit() {
+    startTransition(async () => {
+      try {
+        setPasswordMessage("");
+        const response = await fetch("/api/players/unlock", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ password: passwordInput })
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          setPasswordMessage(result.error ?? "Incorrect password.");
+          return;
+        }
+
+        setIsEditUnlocked(true);
+        const playerToEdit = pendingEditPlayer;
+        closeUnlock();
+        if (playerToEdit) {
+          openEditorForPlayer(playerToEdit);
+        }
+      } catch (error) {
+        setPasswordMessage(error instanceof Error ? error.message : "Could not unlock editing.");
+      }
+    });
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+
+    if (form.id && !isEditUnlocked) {
+      setMessage("Unlock quota editing before saving changes.");
+      return;
+    }
 
     startTransition(async () => {
       const payload = {
@@ -168,7 +227,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                 <h3 className="text-lg font-semibold text-ink">Player Actions</h3>
                 <p className="text-sm leading-6 text-ink/75">
                   Add a player or restore the starter roster. Tap a player name or the
-                  Edit button below to update details.
+                  Edit button below to update details. Editing existing quotas is password protected.
                 </p>
               </div>
 
@@ -374,6 +433,52 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isUnlockOpen ? (
+        <div className="fixed inset-0 z-50 bg-ink/35 px-3 py-4">
+          <div className="mx-auto flex h-full max-w-md items-center justify-center">
+            <div className="w-full rounded-[28px] border border-mist bg-white p-5 shadow-card">
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-ink">Unlock quota editing</h3>
+                <p className="text-sm text-ink/65">
+                  Enter the password to edit player quotas for this session.
+                </p>
+              </div>
+
+              <label className="mt-4 block">
+                <span className="mb-2 block text-sm font-semibold text-ink">Password</span>
+                <input
+                  type="password"
+                  className="club-input h-14"
+                  value={passwordInput}
+                  onChange={(event) => setPasswordInput(event.target.value)}
+                  placeholder="Enter password"
+                />
+              </label>
+
+              {passwordMessage ? <p className="mt-3 text-sm font-medium text-danger">{passwordMessage}</p> : null}
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  className="club-btn-secondary min-h-12 text-base"
+                  onClick={closeUnlock}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isPending || !passwordInput}
+                  className="club-btn-primary min-h-12 text-base disabled:opacity-60"
+                  onClick={handleUnlockEdit}
+                >
+                  {isPending ? "Unlocking..." : "Unlock"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

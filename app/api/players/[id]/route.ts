@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getPlayersPageData } from "@/lib/data";
+import { hasValidPlayerEditSession, PLAYER_EDIT_COOKIE } from "@/lib/player-edit-auth";
 import { prisma } from "@/lib/prisma";
 
 async function syncConflicts(
@@ -30,6 +32,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const cookieStore = await cookies();
+    if (!hasValidPlayerEditSession(cookieStore.get(PLAYER_EDIT_COOKIE)?.value)) {
+      return NextResponse.json({ error: "Editing requires the quota password." }, { status: 403 });
+    }
+
     const { id } = await params;
     const body = await request.json();
     const name = String(body.name ?? "").trim();

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import {
@@ -111,14 +110,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
       <PageTitle
         title={`${data.round.roundName} Results`}
         subtitle={`Round date ${formatDisplayDate(data.round.roundDate)}`}
-        action={
-          <Link
-            href={`/rounds/${data.round.id}`}
-            className="rounded-2xl bg-pine px-4 py-3 text-sm font-semibold text-white"
-          >
-            Edit Round
-          </Link>
-        }
       />
 
       <SectionCard className="space-y-3">
