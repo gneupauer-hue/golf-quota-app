@@ -798,6 +798,68 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     });
   }
 
+  async function submitTeamSegment(
+    team: TeamCode,
+    segment: "front" | "back",
+    workingRows: RowState[]
+  ) {
+    const teamPlayerIds = workingRows
+      .filter((row) => row.team === team)
+      .map((row) => row.playerId);
+
+    if (!teamPlayerIds.length) {
+      throw new Error(`Team ${team} has no players to submit.`);
+    }
+
+    let finalizedRound = false;
+
+    for (const playerId of teamPlayerIds) {
+      const response = await fetch(`/api/rounds/${round.id}/submit-segment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId, segment })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not submit this segment.");
+      }
+
+      if (result.completed) {
+        finalizedRound = true;
+      }
+    }
+
+    const submittedAt = new Date().toISOString();
+    const nextRows = workingRows.map((row) =>
+      row.team === team
+        ? {
+            ...row,
+            frontSubmittedAt: segment === "front" ? submittedAt : row.frontSubmittedAt,
+            backSubmittedAt: segment === "back" ? submittedAt : row.backSubmittedAt
+          }
+        : row
+    );
+
+    setRows(nextRows);
+    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+
+    if (finalizedRound) {
+      setSaved("Final score submitted. Round complete.");
+      router.push(`/rounds/${round.id}/results`);
+      router.refresh();
+      return;
+    }
+
+    setSaved(segment === "front" ? "Front nine submitted." : "Final score submitted.");
+    setMessage(
+      segment === "front"
+        ? `Team ${team} front nine submitted.`
+        : `Team ${team} final score submitted.`
+    );
+    router.refresh();
+  }
+
   function autoBuildTeams(nextFormat = activeSetupFormat) {
     try {
       if (!rows.length) {
@@ -1269,55 +1331,55 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }
 
     if (holeNumber === 9) {
-      const wantsReview = window.confirm(
-        "Would you like to double-check your front-nine scores?"
+      const shouldSubmit = window.confirm(
+        "Submit Front Nine?\n\nPress OK to Submit Front Nine.\nPress Cancel to Review Scores."
       );
-
-      if (wantsReview) {
-        startTransition(async () => {
-          try {
-            setSaving("Saving hole 9...");
-            await persistRound();
-            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-            setSelectedTeam(null);
-            setToast("Hole 9 saved");
-            setMessage(
-              `Team ${team} finished the front nine. Submit each player's front nine from the round status list when you're ready.`
-            );
-            setSaved("Hole 9 saved");
-          } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : "Could not save team scores.";
-            setMessage(errorMessage);
-            setSaveFailed(errorMessage);
-          }
-        });
-        return;
-      }
-    }
-
-    if (holeNumber === 18) {
-      const wantsReview = window.confirm(
-        "Would you like to double-check your final scores?"
-      );
-
-      if (!wantsReview) {
-        setMessage(
-          `Team ${team} can submit final scores from the round status list after this save finishes.`
-        );
-      }
 
       startTransition(async () => {
         try {
-          setSaving("Saving hole 18...");
+          setSaving(shouldSubmit ? "Saving and submitting front nine..." : "Saving hole 9...");
           await persistRound();
           setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-          setSelectedTeam(null);
+          setToast("Hole 9 saved");
+
+          if (shouldSubmit) {
+            setSelectedTeam(null);
+            await submitTeamSegment(team, "front", rows);
+          } else {
+            setMessage(
+              `Team ${team} front nine saved. Review scores, then tap save again to submit front nine.`
+            );
+            setSaved("Hole 9 saved");
+          }
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Could not save team scores.";
+          setMessage(errorMessage);
+          setSaveFailed(errorMessage);
+        }
+      });
+      return;
+    }
+
+    if (holeNumber === 18) {
+      const shouldSubmit = window.confirm(
+        "Submit Final Score?\n\nPress OK to Submit Final Score.\nPress Cancel to Review Scores."
+      );
+
+      startTransition(async () => {
+        try {
+          setSaving(shouldSubmit ? "Saving and submitting final score..." : "Saving hole 18...");
+          await persistRound();
+          setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
           setToast("Hole 18 saved");
-          setMessage(
-            `Team ${team} finished hole 18. Submit each player's back nine from the round status list.`
-          );
-          setSaved("Hole 18 saved");
+
+          if (shouldSubmit) {
+            setSelectedTeam(null);
+            await submitTeamSegment(team, "back", rows);
+          } else {
+            setMessage(`Team ${team} final holes saved. Review scores, then tap save again to submit final score.`);
+            setSaved("Hole 18 saved");
+          }
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : "Could not save team scores.";
@@ -1769,35 +1831,27 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         </>
       ) : isSkinsOnly ? (
         <SkinsOnlyRoundView
-          roundId={round.id}
           rows={calculatedRows}
           rowStates={rows}
-          playerBuyIns={playerBuyIns}
-          initialBuyInPaidPlayerIds={buyInPaidPlayerIds}
           isTestRound={isTestRound}
           saveState={saveState}
           lastSavedAt={lastSavedAt}
           onDeleteRound={deleteRound}
           onForceDeleteRound={forceDeleteRound}
           onOpenEntry={openSkinsEntry}
-          onSubmitSegment={submitSegment}
         />
       ) : (
         <MatchRoundView
-          roundId={round.id}
           rows={calculatedRows}
           rowStates={rows}
           teamStandings={teamStandings}
           teamRowsByCode={teamRowsByCode}
-          playerBuyIns={playerBuyIns}
-          initialBuyInPaidPlayerIds={buyInPaidPlayerIds}
           isTestRound={isTestRound}
           saveState={saveState}
           lastSavedAt={lastSavedAt}
           onDeleteRound={deleteRound}
           onForceDeleteRound={forceDeleteRound}
           onOpenTeam={openTeam}
-          onSubmitSegment={submitSegment}
         />
       )}
 
