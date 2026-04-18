@@ -205,6 +205,17 @@ export type PlayerPayoutPrediction = {
   projectedTotal: number;
 };
 
+export type FinalPlayerPayout = {
+  playerId: string;
+  playerName: string;
+  front: number;
+  back: number;
+  total: number;
+  indy: number;
+  skins: number;
+  totalWon: number;
+};
+
 export type PayoutPredictionsSummary = {
   players: PlayerPayoutPrediction[];
   frontProjectedTotal: number;
@@ -235,6 +246,11 @@ export type PayoutPredictionsSummary = {
   unsettledSkinsValue: number;
   mismatchedCategories: Array<"front" | "back" | "total" | "indy" | "skins" | "overall">;
   isBalanced: boolean;
+};
+
+export type FinalPayoutSummary = {
+  players: FinalPlayerPayout[];
+  totalPaidOut: number;
 };
 
 export type PlayerBuyIn = {
@@ -1513,5 +1529,91 @@ export function calculatePayoutPredictions(
     unsettledSkinsValue,
     mismatchedCategories,
     isBalanced: mismatchedCategories.length === 0
+  };
+}
+
+export function calculateFinalPayoutSummary(
+  rows: CalculatedRoundRow[],
+  mode: RoundMode
+): FinalPayoutSummary {
+  const includeTeamPayouts = mode !== "SKINS_ONLY";
+  const includeIndividualPayouts = mode !== "SKINS_ONLY";
+  const includeSkinsPayouts = true;
+  const teams = calculateTeamStandings(rows);
+  const sideGames = calculateSideGameResults(rows);
+  const players = new Map<string, FinalPlayerPayout>();
+
+  rows.forEach((row) => {
+    players.set(row.playerId, {
+      playerId: row.playerId,
+      playerName: row.playerName,
+      front: 0,
+      back: 0,
+      total: 0,
+      indy: 0,
+      skins: 0,
+      totalWon: 0
+    });
+  });
+
+  function applyAllocations(
+    allocations: Map<string, number>,
+    category: "front" | "back" | "total" | "indy" | "skins"
+  ) {
+    allocations.forEach((amount, playerId) => {
+      const player = players.get(playerId);
+      if (player) {
+        player[category] = roundCurrency(amount);
+      }
+    });
+  }
+
+  if (includeTeamPayouts) {
+    applyAllocations(
+      allocateTeamPotToPlayers(rows, teams, "frontPlusMinus", sideGames.teamPots.frontPot),
+      "front"
+    );
+    applyAllocations(
+      allocateTeamPotToPlayers(rows, teams, "backPlusMinus", sideGames.teamPots.backPot),
+      "back"
+    );
+    applyAllocations(
+      allocateTeamPotToPlayers(rows, teams, "totalPlusMinus", sideGames.teamPots.totalPot),
+      "total"
+    );
+  }
+
+  if (includeIndividualPayouts) {
+    applyAllocations(
+      new Map(sideGames.individualPayouts.map((payout) => [payout.playerId, payout.payout])),
+      "indy"
+    );
+  }
+
+  if (includeSkinsPayouts) {
+    applyAllocations(
+      new Map(sideGames.skins.winners.map((winner) => [winner.playerId, winner.payout])),
+      "skins"
+    );
+  }
+
+  const finalPlayers = Array.from(players.values())
+    .map((player) => ({
+      ...player,
+      totalWon: roundCurrency(
+        player.front + player.back + player.total + player.indy + player.skins
+      )
+    }))
+    .filter((player) => player.totalWon > 0)
+    .sort((left, right) => {
+      if (right.totalWon !== left.totalWon) {
+        return right.totalWon - left.totalWon;
+      }
+      return left.playerName.localeCompare(right.playerName);
+    });
+
+  return {
+    players: finalPlayers,
+    totalPaidOut: roundCurrency(finalPlayers.reduce((sum, player) => sum + player.totalWon, 0))
   };
 }
