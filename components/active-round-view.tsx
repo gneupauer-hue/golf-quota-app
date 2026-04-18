@@ -142,19 +142,19 @@ export function MatchRoundView({
               <div
                 key={`${label}-${team.team}`}
                 className={classNames(
-                  "flex items-center justify-between gap-3 rounded-2xl px-3 py-2",
-                  isWinner ? "bg-[#E2F4E6]" : "bg-white"
+                  "flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5",
+                  isWinner ? "border border-[#5A9764]/20 bg-[#EAF6EC]" : "bg-white"
                 )}
               >
-                <p className="text-sm font-medium text-ink">{`Team ${team.team}`}</p>
-                <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">{`Team ${team.team}`}</p>
                   {isWinner ? (
-                    <span className="rounded-full bg-pine px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                    <span className="mt-1 inline-flex items-center rounded-full bg-pine/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-pine">
                       Winner
                     </span>
                   ) : null}
-                  <p className="text-base font-semibold text-ink">{formatPlusMinus(team[key])}</p>
                 </div>
+                <p className="text-lg font-semibold text-ink">{formatPlusMinus(team[key])}</p>
               </div>
             );
           })}
