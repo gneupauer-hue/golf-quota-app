@@ -3,13 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { SectionCard } from "@/components/section-card";
-import {
-  formatPlusMinus,
-  type CalculatedRoundRow,
-  type PlayerBuyInSummary,
-  type TeamCode,
-  type TeamStanding
-} from "@/lib/quota";
+import { type CalculatedRoundRow, type PlayerBuyInSummary, type TeamCode, type TeamStanding } from "@/lib/quota";
 import { classNames } from "@/lib/utils";
 
 type SaveState = {
@@ -180,19 +174,7 @@ export function MatchRoundView({
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
   onOpenTeam: (team: TeamCode) => void;
 }) {
-  const allFrontSubmitted = rowStates.length > 0 && rowStates.every((row) => Boolean(row.frontSubmittedAt));
-  const allBackSubmitted = rowStates.length > 0 && rowStates.every((row) => Boolean(row.backSubmittedAt));
   const lastSavedLabel = formatTimeLabel(lastSavedAt);
-
-  function getWinningTeams(key: "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus") {
-    if (!teamStandings.length) return [];
-    const best = Math.max(...teamStandings.map((team) => team[key]));
-    return teamStandings.filter((team) => team[key] === best);
-  }
-
-  const frontWinners = allFrontSubmitted ? getWinningTeams("frontPlusMinus") : [];
-  const backWinners = allBackSubmitted ? getWinningTeams("backPlusMinus") : [];
-  const totalWinners = allBackSubmitted ? getWinningTeams("totalPlusMinus") : [];
 
   return (
     <div className="space-y-4">
@@ -289,38 +271,6 @@ export function MatchRoundView({
         </div>
       </SectionCard>
 
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Results</p>
-        {!allFrontSubmitted ? (
-          <p className="text-sm text-ink/70">Waiting for remaining front-nine submissions.</p>
-        ) : (
-          <div className="rounded-[22px] bg-canvas px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Winner</p>
-            <p className="mt-1 text-base font-semibold">
-              {frontWinners.length ? frontWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-            </p>
-          </div>
-        )}
-        {!allBackSubmitted ? (
-          <p className="text-sm text-ink/70">Waiting for remaining back-nine submissions.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-[22px] bg-canvas px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Winner</p>
-              <p className="mt-1 text-base font-semibold">
-                {backWinners.length ? backWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-              </p>
-            </div>
-            <div className="rounded-[22px] bg-canvas px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Winner</p>
-              <p className="mt-1 text-base font-semibold">
-                {totalWinners.length ? totalWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-              </p>
-            </div>
-          </div>
-        )}
-      </SectionCard>
-
       <div className="space-y-3">
         {teamStandings.map((team) => {
           const teamRows = teamRowsByCode.get(team.team) ?? [];
@@ -350,18 +300,6 @@ export function MatchRoundView({
                   </p>
                   <p className="mt-1 text-2xl font-semibold">{teamComplete ? "Completed" : Math.min(progress + 1, 18)}</p>
                 </div>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {[
-                  { label: "Front", value: team.frontPlusMinus },
-                  { label: "Back", value: team.backPlusMinus },
-                  { label: "Total", value: team.totalPlusMinus }
-                ].map((item) => (
-                  <div key={item.label} className="rounded-2xl bg-canvas px-3 py-3">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{item.label}</p>
-                    <p className="mt-1 text-lg font-semibold">{formatPlusMinus(item.value)}</p>
-                  </div>
-                ))}
               </div>
             </button>
           );

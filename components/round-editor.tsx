@@ -1268,7 +1268,45 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
+    if (holeNumber === 9) {
+      const wantsReview = window.confirm(
+        "Would you like to double-check your front-nine scores?"
+      );
+
+      if (wantsReview) {
+        startTransition(async () => {
+          try {
+            setSaving("Saving hole 9...");
+            await persistRound();
+            setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+            setSelectedTeam(null);
+            setToast("Hole 9 saved");
+            setMessage(
+              `Team ${team} finished the front nine. Submit each player's front nine from the round status list when you're ready.`
+            );
+            setSaved("Hole 9 saved");
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : "Could not save team scores.";
+            setMessage(errorMessage);
+            setSaveFailed(errorMessage);
+          }
+        });
+        return;
+      }
+    }
+
     if (holeNumber === 18) {
+      const wantsReview = window.confirm(
+        "Would you like to double-check your final scores?"
+      );
+
+      if (!wantsReview) {
+        setMessage(
+          `Team ${team} can submit final scores from the round status list after this save finishes.`
+        );
+      }
+
       startTransition(async () => {
         try {
           setSaving("Saving hole 18...");
