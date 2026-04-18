@@ -22,6 +22,7 @@ import {
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
+  calculatePayoutPredictions,
   calculateRoundRows,
   calculateSideGameResults,
   calculateTeamStandings,
@@ -396,6 +397,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
   const teamStandings = useMemo(() => calculateTeamStandings(calculatedRows), [calculatedRows]);
   const sideGames = useMemo(() => calculateSideGameResults(calculatedRows), [calculatedRows]);
+  const payoutSummary = useMemo(
+    () =>
+      calculatePayoutPredictions(calculatedRows, {
+        includeTeamPayouts: gameMode !== "SKINS_ONLY",
+        includeIndividualPayouts: gameMode !== "SKINS_ONLY",
+        includeSkinsPayouts: true
+      }),
+    [calculatedRows, gameMode]
+  );
   const invalidSequence = rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
   const hasSavedScores = useMemo(
     () => rows.some((row) => row.holeScores.some((score) => score != null)),
@@ -1839,6 +1849,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           teamStandings={teamStandings}
           teamRowsByCode={teamRowsByCode}
           sideGames={sideGames}
+          payoutSummary={payoutSummary}
           isTestRound={isTestRound}
           saveState={saveState}
           lastSavedAt={lastSavedAt}

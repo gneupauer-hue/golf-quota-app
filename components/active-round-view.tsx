@@ -1,7 +1,14 @@
 "use client";
 
 import { SectionCard } from "@/components/section-card";
-import { type CalculatedRoundRow, type SideGameResults, type TeamCode, type TeamStanding } from "@/lib/quota";
+import {
+  formatPlusMinus,
+  type CalculatedRoundRow,
+  type PayoutPredictionsSummary,
+  type SideGameResults,
+  type TeamCode,
+  type TeamStanding
+} from "@/lib/quota";
 import { classNames } from "@/lib/utils";
 
 type SaveState = {
@@ -21,6 +28,14 @@ function formatTimeLabel(value: string | null) {
     hour: "numeric",
     minute: "2-digit"
   });
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: value % 1 === 0 ? 0 : 2
+  }).format(value);
 }
 
 function hasRecordedFinalHole(holeScores: Array<number | null>) {
@@ -61,6 +76,7 @@ export function MatchRoundView({
   teamStandings,
   teamRowsByCode,
   sideGames,
+  payoutSummary,
   isTestRound,
   saveState,
   lastSavedAt,
@@ -71,6 +87,7 @@ export function MatchRoundView({
   teamStandings: TeamStanding[];
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
   sideGames: SideGameResults;
+  payoutSummary: PayoutPredictionsSummary;
   isArchiving: boolean;
   onArchiveRound: () => void;
   onOpenTeam: (team: TeamCode) => void;
@@ -88,6 +105,9 @@ export function MatchRoundView({
   const awardedSkins = allTeamsSubmitted
     ? sideGames.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName)
     : [];
+  const paidPlayers = allTeamsSubmitted
+    ? payoutSummary.players.filter((player) => player.projectedTotal > 0)
+    : [];
 
   function getWinningTeams(key: "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus") {
     if (!teamStandings.length) return [];
@@ -98,6 +118,50 @@ export function MatchRoundView({
   const frontWinners = allTeamsSubmitted ? getWinningTeams("frontPlusMinus") : [];
   const backWinners = allTeamsSubmitted ? getWinningTeams("backPlusMinus") : [];
   const totalWinners = allTeamsSubmitted ? getWinningTeams("totalPlusMinus") : [];
+
+  function renderTeamComparison(
+    label: string,
+    key: "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus",
+    winners: TeamStanding[]
+  ) {
+    const winnerCodes = new Set(winners.map((team) => team.team));
+    const sortedTeams = [...teamStandings].sort((left, right) => {
+      if (right[key] !== left[key]) {
+        return right[key] - left[key];
+      }
+      return left.team.localeCompare(right.team);
+    });
+
+    return (
+      <div className="rounded-[22px] bg-canvas px-4 py-3">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{label}</p>
+        <div className="mt-2 space-y-2">
+          {sortedTeams.map((team) => {
+            const isWinner = winnerCodes.has(team.team);
+            return (
+              <div
+                key={`${label}-${team.team}`}
+                className={classNames(
+                  "flex items-center justify-between gap-3 rounded-2xl px-3 py-2",
+                  isWinner ? "bg-[#E2F4E6]" : "bg-white"
+                )}
+              >
+                <p className="text-sm font-medium text-ink">{`Team ${team.team}`}</p>
+                <div className="flex items-center gap-2">
+                  {isWinner ? (
+                    <span className="rounded-full bg-pine px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                      Winner
+                    </span>
+                  ) : null}
+                  <p className="text-base font-semibold text-ink">{formatPlusMinus(team[key])}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -179,24 +243,9 @@ export function MatchRoundView({
           <SectionCard className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Final Results</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <div className="rounded-[22px] bg-canvas px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Winner</p>
-                <p className="mt-1 text-base font-semibold">
-                  {frontWinners.length ? frontWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-                </p>
-              </div>
-              <div className="rounded-[22px] bg-canvas px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Winner</p>
-                <p className="mt-1 text-base font-semibold">
-                  {backWinners.length ? backWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-                </p>
-              </div>
-              <div className="rounded-[22px] bg-canvas px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Winner</p>
-                <p className="mt-1 text-base font-semibold">
-                  {totalWinners.length ? totalWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-                </p>
-              </div>
+              {renderTeamComparison("Front", "frontPlusMinus", frontWinners)}
+              {renderTeamComparison("Back", "backPlusMinus", backWinners)}
+              {renderTeamComparison("Total", "totalPlusMinus", totalWinners)}
             </div>
             <div className="rounded-[22px] bg-canvas px-4 py-4">
               <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Good Skins</p>
@@ -204,8 +253,8 @@ export function MatchRoundView({
                 <div className="mt-2 space-y-2">
                   {awardedSkins.map((hole) => (
                     <div key={hole.holeNumber} className="flex items-center justify-between gap-3 text-sm">
-                      <p className="font-medium text-ink">{`Hole ${hole.holeNumber} — ${hole.winnerName}`}</p>
-                      <p className="font-semibold text-pine">{`$${sideGames.skins.valuePerSkin * hole.sharesCaptured}`}</p>
+                      <p className="font-medium text-ink">{`Hole ${hole.holeNumber} - ${hole.winnerName}`}</p>
+                      <p className="font-semibold text-pine">{formatCurrency(hole.holePayout)}</p>
                     </div>
                   ))}
                 </div>
@@ -213,6 +262,44 @@ export function MatchRoundView({
                 <p className="mt-2 text-sm text-ink/65">No good skins were won this round.</p>
               )}
             </div>
+          </SectionCard>
+
+          <SectionCard className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Payout Summary</p>
+            {paidPlayers.length ? (
+              <div className="space-y-2">
+                {paidPlayers.map((player) => {
+                  const categories = [
+                    { label: "Front", value: player.front },
+                    { label: "Back", value: player.back },
+                    { label: "Total", value: player.total },
+                    { label: "Indy", value: player.indy },
+                    { label: "Skins", value: player.skins }
+                  ].filter((category) => category.value > 0);
+
+                  return (
+                    <div key={player.playerId} className="rounded-[22px] bg-canvas px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-base font-semibold text-ink">{player.playerName}</p>
+                        <p className="text-lg font-semibold text-pine">{formatCurrency(player.projectedTotal)}</p>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {categories.map((category) => (
+                          <span
+                            key={`${player.playerId}-${category.label}`}
+                            className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink"
+                          >
+                            {`${category.label}: ${formatCurrency(category.value)}`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-ink/65">No payouts are settled yet.</p>
+            )}
           </SectionCard>
 
           <SectionCard className="space-y-3">

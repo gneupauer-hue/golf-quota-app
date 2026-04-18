@@ -92,6 +92,7 @@ export type SkinHoleResult = {
   winnerPlayerId: string | null;
   winnerName: string | null;
   sharesCaptured: number;
+  holePayout: number;
   activeCarryover: boolean;
 };
 
@@ -651,6 +652,22 @@ function splitCurrencyAcrossKeys(total: number, keys: string[]) {
   return allocations;
 }
 
+function splitCurrencyAcrossShareCount(total: number, shareCount: number) {
+  if (shareCount <= 0 || total <= 0) {
+    return [];
+  }
+
+  const totalCents = Math.round(total * 100);
+  const base = Math.floor(totalCents / shareCount);
+  let remainder = totalCents - base * shareCount;
+
+  return Array.from({ length: shareCount }, () => {
+    const cents = base + (remainder > 0 ? 1 : 0);
+    remainder = Math.max(0, remainder - 1);
+    return cents / 100;
+  });
+}
+
 function formatPlaceLabel(startPlace: number, endPlace: number) {
   if (startPlace === endPlace) {
     return `${startPlace}`;
@@ -870,6 +887,7 @@ export function calculateGoodSkins(rows: CalculatedRoundRow[]): SkinsResult {
         winnerPlayerId: winner.playerId,
         winnerName: winner.playerName,
         sharesCaptured,
+        holePayout: 0,
         activeCarryover: false
       });
 
@@ -888,6 +906,7 @@ export function calculateGoodSkins(rows: CalculatedRoundRow[]): SkinsResult {
       winnerPlayerId: null,
       winnerName: null,
       sharesCaptured: 0,
+      holePayout: 0,
       activeCarryover: true
     });
     pendingShares += 1;
@@ -898,10 +917,33 @@ export function calculateGoodSkins(rows: CalculatedRoundRow[]): SkinsResult {
     0
   );
   const valuePerSkin = totalSkinSharesWon > 0 ? roundCurrency(totalPot / totalSkinSharesWon) : 0;
+  const shareValues = splitCurrencyAcrossShareCount(totalPot, totalSkinSharesWon);
+  const exactWinnerPayouts = new Map<string, number>();
+  let shareCursor = 0;
+
+  holes.forEach((hole) => {
+    if (!hole.skinAwarded || !hole.winnerPlayerId || hole.sharesCaptured <= 0) {
+      return;
+    }
+
+    const holePayout = roundCurrency(
+      shareValues
+        .slice(shareCursor, shareCursor + hole.sharesCaptured)
+        .reduce((sum, value) => sum + value, 0)
+    );
+
+    shareCursor += hole.sharesCaptured;
+    hole.holePayout = holePayout;
+    exactWinnerPayouts.set(
+      hole.winnerPlayerId,
+      roundCurrency((exactWinnerPayouts.get(hole.winnerPlayerId) ?? 0) + holePayout)
+    );
+  });
+
   const winners = Array.from(winnerShares.values())
     .map((winner) => ({
       ...winner,
-      payout: roundCurrency(winner.skinsWon * valuePerSkin)
+      payout: exactWinnerPayouts.get(winner.playerId) ?? 0
     }))
     .sort((a, b) => {
       if (b.skinsWon !== a.skinsWon) {
