@@ -252,9 +252,8 @@ export function MatchRoundView({
               {awardedSkins.length ? (
                 <div className="mt-2 space-y-2">
                   {awardedSkins.map((hole) => (
-                    <div key={hole.holeNumber} className="flex items-center justify-between gap-3 text-sm">
+                    <div key={hole.holeNumber} className="text-sm">
                       <p className="font-medium text-ink">{`Hole ${hole.holeNumber} - ${hole.winnerName}`}</p>
-                      <p className="font-semibold text-pine">{formatCurrency(hole.holePayout)}</p>
                     </div>
                   ))}
                 </div>
