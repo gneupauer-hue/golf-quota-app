@@ -1993,7 +1993,7 @@ function TeamScoreEntry({
             Previous Hole
           </button>
             <button type="button" onClick={() => onSaveHole(team)} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
-            {isPending ? "Saving..." : isFinalHole ? "Save Hole 18" : "Save + Next Hole"}
+            {isPending ? "Saving..." : activeHole === 9 ? "Submit Front 9 Score" : isFinalHole ? "Submit Final Score" : "Save + Next Hole"}
             </button>
           </div>
           <div className="mt-2 grid grid-cols-1 gap-2">
@@ -2549,7 +2549,7 @@ function SkinsOnlyScoreEntry({
             Previous Hole
           </button>
             <button type="button" onClick={onSaveHole} disabled={isPending || !canSaveHole} className="min-h-14 rounded-[22px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-45">
-            {isPending ? "Saving..." : isFinalHole ? "Save Hole 18" : "Save + Next Hole"}
+            {isPending ? "Saving..." : activeHole === 9 ? "Submit Front 9 Score" : isFinalHole ? "Submit Final Score" : "Save + Next Hole"}
             </button>
           </div>
           <div className="mt-2 grid grid-cols-1 gap-2">

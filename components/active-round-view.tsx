@@ -75,6 +75,25 @@ export function MatchRoundView({
       const teamRows = teamRowsByCode.get(team.team) ?? [];
       return teamRows.length > 0 && teamRows.every((row) => hasRecordedFinalHole(row.holeScores));
     });
+  const allTeamsSubmitted =
+    teamStandings.length > 0 &&
+    teamStandings.every((team) => {
+      const teamRows = teamRowsByCode.get(team.team) ?? [];
+      return teamRows.length > 0 && teamRows.every((row) => {
+        const rowState = rowStates.find((candidate) => candidate.playerId === row.playerId);
+        return Boolean(rowState?.backSubmittedAt);
+      });
+    });
+
+  function getWinningTeams(key: "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus") {
+    if (!teamStandings.length) return [];
+    const best = Math.max(...teamStandings.map((team) => team[key]));
+    return teamStandings.filter((team) => team[key] === best);
+  }
+
+  const frontWinners = allTeamsSubmitted ? getWinningTeams("frontPlusMinus") : [];
+  const backWinners = allTeamsSubmitted ? getWinningTeams("backPlusMinus") : [];
+  const totalWinners = allTeamsSubmitted ? getWinningTeams("totalPlusMinus") : [];
 
   return (
     <div className="space-y-4">
@@ -129,7 +148,7 @@ export function MatchRoundView({
                   {teamComplete ? (
                     <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
                       <span aria-hidden="true">✓</span>
-                      Team Complete
+                      Submitted
                     </span>
                   ) : null}
                 </div>
@@ -137,13 +156,39 @@ export function MatchRoundView({
                   <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">
                     {teamComplete ? "Status" : "Next Hole"}
                   </p>
-                  <p className="mt-1 text-2xl font-semibold">{teamComplete ? "Completed" : Math.min(progress + 1, 18)}</p>
+                  <p className="mt-1 text-2xl font-semibold">{teamComplete ? "Submitted" : Math.min(progress + 1, 18)}</p>
                 </div>
               </div>
             </button>
           );
         })}
       </div>
+
+      {allTeamsSubmitted ? (
+        <SectionCard className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Final Results</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-[22px] bg-canvas px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Winner</p>
+              <p className="mt-1 text-base font-semibold">
+                {frontWinners.length ? frontWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
+              </p>
+            </div>
+            <div className="rounded-[22px] bg-canvas px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Winner</p>
+              <p className="mt-1 text-base font-semibold">
+                {backWinners.length ? backWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
+              </p>
+            </div>
+            <div className="rounded-[22px] bg-canvas px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Winner</p>
+              <p className="mt-1 text-base font-semibold">
+                {totalWinners.length ? totalWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
+              </p>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
 
       <SectionCard className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Controls</p>
