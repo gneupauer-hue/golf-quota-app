@@ -40,13 +40,6 @@ export default async function HomePage() {
 
       <QuickRoundLauncher />
 
-      {home.currentRound ? (
-        <ForceClearActiveRound
-          roundId={home.currentRound.id}
-          roundName={home.currentRound.roundName}
-        />
-      ) : null}
-
       <div className="flex flex-col gap-3">
         {actions.map((action) => (
           <Link key={action.href} href={action.href} className="block">
@@ -57,6 +50,15 @@ export default async function HomePage() {
           </Link>
         ))}
       </div>
+
+      {home.currentRound ? (
+        <div className="pt-3">
+          <ForceClearActiveRound
+            roundId={home.currentRound.id}
+            roundName={home.currentRound.roundName}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

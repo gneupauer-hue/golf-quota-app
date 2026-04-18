@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { finalizeRound } from "@/lib/round-service";
 
 export async function POST(
   request: Request,
@@ -135,14 +134,8 @@ export async function POST(
         })
       ]);
 
-      const shouldFinalize = segment === "back" && allBackSubmitted === 0;
-
-      if (shouldFinalize) {
-        await finalizeRound(tx, id);
-      }
-
       return {
-        completed: shouldFinalize,
+        completed: false,
         allFrontSubmitted: allFrontSubmitted === 0,
         allBackSubmitted: allBackSubmitted === 0
       };

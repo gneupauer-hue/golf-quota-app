@@ -1,7 +1,7 @@
 "use client";
 
 import { SectionCard } from "@/components/section-card";
-import { type CalculatedRoundRow, type TeamCode, type TeamStanding } from "@/lib/quota";
+import { type CalculatedRoundRow, type SideGameResults, type TeamCode, type TeamStanding } from "@/lib/quota";
 import { classNames } from "@/lib/utils";
 
 type SaveState = {
@@ -21,10 +21,6 @@ function formatTimeLabel(value: string | null) {
     hour: "numeric",
     minute: "2-digit"
   });
-}
-
-function hasCompletedSegment(holeScores: Array<number | null>, startIndex: number, endIndex: number) {
-  return holeScores.slice(startIndex, endIndex).every((score) => score != null);
 }
 
 function hasRecordedFinalHole(holeScores: Array<number | null>) {
@@ -47,28 +43,39 @@ type SharedProps = {
   isTestRound: boolean;
   saveState: SaveState;
   lastSavedAt: string | null;
-  onDeleteRound: () => void;
-  onForceDeleteRound: () => void;
 };
+
+function getTeamSubmissionState(
+  teamRows: Array<CalculatedRoundRow>,
+  rowStates: RowSubmissionState[]
+) {
+  return teamRows.length > 0 && teamRows.every((row) => {
+    const rowState = rowStates.find((candidate) => candidate.playerId === row.playerId);
+    return Boolean(rowState?.backSubmittedAt);
+  });
+}
 
 export function MatchRoundView({
   rows,
   rowStates,
   teamStandings,
   teamRowsByCode,
+  sideGames,
   isTestRound,
   saveState,
   lastSavedAt,
-  onDeleteRound,
-  onForceDeleteRound,
+  isArchiving,
+  onArchiveRound,
   onOpenTeam
 }: SharedProps & {
   teamStandings: TeamStanding[];
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
+  sideGames: SideGameResults;
+  isArchiving: boolean;
+  onArchiveRound: () => void;
   onOpenTeam: (team: TeamCode) => void;
 }) {
   const lastSavedLabel = formatTimeLabel(lastSavedAt);
-  const allBackSubmitted = rowStates.length > 0 && rowStates.every((row) => Boolean(row.backSubmittedAt));
   const allTeamsComplete =
     teamStandings.length > 0 &&
     teamStandings.every((team) => {
@@ -77,13 +84,10 @@ export function MatchRoundView({
     });
   const allTeamsSubmitted =
     teamStandings.length > 0 &&
-    teamStandings.every((team) => {
-      const teamRows = teamRowsByCode.get(team.team) ?? [];
-      return teamRows.length > 0 && teamRows.every((row) => {
-        const rowState = rowStates.find((candidate) => candidate.playerId === row.playerId);
-        return Boolean(rowState?.backSubmittedAt);
-      });
-    });
+    teamStandings.every((team) => getTeamSubmissionState(teamRowsByCode.get(team.team) ?? [], rowStates));
+  const awardedSkins = allTeamsSubmitted
+    ? sideGames.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName)
+    : [];
 
   function getWinningTeams(key: "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus") {
     if (!teamStandings.length) return [];
@@ -100,22 +104,26 @@ export function MatchRoundView({
       <SectionCard className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Score Save Status</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Status</p>
             <h3 className="mt-1 text-lg font-semibold">
-              {allBackSubmitted || allTeamsComplete
+              {allTeamsSubmitted
                 ? "All teams submitted"
-                : saveState.tone === "saving"
-                ? "Saving..."
-                : saveState.tone === "failed"
-                  ? "Save failed"
-                  : saveState.tone === "saved"
-                    ? "Saved"
-                    : "Ready to score"}
+                : allTeamsComplete
+                  ? "Final scores ready for submission"
+                  : saveState.tone === "saving"
+                    ? "Saving..."
+                    : saveState.tone === "failed"
+                      ? "Save failed"
+                      : saveState.tone === "saved"
+                        ? "Saved"
+                        : "Ready to score"}
             </h3>
             <p className="mt-1 text-sm text-ink/75">
-              {allBackSubmitted || allTeamsComplete
-                ? "Round finalization is in progress or this round has already been submitted."
-                : saveState.message || "Scores only show as saved after the server confirms the write."}
+              {allTeamsSubmitted
+                ? "Review the final results below, then archive the round when you're ready."
+                : allTeamsComplete
+                  ? "All teams have reached hole 18. Open a team card to submit final scores."
+                  : saveState.message || "Scores only show as saved after the server confirms the write."}
             </p>
             {lastSavedLabel ? (
               <p className="mt-2 text-xs font-semibold text-pine">{`Last saved at ${lastSavedLabel}`}</p>
@@ -133,7 +141,7 @@ export function MatchRoundView({
         {teamStandings.map((team) => {
           const teamRows = teamRowsByCode.get(team.team) ?? [];
           const progress = getTeamProgress(teamRows);
-          const teamComplete = teamRows.length > 0 && teamRows.every((row) => hasRecordedFinalHole(row.holeScores));
+          const teamSubmitted = getTeamSubmissionState(teamRows, rowStates);
           return (
             <button
               key={team.team}
@@ -145,18 +153,20 @@ export function MatchRoundView({
                 <div>
                   <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
                   <p className="mt-1 text-sm text-ink/60">{team.players.join(", ")}</p>
-                  {teamComplete ? (
+                  {teamSubmitted ? (
                     <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
-                      <span aria-hidden="true">✓</span>
+                      <span aria-hidden="true">✔</span>
                       Submitted
                     </span>
                   ) : null}
                 </div>
-                <div className={classNames("rounded-2xl px-4 py-3 text-center", teamComplete ? "bg-[#E2F4E6]" : "bg-canvas")}>
+                <div className={classNames("rounded-2xl px-4 py-3 text-center", teamSubmitted ? "bg-[#E2F4E6]" : "bg-canvas")}>
                   <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">
-                    {teamComplete ? "Status" : "Next Hole"}
+                    {teamSubmitted ? "Status" : "Next Hole"}
                   </p>
-                  <p className="mt-1 text-2xl font-semibold">{teamComplete ? "Submitted" : Math.min(progress + 1, 18)}</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {teamSubmitted ? "Submitted" : Math.min(progress + 1, 18)}
+                  </p>
                 </div>
               </div>
             </button>
@@ -165,53 +175,69 @@ export function MatchRoundView({
       </div>
 
       {allTeamsSubmitted ? (
+        <>
+          <SectionCard className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Final Results</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="rounded-[22px] bg-canvas px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Winner</p>
+                <p className="mt-1 text-base font-semibold">
+                  {frontWinners.length ? frontWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
+                </p>
+              </div>
+              <div className="rounded-[22px] bg-canvas px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Winner</p>
+                <p className="mt-1 text-base font-semibold">
+                  {backWinners.length ? backWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
+                </p>
+              </div>
+              <div className="rounded-[22px] bg-canvas px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Winner</p>
+                <p className="mt-1 text-base font-semibold">
+                  {totalWinners.length ? totalWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-[22px] bg-canvas px-4 py-4">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Good Skins</p>
+              {awardedSkins.length ? (
+                <div className="mt-2 space-y-2">
+                  {awardedSkins.map((hole) => (
+                    <div key={hole.holeNumber} className="flex items-center justify-between gap-3 text-sm">
+                      <p className="font-medium text-ink">{`Hole ${hole.holeNumber} — ${hole.winnerName}`}</p>
+                      <p className="font-semibold text-pine">{`$${sideGames.skins.valuePerSkin * hole.sharesCaptured}`}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink/65">No good skins were won this round.</p>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Archive Round</p>
+            <p className="text-sm text-ink/65">
+              Archiving is the final step. It moves this round to Past Games, updates quotas, and clears the active round.
+            </p>
+            <button
+              type="button"
+              onClick={onArchiveRound}
+              disabled={isArchiving}
+              className="club-btn-primary min-h-12 w-full rounded-[22px] disabled:opacity-45"
+            >
+              {isArchiving ? "Archiving Round..." : "Archive Round"}
+            </button>
+          </SectionCard>
+        </>
+      ) : (
         <SectionCard className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Final Results</p>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-[22px] bg-canvas px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front Winner</p>
-              <p className="mt-1 text-base font-semibold">
-                {frontWinners.length ? frontWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-              </p>
-            </div>
-            <div className="rounded-[22px] bg-canvas px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back Winner</p>
-              <p className="mt-1 text-base font-semibold">
-                {backWinners.length ? backWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-              </p>
-            </div>
-            <div className="rounded-[22px] bg-canvas px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Winner</p>
-              <p className="mt-1 text-base font-semibold">
-                {totalWinners.length ? totalWinners.map((team) => `Team ${team.team}`).join(", ") : "No winner"}
-              </p>
-            </div>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Controls</p>
+          <p className="text-sm text-ink/65">
+            Current Round is now score-entry only. Team submission happens inside each team flow.
+          </p>
         </SectionCard>
-      ) : null}
-
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Controls</p>
-        <p className="text-sm text-ink/65">The round finalizes automatically when the last back nine is submitted.</p>
-      </SectionCard>
-
-      <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Admin</p>
-        <button
-          type="button"
-          onClick={onForceDeleteRound}
-          className="min-h-12 w-full rounded-[22px] border border-danger/25 bg-white px-4 text-sm font-semibold text-danger"
-        >
-          Force Clear Active Round
-        </button>
-        <button
-          type="button"
-          onClick={onDeleteRound}
-          className="min-h-12 w-full rounded-[22px] bg-danger/12 px-4 text-sm font-semibold text-danger"
-        >
-          {isTestRound ? "Delete Test Round" : "Cancel Current Round"}
-        </button>
-      </SectionCard>
+      )}
     </div>
   );
 }
@@ -222,8 +248,6 @@ export function SkinsOnlyRoundView({
   isTestRound,
   saveState,
   lastSavedAt,
-  onDeleteRound,
-  onForceDeleteRound,
   onOpenEntry
 }: SharedProps & {
   onOpenEntry: () => void;
@@ -237,22 +261,26 @@ export function SkinsOnlyRoundView({
       <SectionCard className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Score Save Status</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Status</p>
             <h3 className="mt-1 text-lg font-semibold">
-              {allBackSubmitted || allPlayersComplete
+              {allBackSubmitted
                 ? "All players submitted"
-                : saveState.tone === "saving"
-                ? "Saving..."
-                : saveState.tone === "failed"
-                  ? "Save failed"
-                  : saveState.tone === "saved"
-                    ? "Saved"
-                    : "Ready to score"}
+                : allPlayersComplete
+                  ? "Final scores ready for submission"
+                  : saveState.tone === "saving"
+                    ? "Saving..."
+                    : saveState.tone === "failed"
+                      ? "Save failed"
+                      : saveState.tone === "saved"
+                        ? "Saved"
+                        : "Ready to score"}
             </h3>
             <p className="mt-1 text-sm text-ink/75">
-              {allBackSubmitted || allPlayersComplete
-                ? "Round finalization is in progress or this round has already been submitted."
-                : saveState.message || "Scores only show as saved after the server confirms the write."}
+              {allBackSubmitted
+                ? "All players have submitted. Archive this round from the final results flow when you're ready."
+                : allPlayersComplete
+                  ? "Everyone has reached hole 18. Open score entry to submit final scores."
+                  : saveState.message || "Scores only show as saved after the server confirms the write."}
             </p>
             {lastSavedLabel ? (
               <p className="mt-2 text-xs font-semibold text-pine">{`Last saved at ${lastSavedLabel}`}</p>
@@ -283,21 +311,10 @@ export function SkinsOnlyRoundView({
       </SectionCard>
 
       <SectionCard className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Admin</p>
-        <button
-          type="button"
-          onClick={onForceDeleteRound}
-          className="min-h-12 w-full rounded-[22px] border border-danger/25 bg-white px-4 text-sm font-semibold text-danger"
-        >
-          Force Clear Active Round
-        </button>
-        <button
-          type="button"
-          onClick={onDeleteRound}
-          className="min-h-12 w-full rounded-[22px] bg-danger/12 px-4 text-sm font-semibold text-danger"
-        >
-          {isTestRound ? "Delete Test Round" : "Cancel Current Round"}
-        </button>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Round Controls</p>
+        <p className="text-sm text-ink/65">
+          Current Round is now score-entry only. Round admin actions live on Home now.
+        </p>
       </SectionCard>
     </div>
   );

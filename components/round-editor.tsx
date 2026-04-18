@@ -22,7 +22,6 @@ import {
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
-  calculatePlayerBuyIns,
   calculateRoundRows,
   calculateSideGameResults,
   calculateTeamStandings,
@@ -32,9 +31,9 @@ import {
   holeNumbers,
   teamOptions,
   type CalculatedRoundRow,
+  type PlayerBuyInSummary,
   type RoundMode,
   type SideGameResults,
-  type PlayerBuyInSummary,
   type TeamCode,
   type TeamStanding
 } from "@/lib/quota";
@@ -396,7 +395,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }, [playersById, quotaSnapshot, rows]);
 
   const teamStandings = useMemo(() => calculateTeamStandings(calculatedRows), [calculatedRows]);
-  const playerBuyIns = useMemo(() => calculatePlayerBuyIns(calculatedRows, gameMode), [calculatedRows, gameMode]);
+  const sideGames = useMemo(() => calculateSideGameResults(calculatedRows), [calculatedRows]);
   const invalidSequence = rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
   const hasSavedScores = useMemo(
     () => rows.some((row) => row.holeScores.some((score) => score != null)),
@@ -774,16 +773,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
               ? "All front nines are in. Front-nine result is ready below."
               : "Front nine submitted."
           );
-        } else if (result.completed) {
-          setSaved("Back nine submitted. Final results saved.");
-          router.push(`/rounds/${round.id}/results`);
-          router.refresh();
-          return;
         } else {
           setSaved("Back nine submitted.");
           setMessage(
             result.allBackSubmitted
-              ? "All back nines are in. Final results are ready."
+              ? "All back nines are in. Review final results on Current Round, then archive the round."
               : "Back nine submitted."
           );
         }
@@ -811,8 +805,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       throw new Error(`Team ${team} has no players to submit.`);
     }
 
-    let finalizedRound = false;
-
     for (const playerId of teamPlayerIds) {
       const response = await fetch(`/api/rounds/${round.id}/submit-segment`, {
         method: "POST",
@@ -823,10 +815,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
       if (!response.ok) {
         throw new Error(result.error ?? "Could not submit this segment.");
-      }
-
-      if (result.completed) {
-        finalizedRound = true;
       }
     }
 
@@ -844,18 +832,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setRows(nextRows);
     setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
 
-    if (finalizedRound) {
-      setSaved("Final score submitted. Round complete.");
-      router.push(`/rounds/${round.id}/results`);
-      router.refresh();
-      return;
-    }
-
     setSaved(segment === "front" ? "Front nine submitted." : "Final score submitted.");
     setMessage(
       segment === "front"
         ? `Team ${team} front nine submitted.`
-        : `Team ${team} final score submitted.`
+        : `Team ${team} final score submitted. Review results below once every team submits, then archive the round.`
     );
     router.refresh();
   }
@@ -1101,9 +1082,22 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     saveRound("Round details saved.");
   }
 
-  function completeRound() {
+  function archiveRound() {
     if (invalidSequence) {
-      setMessage("Finish holes in order before completing the round.");
+      setMessage("Finish holes in order before archiving the round.");
+      return;
+    }
+
+    if (!allBackSubmitted) {
+      setMessage("Every team must submit final scores before you can archive this round.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Archive Round?\n\nThis will move the round to Past Games, update player quotas, and clear it from Current Round."
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -1116,17 +1110,17 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         });
         const result = await response.json();
         if (!response.ok) {
-          throw new Error(result.error ?? "Could not complete round.");
+          throw new Error(result.error ?? "Could not archive round.");
         }
         setMessage(
           isTestRound
-            ? "Test round completed. Player quotas were not updated."
-            : "Round completed."
+            ? "Test round archived. Player quotas were not updated."
+            : "Round archived."
         );
-        router.push(`/rounds/${round.id}/results`);
+        router.push("/current-round");
         router.refresh();
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not complete round.");
+        setMessage(error instanceof Error ? error.message : "Could not archive round.");
       }
     });
   }
@@ -1836,8 +1830,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           isTestRound={isTestRound}
           saveState={saveState}
           lastSavedAt={lastSavedAt}
-          onDeleteRound={deleteRound}
-          onForceDeleteRound={forceDeleteRound}
           onOpenEntry={openSkinsEntry}
         />
       ) : (
@@ -1846,11 +1838,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           rowStates={rows}
           teamStandings={teamStandings}
           teamRowsByCode={teamRowsByCode}
+          sideGames={sideGames}
           isTestRound={isTestRound}
           saveState={saveState}
           lastSavedAt={lastSavedAt}
-          onDeleteRound={deleteRound}
-          onForceDeleteRound={forceDeleteRound}
+          isArchiving={isPending}
+          onArchiveRound={archiveRound}
           onOpenTeam={openTeam}
         />
       )}

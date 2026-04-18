@@ -14,6 +14,43 @@ export function ForceClearActiveRound({
   const [isPending, setIsPending] = useState(false);
   const [message, setMessage] = useState("");
 
+  async function runAction(url: string, successMessage: string, fallbackError: string) {
+    setIsPending(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(url, {
+        method: "DELETE"
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setMessage(result.error ?? fallbackError);
+        return;
+      }
+
+      setMessage(successMessage);
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : fallbackError);
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function handleCancelRound() {
+    const confirmed = window.confirm(
+      `Cancel ${roundName}?\n\nUse this only if the round was created by mistake and should be removed from the live flow.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await runAction(`/api/rounds/${roundId}`, "Current round canceled.", "Could not cancel the current round.");
+  }
+
   async function handleForceClear() {
     const confirmation = window.prompt(
       `Force clear ${roundName}? This permanently removes the current live round and its unfinished data. Type DELETE to confirm.`
@@ -29,50 +66,41 @@ export function ForceClearActiveRound({
       return;
     }
 
-    setIsPending(true);
-    setMessage("");
-
-    try {
-      const response = await fetch(`/api/rounds/${roundId}?force=1`, {
-        method: "DELETE"
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        setMessage(result.error ?? "Could not clear the active round.");
-        return;
-      }
-
-      setMessage("Active round cleared.");
-      router.push("/");
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not clear the active round.");
-    } finally {
-      setIsPending(false);
-    }
+    await runAction(
+      `/api/rounds/${roundId}?force=1`,
+      "Active round cleared.",
+      "Could not clear the active round."
+    );
   }
 
   return (
-    <div className="club-card space-y-2 px-4 py-4">
+    <div className="club-card-muted space-y-3 px-4 py-4">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-danger/80">
-          Temporary Admin
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/45">
+          Low-Risk Admin
         </p>
-        <h3 className="mt-1 text-lg font-semibold text-ink">Force Clear Active Round</h3>
-        <p className="mt-1 text-sm text-ink/70">
-          Use this only if the live round is stuck and Home keeps reopening it.
+        <h3 className="mt-1 text-base font-semibold text-ink">Round Cleanup</h3>
+        <p className="mt-1 text-sm text-ink/65">
+          These controls live on Home only so they are harder to hit during play.
         </p>
       </div>
       <button
         type="button"
         disabled={isPending}
-        onClick={handleForceClear}
-        className="club-btn-danger min-h-12 w-full rounded-[20px] disabled:opacity-45"
+        onClick={handleCancelRound}
+        className="club-btn-secondary min-h-11 w-full rounded-[20px] text-sm font-semibold disabled:opacity-45"
       >
-        {isPending ? "Clearing Active Round..." : "Force Clear Active Round"}
+        {isPending ? "Working..." : "Cancel Current Round"}
       </button>
-      {message ? <p className="text-sm font-medium text-danger">{message}</p> : null}
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={handleForceClear}
+        className="min-h-11 w-full rounded-[20px] border border-danger/20 bg-transparent px-4 text-sm font-semibold text-danger disabled:opacity-45"
+      >
+        Force Clear Active Round
+      </button>
+      {message ? <p className="text-sm font-medium text-ink/70">{message}</p> : null}
     </div>
   );
 }
