@@ -57,14 +57,18 @@ function formatQuotaResult(value: number) {
 
 function formatMovement(value: number | null) {
   if (value == null) {
-    return "—";
+    return "-";
   }
 
   return value === 0 ? "0" : formatSignedValue(value);
 }
 
+function getLatestRound(player: PlayerItem) {
+  return player.history[0] ?? null;
+}
+
 function getLastRoundLabel(player: PlayerItem) {
-  const latestRound = player.history[0];
+  const latestRound = getLatestRound(player);
   if (!latestRound) {
     return "No rounds yet";
   }
@@ -72,9 +76,18 @@ function getLastRoundLabel(player: PlayerItem) {
   return getPreferredRoundName(latestRound.roundName, latestRound.roundDate);
 }
 
-function getLastRoundMovement(player: PlayerItem) {
-  const latestRound = player.history[0];
-  return latestRound ? latestRound.quotaMovement : null;
+function getPreviousQuota(player: PlayerItem) {
+  const latestRound = getLatestRound(player);
+  return latestRound ? latestRound.startQuota : null;
+}
+
+function getAdjustmentLabel(player: PlayerItem) {
+  const latestRound = getLatestRound(player);
+  if (!latestRound) {
+    return "No history yet";
+  }
+
+  return `${formatMovement(latestRound.quotaMovement)} on ${getLastRoundLabel(player)}`;
 }
 
 export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[] }) {
@@ -272,52 +285,36 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
 
           <div className="space-y-3">
             {groupedPlayers.map((player) => {
-              const latestRound = player.history[0] ?? null;
               const isHistoryOpen = openHistoryPlayerId === player.id;
 
               return (
-                <SectionCard key={player.id} className="p-4">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-semibold text-ink">{player.name}</h3>
-                          <span
-                            className={classNames(
-                              "rounded-full px-2.5 py-1 text-xs font-semibold",
-                              player.isActive ? "bg-fairway/15 text-pine" : "bg-ink/10 text-ink/60"
-                            )}
-                          >
-                            {player.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </div>
-                        <div className="mt-3 space-y-1.5 text-sm text-ink/70">
-                          <p>
-                            Quota <span className="font-semibold text-ink">{player.quota}</span>
-                          </p>
-                          <p>
-                            Last round <span className="font-semibold text-ink">{getLastRoundLabel(player)}</span>
-                          </p>
-                          <p>
-                            Movement <span className="font-semibold text-ink">{formatMovement(getLastRoundMovement(player))}</span>
-                          </p>
-                          <p>
-                            Avoid pairings <span className="font-semibold text-ink">{player.conflictIds.length}</span>
-                          </p>
-                        </div>
+                <SectionCard key={player.id} className="p-3">
+                  <div className="space-y-2.5">
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-ink">{player.name}</h3>
+                      <div className="mt-1.5 space-y-0.5 text-sm leading-5 text-ink/70">
+                        <p>
+                          Current quota: <span className="font-semibold text-ink">{player.quota}</span>
+                        </p>
+                        <p>
+                          Previous quota: <span className="font-semibold text-ink">{getPreviousQuota(player) ?? "-"}</span>
+                        </p>
+                        <p>
+                          Adjustment: <span className="font-semibold text-ink">{getAdjustmentLabel(player)}</span>
+                        </p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        className="club-btn-primary min-h-12 text-sm"
+                        className="club-btn-primary min-h-11 text-sm"
                         type="button"
                         onClick={() => toggleHistory(player.id)}
                       >
                         {isHistoryOpen ? "Hide History" : "See History"}
                       </button>
                       <button
-                        className="club-btn-secondary min-h-12 text-sm"
+                        className="club-btn-secondary min-h-11 text-sm"
                         type="button"
                         onClick={() => handleEdit(player)}
                       >
