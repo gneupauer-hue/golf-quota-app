@@ -19,7 +19,7 @@ type PlayerRow = {
 type RoundRow = {
   id: string;
   roundName: string;
-  roundDate: number;
+  roundDate: number | null;
   completedAt: number | null;
   createdAt: number;
 };
@@ -32,6 +32,11 @@ type EntryRow = {
   team: string | null;
   startQuota: number;
   holeScores: Array<number | null>;
+};
+
+type RoundCandidate = RoundRow & {
+  displayName: string;
+  displayDate: number;
 };
 
 function parseArgs(argv: string[]): CliOptions {
@@ -90,6 +95,34 @@ function parseDateToEpoch(value: string) {
   return parsed;
 }
 
+function formatRoundNameFromEpoch(epoch: number) {
+  const value = new Date(epoch);
+  const month = value.getUTCMonth() + 1;
+  const day = value.getUTCDate();
+  return `${month}.${day}`;
+}
+
+function getDisplayDate(round: RoundRow) {
+  return round.roundDate ?? round.completedAt ?? round.createdAt;
+}
+
+function getDisplayName(round: RoundRow) {
+  const trimmedName = round.roundName?.trim();
+  if (trimmedName) {
+    return trimmedName;
+  }
+
+  return formatRoundNameFromEpoch(getDisplayDate(round));
+}
+
+function normalizeRoundCandidate(round: RoundRow): RoundCandidate {
+  return {
+    ...round,
+    displayName: getDisplayName(round),
+    displayDate: getDisplayDate(round)
+  };
+}
+
 function getCompletedRounds(db: DatabaseSync): RoundRow[] {
   return db
     .prepare(
@@ -136,19 +169,54 @@ function getEntriesForRound(db: DatabaseSync, roundId: string): EntryRow[] {
   }));
 }
 
+function selectTargetRound(db: DatabaseSync, options: CliOptions) {
+  if (options.roundId) {
+    const exactRound = db
+      .prepare("select id, roundName, roundDate, completedAt, createdAt from Round where id = ?")
+      .get(options.roundId) as RoundRow | undefined;
+
+    return {
+      targetRound: exactRound ? normalizeRoundCandidate(exactRound) : null,
+      candidates: exactRound ? [normalizeRoundCandidate(exactRound)] : []
+    };
+  }
+
+  const completedRounds = getCompletedRounds(db).map(normalizeRoundCandidate);
+  const desiredName = options.matchName?.trim().toLowerCase();
+
+  if (!desiredName) {
+    return {
+      targetRound: null,
+      candidates: completedRounds
+    };
+  }
+
+  const candidates = completedRounds.filter((round) => {
+    const storedName = round.roundName?.trim().toLowerCase();
+    const displayName = round.displayName.trim().toLowerCase();
+    return storedName === desiredName || displayName === desiredName;
+  });
+
+  return {
+    targetRound: candidates[0] ?? null,
+    candidates: completedRounds
+  };
+}
+
 function repairRoundMetadata(db: DatabaseSync, options: CliOptions) {
-  const targetRound = options.roundId
-    ? (db
-        .prepare("select id, roundName, roundDate, completedAt, createdAt from Round where id = ?")
-        .get(options.roundId) as RoundRow | undefined)
-    : (db
-        .prepare(
-          "select id, roundName, roundDate, completedAt, createdAt from Round where completedAt is not null and roundName = ? order by roundDate asc, completedAt asc, createdAt asc limit 1"
-        )
-        .get(options.matchName ?? "") as RoundRow | undefined);
+  const { targetRound, candidates } = selectTargetRound(db, options);
 
   if (!targetRound) {
-    return null;
+    return {
+      repairedRound: null,
+      candidates: candidates.map((round) => ({
+        id: round.id,
+        roundName: round.roundName,
+        displayName: round.displayName,
+        displayDate: new Date(round.displayDate).toISOString(),
+        completedAt: round.completedAt ? new Date(round.completedAt).toISOString() : null
+      }))
+    };
   }
 
   const nextRoundDate = parseDateToEpoch(options.newDate);
@@ -159,11 +227,21 @@ function repairRoundMetadata(db: DatabaseSync, options: CliOptions) {
   );
 
   return {
-    id: targetRound.id,
-    previousName: targetRound.roundName,
-    previousRoundDate: targetRound.roundDate,
-    nextName: options.newName,
-    nextRoundDate
+    repairedRound: {
+      id: targetRound.id,
+      previousName: targetRound.roundName,
+      previousDisplayName: targetRound.displayName,
+      previousRoundDate: targetRound.roundDate,
+      nextName: options.newName,
+      nextRoundDate
+    },
+    candidates: candidates.map((round) => ({
+      id: round.id,
+      roundName: round.roundName,
+      displayName: round.displayName,
+      displayDate: new Date(round.displayDate).toISOString(),
+      completedAt: round.completedAt ? new Date(round.completedAt).toISOString() : null
+    }))
   };
 }
 
@@ -244,18 +322,19 @@ function main() {
   db.exec("begin immediate transaction");
 
   try {
-    const repairedRound = repairRoundMetadata(db, options);
+    const repair = repairRoundMetadata(db, options);
     const rebuild = rebuildQuotaHistory(db);
     db.exec("commit");
 
     console.log(
       JSON.stringify(
         {
-          repairedRound,
+          repairedRound: repair.repairedRound,
+          candidates: repair.candidates,
           rebuild,
-          note: repairedRound
+          note: repair.repairedRound
             ? "Archived round updated and quota history rebuilt."
-            : "No matching archived round was found in this SQLite database. Quota history was rebuilt without renaming a round."
+            : "No matching archived round was found in this SQLite database. Candidate completed rounds are included above for verification."
         },
         null,
         2
