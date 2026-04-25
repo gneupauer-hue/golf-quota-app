@@ -3,12 +3,14 @@
 import { useMemo, useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
-import { classNames, formatDisplayDate, getPreferredRoundName } from "@/lib/utils";
+import { classNames, formatDisplayDate, getRoundDisplayDate, getRoundDisplayName } from "@/lib/utils";
 
 type PlayerHistoryItem = {
   roundId: string;
   roundName: string;
   roundDate: string | Date;
+  completedAt?: string | Date | null;
+  createdAt?: string | Date | null;
   totalPoints: number;
   startQuota: number;
   plusMinus: number;
@@ -73,7 +75,12 @@ function getLastRoundLabel(player: PlayerItem) {
     return "No rounds yet";
   }
 
-  return getPreferredRoundName(latestRound.roundName, latestRound.roundDate);
+  return getRoundDisplayName({
+    roundName: latestRound.roundName,
+    roundDate: latestRound.roundDate,
+    completedAt: latestRound.completedAt,
+    createdAt: latestRound.createdAt
+  });
 }
 
 function getPreviousQuota(player: PlayerItem) {
@@ -338,10 +345,22 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     <p className="text-base font-semibold text-ink">
-                                      {getPreferredRoundName(item.roundName, item.roundDate)}
+                                      {getRoundDisplayName({
+                                      roundName: item.roundName,
+                                      roundDate: item.roundDate,
+                                      completedAt: item.completedAt,
+                                      createdAt: item.createdAt
+                                    })}
                                     </p>
                                     <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
-                                      {formatDisplayDate(item.roundDate)}
+                                      {formatDisplayDate(
+                                      getRoundDisplayDate({
+                                        roundName: item.roundName,
+                                        roundDate: item.roundDate,
+                                        completedAt: item.completedAt,
+                                        createdAt: item.createdAt
+                                      })
+                                    )}
                                     </p>
                                   </div>
                                 </div>

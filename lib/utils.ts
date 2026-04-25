@@ -43,12 +43,42 @@ export function formatRoundNameFromDate(date: Date | string) {
   return `${month}.${day}`;
 }
 
-export function getPreferredRoundName(roundName: string | null | undefined, roundDate: Date | string) {
-  const trimmedName = roundName?.trim();
+type RoundDisplayInput = {
+  roundName?: string | null;
+  roundDate?: Date | string | null;
+  completedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+};
+
+function normalizeDisplayDate(input: RoundDisplayInput) {
+  if (input.roundDate) {
+    return input.roundDate;
+  }
+
+  if (input.completedAt) {
+    return input.completedAt;
+  }
+
+  if (input.createdAt) {
+    return input.createdAt;
+  }
+
+  return new Date();
+}
+
+export function getRoundDisplayDate(input: RoundDisplayInput) {
+  return normalizeDisplayDate(input);
+}
+
+export function getRoundDisplayName(input: RoundDisplayInput) {
+  const trimmedName = input.roundName?.trim();
   if (trimmedName) {
     return trimmedName;
   }
 
-  return formatRoundNameFromDate(roundDate);
+  return formatRoundNameFromDate(normalizeDisplayDate(input));
 }
 
+export function getPreferredRoundName(roundName: string | null | undefined, roundDate: Date | string) {
+  return getRoundDisplayName({ roundName, roundDate });
+}

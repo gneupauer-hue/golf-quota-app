@@ -101,6 +101,11 @@ export async function getPlayersPageData() {
           },
           {
             round: {
+              completedAt: "desc"
+            }
+          },
+          {
+            round: {
               createdAt: "desc"
             }
           }
@@ -114,7 +119,9 @@ export async function getPlayersPageData() {
             select: {
               id: true,
               roundName: true,
-              roundDate: true
+              roundDate: true,
+              completedAt: true,
+              createdAt: true
             }
           }
         }
@@ -132,6 +139,8 @@ export async function getPlayersPageData() {
         roundId: entry.round.id,
         roundName: entry.round.roundName,
         roundDate: entry.round.roundDate,
+        completedAt: entry.round.completedAt,
+        createdAt: entry.round.createdAt,
         totalPoints: entry.totalPoints,
         startQuota: entry.startQuota,
         plusMinus: entry.plusMinus,
@@ -452,7 +461,7 @@ export async function getRoundsList() {
         }
       }
     },
-    orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }]
+    orderBy: [{ roundDate: "desc" }, { completedAt: "desc" }, { createdAt: "desc" }]
   });
 
   return (rounds as any[]).map((round: any) => {
@@ -503,7 +512,7 @@ export async function getPastGamesList() {
         }
       }
     },
-    orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }]
+    orderBy: [{ roundDate: "desc" }, { completedAt: "desc" }, { createdAt: "desc" }]
   });
 
   return (rounds as any[]).map((round: any) => {
@@ -937,7 +946,7 @@ export async function getHomePageData() {
     prisma.player.count({ where: { isActive: true } }),
     prisma.round.count(),
     prisma.round.findFirst({
-      orderBy: [{ roundDate: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ roundDate: "desc" }, { completedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         roundName: true,

@@ -7,7 +7,7 @@ import {
   formatPlusMinus,
   type TeamCode
 } from "@/lib/quota";
-import { classNames, formatDisplayDate, getPreferredRoundName } from "@/lib/utils";
+import { classNames, formatDisplayDate, getRoundDisplayDate, getRoundDisplayName } from "@/lib/utils";
 
 type ResultsData = {
   round: {
@@ -18,6 +18,7 @@ type ResultsData = {
     isPayoutLocked: boolean;
     paidPlayerIds: string[];
     notes: string | null;
+    createdAt?: Date | string | null;
     completedAt: Date | string | null;
   };
   entries: Array<{
@@ -157,7 +158,18 @@ export function RoundResults({ data }: { data: ResultsData }) {
   const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
   const payoutAudit = calculatePayoutAudit(data.entries, data.round.roundMode);
-  const preferredRoundName = getPreferredRoundName(data.round.roundName, data.round.roundDate);
+  const displayRoundName = getRoundDisplayName({
+    roundName: data.round.roundName,
+    roundDate: data.round.roundDate,
+    completedAt: data.round.completedAt,
+    createdAt: data.round.createdAt
+  });
+  const displayRoundDate = getRoundDisplayDate({
+    roundName: data.round.roundName,
+    roundDate: data.round.roundDate,
+    completedAt: data.round.completedAt,
+    createdAt: data.round.createdAt
+  });
   const indyCashers = data.money.individualPayouts.filter((player) => player.payout > 0);
   const indyRankings = data.money.individualRankings;
   const indyWinnerIds = new Set(indyCashers.map((player) => player.playerId));
@@ -185,8 +197,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
   return (
     <div className="space-y-3 pb-8">
       <PageTitle
-        title={`${preferredRoundName} Results`}
-        subtitle={`Round date ${formatDisplayDate(data.round.roundDate)}`}
+        title={`${displayRoundName} Results`}
+        subtitle={`Round date ${formatDisplayDate(displayRoundDate)}`}
       />
 
       <SectionCard className="space-y-4 bg-grove text-white">
@@ -231,7 +243,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
             <div className="rounded-[22px] border border-white/12 bg-white/8 px-4 py-3.5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Round Summary</p>
               <p className="mt-2 text-xl font-bold tracking-tight text-white">
-                {topIndividual ? topIndividual.playerName : preferredRoundName}
+                {topIndividual ? topIndividual.playerName : displayRoundName}
               </p>
               <p className="mt-2 text-sm text-white/75">
                 {topIndividual
@@ -416,7 +428,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                   <p className="text-lg font-bold text-ink">{player.playerName}</p>
                   <p className="mt-1 text-sm text-ink/60">
                     {`Place ${player.placeLabel}`}
-                    {player.tied ? " • Tie split" : ""}
+                    {player.tied ? " â€¢ Tie split" : ""}
                   </p>
                 </div>
                 <div className="text-right">

@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
-import { formatDisplayDate, getPreferredRoundName } from "@/lib/utils";
+import { formatDisplayDate, getRoundDisplayDate, getRoundDisplayName } from "@/lib/utils";
 
 type RoundSummary = {
   id: string;
   roundName: string;
   roundDate: Date | string;
   roundMode?: "MATCH_QUOTA" | "SKINS_ONLY";
+  createdAt?: Date | string | null;
   isTestRound?: boolean;
   notes: string | null;
   completedAt: Date | string | null;
@@ -69,9 +70,21 @@ export function PastRounds({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-grove px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
-                      {getPreferredRoundName(round.roundName, round.roundDate)}
+                      {getRoundDisplayName({
+                      roundName: round.roundName,
+                      roundDate: round.roundDate,
+                      completedAt: round.completedAt,
+                      createdAt: round.createdAt
+                    })}
                     </span>
-                    <span className="club-pill">{formatDisplayDate(round.roundDate)}</span>
+                    <span className="club-pill">{formatDisplayDate(
+                      getRoundDisplayDate({
+                        roundName: round.roundName,
+                        roundDate: round.roundDate,
+                        completedAt: round.completedAt,
+                        createdAt: round.createdAt
+                      })
+                    )}</span>
                     <span className="club-pill">{formatModeLabel(round.roundMode)}</span>
                     <span className="club-pill">
                       {round.entryCount} {round.entryCount === 1 ? "player" : "players"}

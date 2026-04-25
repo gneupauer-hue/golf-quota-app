@@ -256,7 +256,7 @@ export async function recomputeHistoricalState(tx: Tx) {
         }
       }
     },
-    orderBy: [{ roundDate: "asc" }, { createdAt: "asc" }]
+    orderBy: [{ roundDate: "asc" }, { completedAt: "asc" }, { createdAt: "asc" }]
   });
 
   for (const round of rounds) {
@@ -377,7 +377,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
         }
       }
     },
-    orderBy: [{ roundDate: "asc" }, { createdAt: "asc" }]
+    orderBy: [{ roundDate: "asc" }, { completedAt: "asc" }, { createdAt: "asc" }]
   });
 
   for (const round of priorRounds) {
