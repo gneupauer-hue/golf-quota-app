@@ -512,7 +512,7 @@ export async function getPastGamesList() {
         }
       }
     },
-    orderBy: [{ roundDate: "desc" }, { completedAt: "desc" }, { createdAt: "desc" }]
+    orderBy: [{ completedAt: "desc" }, { roundDate: "desc" }, { createdAt: "desc" }]
   });
 
   return (rounds as any[]).map((round: any) => {
