@@ -1,4 +1,7 @@
-﻿import Link from "next/link";
+﻿"use client";
+
+import Link from "next/link";
+import { useState } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import {
@@ -105,6 +108,13 @@ type ResultsData = {
   };
 };
 
+type CollapsibleSectionProps = {
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  children: React.ReactNode;
+};
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -117,14 +127,9 @@ function teamCardTone(isWinner: boolean) {
   return isWinner ? "border-[#5A9764] bg-[#EAF6EC]" : "border-ink/10 bg-canvas";
 }
 
-function getTeamLabel(team: TeamCode | null) {
-  return team ? `Team ${team}` : "Tied";
-}
-
 function formatQuotaResult(value: number) {
   return value === 0 ? "Even" : formatPlusMinus(value);
 }
-
 
 function formatIndyRankingDetail(totalPoints: number, startQuota: number, plusMinus: number) {
   return `Points ${totalPoints} / Quota ${startQuota} = ${formatQuotaResult(plusMinus)}`;
@@ -140,11 +145,50 @@ function ResultStatCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/45">{title}</p>
-      <p className="mt-2 text-2xl font-bold tracking-tight text-ink">{value}</p>
-      {detail ? <p className="mt-2 text-sm text-ink/60">{detail}</p> : null}
+    <div className="rounded-[20px] border border-ink/10 bg-canvas px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">{title}</p>
+      <p className="mt-1.5 text-xl font-bold tracking-tight text-ink">{value}</p>
+      {detail ? <p className="mt-1.5 text-sm text-ink/60">{detail}</p> : null}
     </div>
+  );
+}
+
+function CollapsibleSection({ title, subtitle, badge, children }: CollapsibleSectionProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <SectionCard className="overflow-hidden px-0 py-0">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-ink/50">{title}</p>
+            {badge ? (
+              <span className="rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold text-ink/70">
+                {badge}
+              </span>
+            ) : null}
+          </div>
+          {subtitle ? <p className="mt-1 text-sm text-ink/65">{subtitle}</p> : null}
+        </div>
+        <span className="shrink-0 pt-0.5 text-xs font-semibold text-ink/55">
+          {open ? "Tap to collapse" : "Click to expand"}
+        </span>
+      </button>
+      <div
+        className={classNames(
+          "grid transition-all duration-200 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-ink/10 px-4 py-3">{children}</div>
+        </div>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -165,26 +209,19 @@ export function RoundResults({ data }: { data: ResultsData }) {
 
   return (
     <div className="space-y-3 pb-8">
-      <PageTitle
-        title="Results"
-        subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`}
-      />
+      <PageTitle title="Results" subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`} />
       <Link
         href="/past-games"
         className="inline-flex min-h-11 items-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
       >
         ← See All Results
       </Link>
-      {data.teamStandings.length ? (
-        <SectionCard className="space-y-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Team Results
-            </p>
-            <p className="mt-1 text-sm text-ink/65">
-              Front, back, and total results with each team's quota targets.
-            </p>
-          </div>
+
+      <CollapsibleSection
+        title="Team Results"
+        subtitle="Final front, back, and total team performance."
+      >
+        {data.teamStandings.length ? (
           <div className="space-y-2">
             {data.teamStandings.map((team) => {
               const winningFront = data.leaders.frontTeam?.team === team.team;
@@ -195,7 +232,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                 <div
                   key={team.team}
                   className={classNames(
-                    "rounded-[24px] border px-4 py-4",
+                    "rounded-[22px] border px-4 py-4",
                     winningTotal ? "border-[#5A9764] bg-[#E2F4E6]" : "border-ink/10 bg-canvas"
                   )}
                 >
@@ -255,21 +292,16 @@ export function RoundResults({ data }: { data: ResultsData }) {
               );
             })}
           </div>
-        </SectionCard>
-      ) : null}
+        ) : (
+          <p className="text-sm text-ink/65">No team results available.</p>
+        )}
+      </CollapsibleSection>
 
-      <SectionCard className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Pot Summary
-            </p>
-            <p className="mt-1 text-sm text-ink/65">Round pots and paid-player summary.</p>
-          </div>
-          <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink/70">
-            {`${payoutSummary.players.length} paid`}
-          </span>
-        </div>
+      <CollapsibleSection
+        title="Pot Summary"
+        subtitle="Round pots and paid-player summary."
+        badge={`${payoutSummary.players.length} paid`}
+      >
         <div className="grid grid-cols-2 gap-2.5">
           <ResultStatCard
             title="Team Pots"
@@ -296,21 +328,14 @@ export function RoundResults({ data }: { data: ResultsData }) {
             detail={`${data.money.overallPot.playerCount} players`}
           />
         </div>
-      </SectionCard>
+      </CollapsibleSection>
 
-      {!isSkinsOnly && indyCashers.length ? (
-        <SectionCard className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-                Indy Cashers
-              </p>
-              <p className="mt-1 text-sm text-ink/65">Only players who cashed in the field payout.</p>
-            </div>
-            <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink/70">
-              {`${indyCashers.length} paid`}
-            </span>
-          </div>
+      <CollapsibleSection
+        title="Indy Cashers"
+        subtitle="Only players who cashed in the field payout."
+        badge={!isSkinsOnly ? `${indyCashers.length} paid` : undefined}
+      >
+        {!isSkinsOnly && indyCashers.length ? (
           <div className="space-y-2">
             {indyCashers.map((player) => (
               <div
@@ -321,7 +346,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                   <p className="text-lg font-bold text-ink">{player.playerName}</p>
                   <p className="mt-1 text-sm text-ink/60">
                     {`Place ${player.placeLabel}`}
-                    {player.tied ? " Ã¢â‚¬Â¢ Tie split" : ""}
+                    {player.tied ? " - Tie split" : ""}
                   </p>
                 </div>
                 <div className="text-right">
@@ -333,17 +358,16 @@ export function RoundResults({ data }: { data: ResultsData }) {
               </div>
             ))}
           </div>
-        </SectionCard>
-      ) : null}
+        ) : (
+          <p className="text-sm text-ink/65">No Indy cashers.</p>
+        )}
+      </CollapsibleSection>
 
-      {goodSkins.length ? (
-        <SectionCard className="space-y-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Good Skins
-            </p>
-            <p className="mt-1 text-sm text-ink/65">Awarded winners only after tie and carryover resolution.</p>
-          </div>
+      <CollapsibleSection
+        title="Good Skins"
+        subtitle="Awarded winners only after tie and carryover resolution."
+      >
+        {goodSkins.length ? (
           <div className="space-y-2">
             {goodSkins.map((hole) => (
               <div
@@ -357,36 +381,25 @@ export function RoundResults({ data }: { data: ResultsData }) {
               </div>
             ))}
           </div>
-        </SectionCard>
-      ) : null}
+        ) : (
+          <p className="text-sm text-ink/65">No good skins awarded.</p>
+        )}
+      </CollapsibleSection>
 
-      <SectionCard className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Skins Pot
-            </p>
-            <p className="mt-1 text-sm text-ink/65">Awarded skins, paid total, and leftover.</p>
-          </div>
-          <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink/70">
-            {`${data.money.skins.totalSkinSharesWon} awarded`}
-          </span>
-        </div>
+      <CollapsibleSection
+        title="Skins Pot"
+        subtitle="Awarded skins, paid total, and leftover."
+        badge={`${data.money.skins.totalSkinSharesWon} awarded`}
+      >
         <div className="grid grid-cols-2 gap-2.5">
           <ResultStatCard title="Skins Pot" value={formatCurrency(data.money.skins.totalPot)} />
           <ResultStatCard title="Per Skin" value={formatCurrency(data.money.skins.valuePerSkin)} />
           <ResultStatCard title="Total Paid" value={formatCurrency(data.money.skins.totalDistributed)} />
           <ResultStatCard title="Leftover" value={formatCurrency(data.money.skins.leftover)} />
         </div>
-      </SectionCard>
+      </CollapsibleSection>
 
-      <SectionCard className="space-y-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-            Indy Rankings
-          </p>
-          <p className="mt-1 text-sm text-ink/65">Final standings versus quota.</p>
-        </div>
+      <CollapsibleSection title="Indy Rankings" subtitle="Final standings versus quota.">
         {!isSkinsOnly && indyRankings.length ? (
           <div className="space-y-2">
             {indyRankings.map((player) => {
@@ -416,23 +429,15 @@ export function RoundResults({ data }: { data: ResultsData }) {
             })}
           </div>
         ) : (
-          <p className="text-sm text-ink/65">No Indy results</p>
+          <p className="text-sm text-ink/65">No Indy results.</p>
         )}
-      </SectionCard>
+      </CollapsibleSection>
 
-      <SectionCard className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Payout Summary
-            </p>
-            <p className="mt-1 text-sm text-ink/65">Only paid players and winning categories.</p>
-          </div>
-          <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink/70">
-            {formatCurrency(payoutAudit.overallPaidOut)}
-          </span>
-        </div>
-
+      <CollapsibleSection
+        title="Payout Summary"
+        subtitle="Only paid players and winning categories."
+        badge={formatCurrency(payoutAudit.overallPaidOut)}
+      >
         {payoutSummary.players.length ? (
           <div className="space-y-2">
             {payoutSummary.players.map((player) => {
@@ -474,35 +479,20 @@ export function RoundResults({ data }: { data: ResultsData }) {
         )}
 
         {payoutSummary.skinsLeftover > 0 ? (
-          <div className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5">
+          <div className="mt-2 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5">
             <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Leftover</p>
             <p className="mt-1 text-base font-semibold text-ink">
               {`${formatCurrency(payoutSummary.skinsLeftover)} discretionary / possible bartender tip`}
             </p>
           </div>
         ) : null}
-      </SectionCard>
+      </CollapsibleSection>
 
-      <SectionCard className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Pot Check
-            </p>
-            <p className="mt-1 text-sm text-ink/65">
-              Final reconciliation of pots, payouts, skins, and leftover.
-            </p>
-          </div>
-          <span
-            className={classNames(
-              "rounded-full px-3 py-1.5 text-xs font-semibold",
-              payoutAudit.passed ? "bg-[#E2F4E6] text-pine" : "bg-[#FCE5E2] text-danger"
-            )}
-          >
-            {payoutAudit.passed ? "Passed" : "Needs review"}
-          </span>
-        </div>
-
+      <CollapsibleSection
+        title="Pot Check"
+        subtitle="Final reconciliation of pots, payouts, skins, and leftover."
+        badge={payoutAudit.passed ? "Passed" : "Needs review"}
+      >
         <div className="grid grid-cols-2 gap-2.5">
           <ResultStatCard title="Front Pot" value={formatCurrency(payoutAudit.frontPot)} />
           <ResultStatCard title="Back Pot" value={formatCurrency(payoutAudit.backPot)} />
@@ -512,14 +502,14 @@ export function RoundResults({ data }: { data: ResultsData }) {
           <ResultStatCard title="Overall Pot" value={formatCurrency(payoutAudit.overallPot)} />
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="mt-2.5 grid grid-cols-2 gap-2.5">
           <ResultStatCard title="Good Skins Awarded" value={`${payoutAudit.goodSkinsAwarded}`} />
           <ResultStatCard title="Per Skin Value" value={formatCurrency(payoutAudit.perSkinValue)} />
           <ResultStatCard title="Total Skins Paid" value={formatCurrency(payoutAudit.skinsPaid)} />
           <ResultStatCard title="Leftover" value={formatCurrency(payoutAudit.leftover)} />
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="mt-2.5 grid grid-cols-2 gap-2.5">
           <ResultStatCard title="Total Front Paid" value={formatCurrency(payoutAudit.frontPaid)} />
           <ResultStatCard title="Total Back Paid" value={formatCurrency(payoutAudit.backPaid)} />
           <ResultStatCard title="Total Match Paid" value={formatCurrency(payoutAudit.totalMatchPaid)} />
@@ -528,7 +518,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
           <ResultStatCard title="Overall Paid Out" value={formatCurrency(payoutAudit.overallPaidOut)} />
         </div>
 
-        <div className="space-y-2">
+        <div className="mt-2.5 space-y-2">
           {payoutAudit.checks.map((check) => (
             <div
               key={check.label}
@@ -537,16 +527,17 @@ export function RoundResults({ data }: { data: ResultsData }) {
                 check.passed ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-danger/20 bg-[#FCE5E2]"
               )}
             >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-ink">{check.label}</p>
-                  <p className={classNames("text-sm font-semibold", check.passed ? "text-pine" : "text-danger")}>
-                    {formatPayoutAuditStatus(check.label, check.difference)}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-ink">{check.label}</p>
+                <p className={classNames("text-sm font-semibold", check.passed ? "text-pine" : "text-danger")}>
+                  {formatPayoutAuditStatus(check.label, check.difference)}
+                </p>
               </div>
-            ))}
+            </div>
+          ))}
         </div>
-      </SectionCard>
+      </CollapsibleSection>
+
       <Link
         href="/past-games"
         className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
@@ -556,10 +547,3 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
-
-
-
-
-
-
-
