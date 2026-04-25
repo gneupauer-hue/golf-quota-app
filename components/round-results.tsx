@@ -1,4 +1,5 @@
-﻿import { PageTitle } from "@/components/page-title";
+﻿import Link from "next/link";
+import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import {
   calculatePayoutAudit,
@@ -168,6 +169,12 @@ export function RoundResults({ data }: { data: ResultsData }) {
         title="Results"
         subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`}
       />
+      <Link
+        href="/past-games"
+        className="inline-flex min-h-11 items-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
+      >
+        ← See All Results
+      </Link>
       {data.teamStandings.length ? (
         <SectionCard className="space-y-3">
           <div>
@@ -540,9 +547,17 @@ export function RoundResults({ data }: { data: ResultsData }) {
             ))}
         </div>
       </SectionCard>
+      <Link
+        href="/past-games"
+        className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
+      >
+        ← See All Results
+      </Link>
     </div>
   );
 }
+
+
 
 
 
