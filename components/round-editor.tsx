@@ -500,6 +500,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     useState<LockedScoreAction | null>(null);
   const [quotaAdjustmentPreview, setQuotaAdjustmentPreview] =
     useState<QuotaAdjustmentPreview | null>(null);
+  const [quotaAdjustmentError, setQuotaAdjustmentError] = useState("");
   const derivedRoundName = useMemo(() => formatRoundNameFromDate(roundDate), [roundDate]);
   const displayRoundName = useMemo(() => getPreferredRoundName(round.roundName, roundDate), [round.roundName, roundDate]);
   const isSkinsOnly = gameMode === "SKINS_ONLY";
@@ -1507,6 +1508,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           throw new Error(result.error ?? "Could not load quota adjustments.");
         }
 
+        setQuotaAdjustmentError("");
         setQuotaAdjustmentPreview({
           warning:
             result.warning ??
@@ -1526,6 +1528,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   function closeQuotaAdjustmentPreview() {
+    setQuotaAdjustmentError("");
     setQuotaAdjustmentPreview(null);
     setMessage("Returned to results without posting the round.");
   }
@@ -1535,8 +1538,23 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
+    const invalidPlayers = quotaAdjustmentPreview.rows.filter(
+      (player) => player.startQuota + player.quotaAdjustment !== player.nextQuota
+    );
+
+    if (invalidPlayers.length > 0) {
+      const errorMessage = `Quota approval blocked. Check: ${invalidPlayers
+        .map((player) => player.playerName)
+        .join(", ")}.`;
+      setQuotaAdjustmentError(errorMessage);
+      setMessage(errorMessage);
+      setSaveFailed(errorMessage);
+      return;
+    }
+
     startTransition(async () => {
       try {
+        setQuotaAdjustmentError("");
         setMessage("");
         setSaving("Posting round and applying approved quota changes...");
         const response = await fetch(`/api/rounds/${round.id}/complete`, {
@@ -2378,6 +2396,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
               <h3 className="mt-1 text-xl font-semibold">Review before posting the round</h3>
               <p className="mt-1 text-sm font-medium text-danger">{quotaAdjustmentPreview.warning}</p>
             </div>
+
+            {quotaAdjustmentError ? (
+              <div className="rounded-[22px] bg-[#FCE5E2] px-4 py-3 text-sm font-medium text-danger">
+                {quotaAdjustmentError}
+              </div>
+            ) : null}
 
             <div className="space-y-3">
               {quotaAdjustmentPreview.rows.map((player) => (
