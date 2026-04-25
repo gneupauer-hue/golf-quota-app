@@ -1,7 +1,34 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { finalizeRound } from "@/lib/round-service";
+import { finalizeRound, getRoundCompletionPreview } from "@/lib/round-service";
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const preview = await prisma.$transaction(async (tx) => {
+      return getRoundCompletionPreview(tx, id);
+    });
+
+    return NextResponse.json({
+      ok: true,
+      isTestRound: preview.isTestRound,
+      warning: preview.isTestRound
+        ? "Review carefully. This is a test round, so quotas will not be updated when you post it."
+        : "Review carefully. These quota changes will be used for the next round.",
+      rows: preview.rows
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not load quota adjustments." },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(
   _request: Request,

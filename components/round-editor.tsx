@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -100,6 +100,21 @@ type RowState = {
 type SaveState = {
   tone: "idle" | "saving" | "saved" | "failed";
   message: string;
+};
+
+type QuotaAdjustmentPreviewRow = {
+  playerId: string;
+  playerName: string;
+  startQuota: number;
+  totalPoints: number;
+  quotaAdjustment: number;
+  nextQuota: number;
+};
+
+type QuotaAdjustmentPreview = {
+  warning: string;
+  isTestRound: boolean;
+  rows: QuotaAdjustmentPreviewRow[];
 };
 
 type LockedScoreAction =
@@ -483,6 +498,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [isScoreUnlockOpen, setIsScoreUnlockOpen] = useState(false);
   const [pendingLockedScoreAction, setPendingLockedScoreAction] =
     useState<LockedScoreAction | null>(null);
+  const [quotaAdjustmentPreview, setQuotaAdjustmentPreview] =
+    useState<QuotaAdjustmentPreview | null>(null);
   const derivedRoundName = useMemo(() => formatRoundNameFromDate(roundDate), [roundDate]);
   const displayRoundName = useMemo(() => getPreferredRoundName(round.roundName, roundDate), [round.roundName, roundDate]);
   const isSkinsOnly = gameMode === "SKINS_ONLY";
@@ -1473,34 +1490,77 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
-    const confirmed = window.confirm(
-      "Archive Round?\n\nThis will move the round to Past Games, update player quotas, and clear it from Current Round."
-    );
+    startTransition(async () => {
+      try {
+        setMessage("");
+        setSaving("Saving round before quota review...");
+        await persistRound();
+        const nextSavedRows = rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
+        setSavedRows(nextSavedRows);
 
-    if (!confirmed) {
+        const response = await fetch(`/api/rounds/${round.id}/complete`, {
+          method: "GET"
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not load quota adjustments.");
+        }
+
+        setQuotaAdjustmentPreview({
+          warning:
+            result.warning ??
+            "Review carefully. These quota changes will be used for the next round.",
+          isTestRound: Boolean(result.isTestRound),
+          rows: Array.isArray(result.rows) ? result.rows : []
+        });
+        setMessage("Review quota adjustments before posting the round.");
+        setSaved("Quota adjustments ready for review.");
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Could not load quota adjustments.";
+        setMessage(errorMessage);
+        setSaveFailed(errorMessage);
+      }
+    });
+  }
+
+  function closeQuotaAdjustmentPreview() {
+    setQuotaAdjustmentPreview(null);
+    setMessage("Returned to results without posting the round.");
+  }
+
+  function approveAndPostRound() {
+    if (!quotaAdjustmentPreview) {
       return;
     }
 
     startTransition(async () => {
       try {
-        await persistRound();
-        setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        setMessage("");
+        setSaving("Posting round and applying approved quota changes...");
         const response = await fetch(`/api/rounds/${round.id}/complete`, {
           method: "POST"
         });
         const result = await response.json();
+
         if (!response.ok) {
           throw new Error(result.error ?? "Could not archive round.");
         }
+
+        setQuotaAdjustmentPreview(null);
         setMessage(
-          isTestRound
+          quotaAdjustmentPreview.isTestRound
             ? "Test round archived. Player quotas were not updated."
-            : "Round archived."
+            : "Round archived and quota changes approved."
         );
+        setSaved(quotaAdjustmentPreview.isTestRound ? "Test round posted" : "Round posted");
         router.push("/current-round");
         router.refresh();
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not archive round.");
+        const errorMessage = error instanceof Error ? error.message : "Could not archive round.";
+        setMessage(errorMessage);
+        setSaveFailed(errorMessage);
       }
     });
   }
@@ -2124,7 +2184,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         </p>
                         {selectedMatchFormat ? (
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-pine">
-                            {`Selected format: ${selectedMatchFormat.label}${selectedMatchFormat.subtitle ? ` — ${selectedMatchFormat.subtitle}` : ""}`}
+                            {`Selected format: ${selectedMatchFormat.label}${selectedMatchFormat.subtitle ? ` â€” ${selectedMatchFormat.subtitle}` : ""}`}
                           </p>
                         ) : null}
                       </div>
@@ -2307,6 +2367,87 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           onRefresh={refreshRoundData}
         />
       )}
+
+      {quotaAdjustmentPreview ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-ink/35 p-3 sm:items-center sm:justify-center">
+          <SectionCard className="w-full max-w-2xl space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+                Quota Adjustment Confirmation
+              </p>
+              <h3 className="mt-1 text-xl font-semibold">Review before posting the round</h3>
+              <p className="mt-1 text-sm font-medium text-danger">{quotaAdjustmentPreview.warning}</p>
+            </div>
+
+            <div className="space-y-3">
+              {quotaAdjustmentPreview.rows.map((player) => (
+                <div
+                  key={player.playerId}
+                  className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{player.playerName}</p>
+                      <p className="mt-1 text-xs text-ink/55">
+                        Starting quota {player.startQuota} • Points scored {player.totalPoints}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-ink">New quota {player.nextQuota}</p>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                    <div className="rounded-2xl bg-white px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Starting</p>
+                      <p className="mt-1 font-semibold text-ink">{player.startQuota}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points</p>
+                      <p className="mt-1 font-semibold text-ink">{player.totalPoints}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Adjustment</p>
+                      <p
+                        className={classNames(
+                          "mt-1 font-semibold",
+                          player.quotaAdjustment > 0
+                            ? "text-pine"
+                            : player.quotaAdjustment < 0
+                              ? "text-danger"
+                              : "text-ink"
+                        )}
+                      >
+                        {formatPlusMinus(player.quotaAdjustment)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">New quota</p>
+                      <p className="mt-1 font-semibold text-ink">{player.nextQuota}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-45"
+                onClick={closeQuotaAdjustmentPreview}
+                disabled={isPending}
+              >
+                Back to Results
+              </button>
+              <button
+                type="button"
+                className="club-btn-primary min-h-12 disabled:opacity-45"
+                onClick={approveAndPostRound}
+                disabled={isPending}
+              >
+                {isPending ? "Posting Round..." : "Approve & Post Round"}
+              </button>
+            </div>
+          </SectionCard>
+        </div>
+      ) : null}
 
       {isScoreUnlockOpen ? (
         <div className="fixed inset-0 z-50 flex items-end bg-ink/35 p-3 sm:items-center sm:justify-center">
@@ -2890,7 +3031,7 @@ function RoundTabView({
                   <p className="mt-1 text-sm text-ink/60">{team.players.join(", ")}</p>
                   {teamComplete ? (
                     <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
-                      <span aria-hidden="true">✔</span>
+                      <span aria-hidden="true">âœ”</span>
                       Team Complete
                     </span>
                   ) : null}
@@ -3014,7 +3155,7 @@ function SkinsOnlyRoundTab({
                   <p className="mt-1 text-xs text-ink/60">{`${row.totalPoints} points`}</p>
                   {playerComplete ? (
                     <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
-                      <span aria-hidden="true">✔</span>
+                      <span aria-hidden="true">âœ”</span>
                       Completed
                     </span>
                   ) : null}
@@ -3387,7 +3528,7 @@ function BuyInStatusSection({
         </div>
       ) : (
         <div className="rounded-[22px] border border-[#5A9764]/25 bg-[#E2F4E6] px-4 py-4 text-center">
-          <p className="text-base font-semibold text-pine">All players paid in 👍</p>
+          <p className="text-base font-semibold text-pine">All players paid in ðŸ‘</p>
         </div>
       )}
     </SectionCard>
@@ -3424,7 +3565,7 @@ function PlayersTab({
                 </p>
                 {playerComplete ? (
                   <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
-                    <span aria-hidden="true">✔</span>
+                    <span aria-hidden="true">âœ”</span>
                     Completed
                   </span>
                 ) : null}
@@ -3617,4 +3758,5 @@ function SettingsTab({
     </div>
   );
 }
+
 

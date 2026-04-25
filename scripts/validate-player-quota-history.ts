@@ -106,7 +106,7 @@ function main() {
         const prior = array[index - 1] ?? null;
         const chainOk = prior ? round.startQuota === prior.nextQuota : true;
         return {
-          roundDate: toIso(round.completedAt ? round.completedAt.getTime() : null),
+          roundDate: toIso(round.completedAt ? new Date(round.completedAt).getTime() : null),
           roundName: round.roundName,
           rebuiltStartQuota: round.startQuota,
           movement: round.quotaMovement,

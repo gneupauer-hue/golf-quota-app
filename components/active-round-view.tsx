@@ -546,7 +546,7 @@ export function MatchRoundView({
           <SectionCard className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Archive Round</p>
             <p className="text-sm text-ink/65">
-              Archiving is the final step. It moves this round to Past Games, updates quotas, and clears the active round.
+              Archiving is the final step. Review the quota changes first, then approve the post to move this round to Past Games and clear it from Current Round.
             </p>
             <button
               type="button"
@@ -554,7 +554,7 @@ export function MatchRoundView({
               disabled={isArchiving}
               className="club-btn-primary min-h-12 w-full rounded-[22px] disabled:opacity-45"
             >
-              {isArchiving ? "Archiving Round..." : "Archive Round"}
+              {isArchiving ? "Posting Round..." : "Review & Archive Round"}
             </button>
           </SectionCard>
 

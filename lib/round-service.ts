@@ -210,7 +210,93 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
   await persistRoundSummaries(tx, roundId, recalculated);
 }
 
+export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
+  const round = await tx.round.findUnique({
+    where: { id: roundId },
+    include: {
+      entries: {
+        include: {
+          player: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: {
+          playerId: "asc"
+        }
+      }
+    }
+  });
+
+  if (!round) {
+    throw new Error("Round not found");
+  }
+
+  if (round.canceledAt) {
+    throw new Error("Canceled rounds cannot be posted.");
+  }
+
+  if (round.completedAt) {
+    throw new Error("This round has already been posted.");
+  }
+
+  const pendingBackNine = round.entries.filter((entry) => !entry.backSubmittedAt).length;
+
+  if (pendingBackNine > 0) {
+    throw new Error("All players must submit their back nine before completing the round.");
+  }
+
+  const quotaMap = await getQuotaSnapshotBeforeRound(tx, roundId);
+  const recalculated = calculateRoundRows(
+    round.entries.map((entry) => ({
+      playerId: entry.playerId,
+      playerName: entry.player.name,
+      team: (entry.team as TeamCode | null) ?? null,
+      holeScores: getHoleScores(entry),
+      startQuota: quotaMap[entry.playerId] ?? entry.startQuota
+    }))
+  );
+
+  return {
+    roundId: round.id,
+    isTestRound: Boolean(round.isTestRound),
+    rows: recalculated
+      .map((row) => ({
+        playerId: row.playerId,
+        playerName: row.playerName,
+        startQuota: row.startQuota,
+        totalPoints: row.totalPoints,
+        quotaAdjustment: row.nextQuota - row.startQuota,
+        nextQuota: row.nextQuota
+      }))
+      .sort((left, right) => left.playerName.localeCompare(right.playerName))
+  };
+}
+
 export async function finalizeRound(tx: Tx, roundId: string) {
+  const round = await tx.round.findUnique({
+    where: { id: roundId },
+    select: {
+      id: true,
+      completedAt: true,
+      canceledAt: true
+    }
+  });
+
+  if (!round) {
+    throw new Error("Round not found");
+  }
+
+  if (round.canceledAt) {
+    throw new Error("Canceled rounds cannot be posted.");
+  }
+
+  if (round.completedAt) {
+    throw new Error("This round has already been posted.");
+  }
+
   const pendingBackNine = await tx.roundEntry.count({
     where: {
       roundId,
