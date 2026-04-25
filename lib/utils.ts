@@ -51,12 +51,12 @@ type RoundDisplayInput = {
 };
 
 function normalizeDisplayDate(input: RoundDisplayInput) {
-  if (input.roundDate) {
-    return input.roundDate;
-  }
-
   if (input.completedAt) {
     return input.completedAt;
+  }
+
+  if (input.roundDate) {
+    return input.roundDate;
   }
 
   if (input.createdAt) {
@@ -71,6 +71,10 @@ export function getRoundDisplayDate(input: RoundDisplayInput) {
 }
 
 export function getRoundDisplayName(input: RoundDisplayInput) {
+  if (input.completedAt) {
+    return formatRoundNameFromDate(input.completedAt);
+  }
+
   const trimmedName = input.roundName?.trim();
   if (trimmedName) {
     return trimmedName;

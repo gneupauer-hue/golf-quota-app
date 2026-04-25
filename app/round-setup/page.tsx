@@ -33,7 +33,7 @@ export default async function RoundSetupPage() {
           </p>
           <h3 className="text-xl font-semibold text-ink">This round is already active</h3>
           <p className="text-sm text-ink/65">
-            Team setup is finished for {data.round.roundName}. Use Current Round for live scoring and submissions.
+            Team setup is finished. Use Current Round for live scoring and submissions.
           </p>
           <Link href="/current-round" className="club-btn-primary min-h-12">
             Go To Current Round
@@ -52,3 +52,4 @@ export default async function RoundSetupPage() {
     />
   );
 }
+

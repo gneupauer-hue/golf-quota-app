@@ -44,7 +44,7 @@ export default async function CurrentRoundPage({
           </h3>
           <p className="text-sm text-ink/70">
             {roundId
-              ? "Finish building teams and tap Start This Round in Round Setup. Current Round will open automatically once the round is live."
+              ? "Finish building teams and tap Start Round in Round Setup. Current Round will open automatically once the round is live."
               : "Current Round stays focused on live scoring only. Go to Round Setup to create the next round."}
           </p>
         </div>
@@ -55,3 +55,4 @@ export default async function CurrentRoundPage({
     </div>
   );
 }
+

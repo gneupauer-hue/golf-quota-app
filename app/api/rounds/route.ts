@@ -7,18 +7,10 @@ import { formatRoundNameFromDate } from "@/lib/utils";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const roundDate = String(body.roundDate ?? "").trim();
-    const roundName = String(body.roundName ?? "").trim();
-    const notes = String(body.notes ?? "");
+    const now = new Date();
     const roundMode =
       body.roundMode === "SKINS_ONLY" ? ("SKINS_ONLY" as RoundMode) : ("MATCH_QUOTA" as RoundMode);
     const isTestRound = Boolean(body.isTestRound);
-
-    if (!roundDate) {
-      return NextResponse.json({ error: "Round date is required." }, { status: 400 });
-    }
-
-    const resolvedRoundName = roundName || formatRoundNameFromDate(roundDate);
     const activeRound = await resolveActiveRound(prisma);
 
     if (activeRound) {
@@ -34,11 +26,11 @@ export async function POST(request: Request) {
 
     const round = await prisma.round.create({
       data: {
-        roundName: resolvedRoundName,
-        roundDate: new Date(roundDate),
+        roundName: formatRoundNameFromDate(now),
+        roundDate: now,
         roundMode,
         isTestRound,
-        notes: notes.trim() ? notes.trim() : null
+        notes: null
       }
     });
 

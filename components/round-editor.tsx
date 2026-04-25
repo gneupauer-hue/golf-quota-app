@@ -1920,9 +1920,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
                   Round Basics
                 </p>
-                <h3 className="mt-1 text-lg font-semibold">Game type and round date</h3>
+                <h3 className="mt-1 text-lg font-semibold">Game type</h3>
                 <p className="mt-1 text-sm text-ink/65">
-                  Set the round mode and date first. The round name always follows the selected date.
+                  Choose the scoring format, then add players, build teams, and start the round.
                 </p>
               </div>
             </div>
@@ -1968,14 +1968,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   Skins Only
                 </button>
               </div>
-            </div>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold">Round date</span>
-              <input type="date" className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none" value={roundDate} onChange={(event) => setRoundDate(event.target.value)} />
-            </label>
-            <div className="rounded-2xl border border-pine/20 bg-[#E2F4E6] px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-pine">Round name</p>
-              <p className="mt-1 text-base font-semibold text-ink">{displayRoundName}</p>
             </div>
           </SectionCard>
 

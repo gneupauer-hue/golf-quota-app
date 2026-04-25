@@ -15,6 +15,7 @@ import {
 import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
 import { getSeasonConfig } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
+import { formatDisplayDate } from "@/lib/utils";
 
 function normalizeRoundMode(value: string): RoundMode {
   return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
@@ -96,12 +97,12 @@ export async function getPlayersPageData() {
         orderBy: [
           {
             round: {
-              roundDate: "desc"
+              completedAt: "desc"
             }
           },
           {
             round: {
-              completedAt: "desc"
+              roundDate: "desc"
             }
           },
           {
@@ -172,7 +173,7 @@ export async function getCurrentQuotaRows() {
         },
         orderBy: {
           round: {
-            roundDate: "desc"
+            completedAt: "desc"
           }
         },
         take: 1,
@@ -180,7 +181,7 @@ export async function getCurrentQuotaRows() {
           totalPoints: true,
           round: {
             select: {
-              roundName: true,
+              completedAt: true,
               roundDate: true
             }
           }
@@ -189,16 +190,21 @@ export async function getCurrentQuotaRows() {
     }
   });
 
-  return players.map((player) => ({
-    id: player.id,
-    name: player.name,
-    quota: player.quota ?? player.currentQuota ?? player.startingQuota,
-    group: player.isRegular ? "Regular" : "Other",
-    isActive: player.isActive,
-    lastRoundPlayed: player.roundEntries[0]?.round.roundName ?? "-",
-    lastRoundDate: player.roundEntries[0]?.round.roundDate ?? null,
-    lastScore: player.roundEntries[0]?.totalPoints ?? null
-  }));
+  return players.map((player) => {
+    const latestRound = player.roundEntries[0]?.round;
+    const latestRoundDate = latestRound?.completedAt ?? latestRound?.roundDate ?? null;
+
+    return {
+      id: player.id,
+      name: player.name,
+      quota: player.quota ?? player.currentQuota ?? player.startingQuota,
+      group: player.isRegular ? "Regular" : "Other",
+      isActive: player.isActive,
+      lastRoundPlayed: latestRoundDate ? formatDisplayDate(latestRoundDate) : "-",
+      lastRoundDate: null,
+      lastScore: player.roundEntries[0]?.totalPoints ?? null
+    };
+  });
 }
 
 export async function getSeasonStatsData(sortBy: SeasonStatsSort = "net") {
@@ -461,7 +467,7 @@ export async function getRoundsList() {
         }
       }
     },
-    orderBy: [{ roundDate: "desc" }, { completedAt: "desc" }, { createdAt: "desc" }]
+    orderBy: [{ completedAt: "desc" }, { roundDate: "desc" }, { createdAt: "desc" }]
   });
 
   return (rounds as any[]).map((round: any) => {
@@ -946,7 +952,7 @@ export async function getHomePageData() {
     prisma.player.count({ where: { isActive: true } }),
     prisma.round.count(),
     prisma.round.findFirst({
-      orderBy: [{ roundDate: "desc" }, { completedAt: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ completedAt: "desc" }, { roundDate: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         roundName: true,

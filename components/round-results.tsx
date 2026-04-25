@@ -1,4 +1,4 @@
-import { PageTitle } from "@/components/page-title";
+﻿import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import {
   calculatePayoutAudit,
@@ -7,7 +7,7 @@ import {
   formatPlusMinus,
   type TeamCode
 } from "@/lib/quota";
-import { classNames, formatDisplayDate, getRoundDisplayDate, getRoundDisplayName } from "@/lib/utils";
+import { classNames, formatDisplayDate, getRoundDisplayDate } from "@/lib/utils";
 
 type ResultsData = {
   round: {
@@ -158,12 +158,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
   const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
   const payoutAudit = calculatePayoutAudit(data.entries, data.round.roundMode);
-  const displayRoundName = getRoundDisplayName({
-    roundName: data.round.roundName,
-    roundDate: data.round.roundDate,
-    completedAt: data.round.completedAt,
-    createdAt: data.round.createdAt
-  });
   const displayRoundDate = getRoundDisplayDate({
     roundName: data.round.roundName,
     roundDate: data.round.roundDate,
@@ -197,10 +191,9 @@ export function RoundResults({ data }: { data: ResultsData }) {
   return (
     <div className="space-y-3 pb-8">
       <PageTitle
-        title={`${displayRoundName} Results`}
-        subtitle={`Round date ${formatDisplayDate(displayRoundDate)}`}
+        title="Results"
+        subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`}
       />
-
       <SectionCard className="space-y-4 bg-grove text-white">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -243,7 +236,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
             <div className="rounded-[22px] border border-white/12 bg-white/8 px-4 py-3.5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Round Summary</p>
               <p className="mt-2 text-xl font-bold tracking-tight text-white">
-                {topIndividual ? topIndividual.playerName : displayRoundName}
+                {topIndividual ? topIndividual.playerName : "Results Summary"}
               </p>
               <p className="mt-2 text-sm text-white/75">
                 {topIndividual
@@ -428,7 +421,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                   <p className="text-lg font-bold text-ink">{player.playerName}</p>
                   <p className="mt-1 text-sm text-ink/60">
                     {`Place ${player.placeLabel}`}
-                    {player.tied ? " â€¢ Tie split" : ""}
+                    {player.tied ? " Ã¢â‚¬Â¢ Tie split" : ""}
                   </p>
                 </div>
                 <div className="text-right">
@@ -657,4 +650,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
+
+
 

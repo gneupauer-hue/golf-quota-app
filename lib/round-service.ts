@@ -10,6 +10,7 @@ import {
   type RoundMode,
   type TeamCode
 } from "@/lib/quota";
+import { formatRoundNameFromDate } from "@/lib/utils";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 type HoleFieldName = (typeof holeFieldNames)[number];
@@ -217,11 +218,15 @@ export async function finalizeRound(tx: Tx, roundId: string) {
     throw new Error("All players must submit their back nine before completing the round.");
   }
 
+  const finalizedAt = new Date();
+
   await syncRoundComputedState(tx, roundId);
   await tx.round.update({
     where: { id: roundId },
     data: {
-      completedAt: new Date()
+      completedAt: finalizedAt,
+      roundDate: finalizedAt,
+      roundName: formatRoundNameFromDate(finalizedAt)
     }
   });
 
@@ -256,7 +261,7 @@ export async function recomputeHistoricalState(tx: Tx) {
         }
       }
     },
-    orderBy: [{ roundDate: "asc" }, { completedAt: "asc" }, { createdAt: "asc" }]
+    orderBy: [{ completedAt: "asc" }, { roundDate: "asc" }, { createdAt: "asc" }]
   });
 
   for (const round of rounds) {
@@ -377,7 +382,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
         }
       }
     },
-    orderBy: [{ roundDate: "asc" }, { completedAt: "asc" }, { createdAt: "asc" }]
+    orderBy: [{ completedAt: "asc" }, { roundDate: "asc" }, { createdAt: "asc" }]
   });
 
   for (const round of priorRounds) {
