@@ -62,7 +62,7 @@ export async function getPlayersForSelection() {
     players.map((player) => ({
       id: player.id,
       name: player.name,
-      quota: player.quota ?? player.currentQuota ?? player.startingQuota,
+      quota: player.currentQuota ?? player.quota ?? player.startingQuota,
       isRegular: player.isRegular,
       isActive: player.isActive,
       conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId)
@@ -132,7 +132,7 @@ export async function getPlayersPageData() {
     players.map((player) => ({
       id: player.id,
       name: player.name,
-      quota: player.quota ?? player.currentQuota ?? player.startingQuota,
+      quota: player.currentQuota ?? player.quota ?? player.startingQuota,
       isRegular: player.isRegular,
       isActive: player.isActive,
       conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId),
@@ -197,7 +197,7 @@ export async function getCurrentQuotaRows() {
     return {
       id: player.id,
       name: player.name,
-      quota: player.quota ?? player.currentQuota ?? player.startingQuota,
+      quota: player.currentQuota ?? player.quota ?? player.startingQuota,
       group: player.isRegular ? "Regular" : "Other",
       isActive: player.isActive,
       lastRoundPlayed: latestRoundDate ? formatDisplayDate(latestRoundDate) : "-",
@@ -261,7 +261,7 @@ export async function getSeasonStatsData(sortBy: SeasonStatsSort = "net") {
         isRegular: player.isRegular,
         isActive: player.isActive,
         roundsPlayed: 0,
-        currentQuota: player.quota ?? player.currentQuota ?? player.startingQuota,
+        currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
         startingQuota: null as number | null,
         quotaChange: 0,
         totalPaidIn: 0,

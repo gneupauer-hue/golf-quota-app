@@ -27,6 +27,14 @@ type EntryRow = {
   holeScores: Array<number | null>;
 };
 
+type VerificationRound = {
+  roundName: string | null;
+  completedAt: string | null;
+  startQuota: number;
+  movement: number;
+  nextQuota: number;
+};
+
 function shouldSkipQuotaProgression(round: { roundMode: string; isTestRound?: boolean | null }) {
   return round.roundMode === "SKINS_ONLY" || Boolean(round.isTestRound);
 }
@@ -95,6 +103,10 @@ function getEntriesForRound(db: DatabaseSync, roundId: string) {
   })) as EntryRow[];
 }
 
+function formatEpoch(epoch: number | null) {
+  return epoch == null ? null : new Date(epoch).toISOString();
+}
+
 function main() {
   const dbPath = process.argv[2] ?? "C:/Projectsgolf-app/prisma/dev.db";
   const db = new DatabaseSync(dbPath);
@@ -109,6 +121,7 @@ function main() {
       isTestRound: Boolean(round.isTestRound)
     })) as RoundRow[];
     const quotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
+    const verificationMap = new Map<string, { playerName: string; oldestStartQuota: number; rounds: VerificationRound[] }>();
 
     const updateEntry = db.prepare(
       `update RoundEntry set
@@ -171,6 +184,20 @@ function main() {
           matchingEntry.id
         );
 
+        const verification = verificationMap.get(row.playerId) ?? {
+          playerName: row.playerName,
+          oldestStartQuota: row.startQuota,
+          rounds: []
+        };
+        verification.rounds.push({
+          roundName: round.roundName,
+          completedAt: formatEpoch(round.completedAt),
+          startQuota: row.startQuota,
+          movement: row.nextQuota - row.startQuota,
+          nextQuota: row.nextQuota
+        });
+        verificationMap.set(row.playerId, verification);
+
         if (!shouldSkipQuotaProgression(round)) {
           quotaMap.set(row.playerId, row.nextQuota);
         }
@@ -178,7 +205,7 @@ function main() {
     }
 
     for (const player of players) {
-      const nextQuota = quotaMap.get(player.id) ?? player.startingQuota;
+      const nextQuota = quotaMap.get(player.id) ?? player.currentQuota ?? player.startingQuota;
       if (playerColumns.has("quota")) {
         updatePlayer.run(nextQuota, nextQuota, player.id);
       } else {
@@ -188,12 +215,23 @@ function main() {
 
     db.exec("commit");
 
+    const verificationSummary = players.map((player) => {
+      const history = verificationMap.get(player.id);
+      return {
+        playerName: player.name,
+        oldestStartQuota: history?.oldestStartQuota ?? player.startingQuota,
+        rounds: history?.rounds ?? [],
+        finalCurrentQuota: quotaMap.get(player.id) ?? player.currentQuota ?? player.startingQuota
+      };
+    });
+
     console.log(
       JSON.stringify(
         {
           dbPath,
           roundsProcessed: rounds.length,
-          playersProcessed: players.length
+          playersProcessed: players.length,
+          verificationSummary
         },
         null,
         2
