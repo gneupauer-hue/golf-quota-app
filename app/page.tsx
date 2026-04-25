@@ -1,0 +1,60 @@
+import Link from "next/link";
+import { ForceClearActiveRound } from "@/components/force-clear-active-round";
+import { QuickRoundLauncher } from "@/components/quick-round-launcher";
+import { SectionCard } from "@/components/section-card";
+import { getHomePageData } from "@/lib/data";
+
+export const dynamic = "force-dynamic";
+
+const actions = [
+  {
+    href: "/round-setup",
+    title: "Round Setup",
+    description: "Build the next round, validate team sizes, auto-build teams, and start live play."
+  },
+  {
+    href: "/current-round",
+    title: "Current Round",
+    description: "Live scoring only after a round has been started."
+  },
+  {
+    href: "/players",
+    title: "Players",
+    description: "Manage roster, conflicts, quotas, and active status."
+  },
+  {
+    href: "/past-games",
+    title: "Past Games",
+    description: "Completed rounds archived for read-only review."
+  }
+];
+
+export default async function HomePage() {
+  const home = await getHomePageData();
+
+  return (
+    <div className="space-y-3">
+      <QuickRoundLauncher />
+
+      <div className="flex flex-col gap-3">
+        {actions.map((action) => (
+          <Link key={action.href} href={action.href} className="block">
+            <SectionCard className="h-auto min-h-0 py-4">
+              <h3 className="text-xl font-bold tracking-tight text-ink">{action.title}</h3>
+              <p className="mt-1 text-sm font-medium text-ink/80">{action.description}</p>
+            </SectionCard>
+          </Link>
+        ))}
+      </div>
+
+      {home.currentRound ? (
+        <div className="pt-3">
+          <ForceClearActiveRound
+            roundId={home.currentRound.id}
+            roundName={home.currentRound.roundName}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}

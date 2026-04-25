@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --club-cream: #f5f2ea;
+  --club-cream-deep: #efe9dd;
+  --club-card: #faf8f2;
+  --club-card-border: #e8e2d6;
+  --club-green: #1f5e3b;
+  --club-green-dark: #164a2e;
+  --club-gold: #c2a878;
+  --club-text: #1b1b1b;
+  --club-text-soft: #6b6b6b;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  height: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  background-color: var(--club-cream);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)),
+    radial-gradient(circle at 20% 14%, rgba(194, 168, 120, 0.05), transparent 0 18%),
+    radial-gradient(circle at 82% 10%, rgba(31, 94, 59, 0.035), transparent 0 20%);
+  color: var(--club-text);
+  font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
+  font-weight: 500;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(194, 168, 120, 0.28);
+  color: var(--club-text);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: var(--club-text);
+}
+
+input,
+textarea,
+select {
+  background: #fffdf9;
+}
+
+button {
+  font-weight: 700;
+}
+
+@layer components {
+  .club-card {
+    @apply rounded-[28px] border border-mist bg-white shadow-card;
+  }
+
+  .club-card-muted {
+    @apply rounded-2xl border border-mist bg-card;
+  }
+
+  .club-btn-primary {
+    @apply inline-flex items-center justify-center rounded-2xl bg-pine px-4 py-3 text-sm font-bold text-white;
+  }
+
+  .club-btn-secondary {
+    @apply inline-flex items-center justify-center rounded-2xl border border-mist bg-canvas px-4 py-3 text-sm font-bold text-ink;
+  }
+
+  .club-btn-danger {
+    @apply inline-flex items-center justify-center rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm font-bold text-danger;
+  }
+
+  .club-input {
+    @apply w-full rounded-2xl border border-mist bg-card px-4 py-3 text-base font-medium text-ink outline-none;
+  }
+
+  .club-pill {
+    @apply rounded-full bg-canvas px-2.5 py-1 text-xs font-semibold text-ink/80;
+  }
+
+  .club-panel-dark {
+    @apply rounded-[24px] border border-pine/20 bg-grove text-white shadow-card;
+  }
+}

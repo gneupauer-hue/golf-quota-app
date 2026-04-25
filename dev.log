@@ -1,0 +1,28 @@
+
+> golf-quota-tracker@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.15
+   - Local:        http://localhost:3002
+   - Network:      http://192.168.6.108:3002
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 1600ms
+ ○ Compiling /rounds/new ...
+ ✓ Compiled /rounds/new in 1198ms (635 modules)
+ GET /rounds/new 200 in 1701ms
+ GET /rounds 200 in 2124ms
+ GET / 200 in 2126ms
+ GET /quotas 200 in 2319ms
+ ✓ Compiled in 858ms (251 modules)
+ ✓ Compiled in 81ms (251 modules)
+ ✓ Compiled in 154ms (251 modules)
+ ✓ Compiled in 88ms (251 modules)
+ GET /rounds 200 in 85ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 1618ms (966 modules)
+ GET / 500 in 4267ms
+ GET / 500 in 264ms
+ ✓ Compiled in 564ms (403 modules)
+ ✓ Compiled in 132ms (403 modules)

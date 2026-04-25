@@ -1,0 +1,11 @@
+
+> golf-quota-tracker@0.1.0 start
+> node scripts/fix-next-css.cjs && next start
+
+Copied 94947fc70c35f771.css -> .next/static/css/app/layout.css
+   ▲ Next.js 15.5.15
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.6.108:3000
+
+ ✓ Starting...
+ ✓ Ready in 515ms
