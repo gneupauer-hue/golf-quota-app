@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+﻿import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finalizeRound, getRoundCompletionPreview } from "@/lib/round-service";
@@ -17,9 +17,9 @@ export async function GET(
     return NextResponse.json({
       ok: true,
       isTestRound: preview.isTestRound,
-      warning: preview.isTestRound
-        ? "Review carefully. This is a test round, so quotas will not be updated when you post it."
-        : "Review carefully. These quota changes will be used for the next round.",
+      readOnly: preview.readOnly,
+      approvedAt: preview.approvedAt,
+      warning: preview.warning,
       rows: preview.rows
     });
   } catch (error) {
@@ -73,3 +73,4 @@ export async function POST(
     );
   }
 }
+

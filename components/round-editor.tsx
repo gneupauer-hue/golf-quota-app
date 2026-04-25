@@ -114,6 +114,8 @@ type QuotaAdjustmentPreviewRow = {
 type QuotaAdjustmentPreview = {
   warning: string;
   isTestRound: boolean;
+  readOnly: boolean;
+  approvedAt: string | null;
   rows: QuotaAdjustmentPreviewRow[];
 };
 
@@ -1512,12 +1514,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         setQuotaAdjustmentPreview({
           warning:
             result.warning ??
-            "Review carefully. These quota changes will be used for the next round.",
+            "Review carefully. These quotas will be used for the next round.",
           isTestRound: Boolean(result.isTestRound),
+          readOnly: Boolean(result.readOnly),
+          approvedAt: result.approvedAt ?? null,
           rows: Array.isArray(result.rows) ? result.rows : []
         });
-        setMessage("Review quota adjustments before posting the round.");
-        setSaved("Quota adjustments ready for review.");
+        setMessage(
+          result.readOnly
+            ? "Quota changes already approved for this round."
+            : "Review quota changes before posting the round."
+        );
+        setSaved(result.readOnly ? "Quota changes already approved" : "Quota changes ready for review.");
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Could not load quota adjustments.";
@@ -1535,6 +1543,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
   function approveAndPostRound() {
     if (!quotaAdjustmentPreview) {
+      return;
+    }
+
+    if (quotaAdjustmentPreview.readOnly) {
+      setQuotaAdjustmentError("This round has already been approved and posted.");
       return;
     }
 
@@ -1573,7 +1586,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             : "Round archived and quota changes approved."
         );
         setSaved(quotaAdjustmentPreview.isTestRound ? "Test round posted" : "Round posted");
-        router.push("/current-round");
+        router.push("/past-games");
         router.refresh();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Could not archive round.";
@@ -2387,91 +2400,127 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       )}
 
       {quotaAdjustmentPreview ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-ink/35 p-3 sm:items-center sm:justify-center">
-          <SectionCard className="w-full max-w-2xl space-y-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-                Quota Adjustment Confirmation
-              </p>
-              <h3 className="mt-1 text-xl font-semibold">Review before posting the round</h3>
-              <p className="mt-1 text-sm font-medium text-danger">{quotaAdjustmentPreview.warning}</p>
-            </div>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-hero text-ink">
+          <div
+            className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col px-3.5 pb-8 sm:px-4"
+            style={{
+              paddingTop: "max(24px, calc(env(safe-area-inset-top) + 16px))",
+              paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))"
+            }}
+          >
+            <PageTitle
+              title="Confirm Quota Changes"
+              subtitle="Review carefully. These quotas will be used for the next round."
+            />
 
-            {quotaAdjustmentError ? (
-              <div className="rounded-[22px] bg-[#FCE5E2] px-4 py-3 text-sm font-medium text-danger">
-                {quotaAdjustmentError}
-              </div>
-            ) : null}
-
-            <div className="space-y-3">
-              {quotaAdjustmentPreview.rows.map((player) => (
-                <div
-                  key={player.playerId}
-                  className="rounded-[22px] border border-ink/10 bg-canvas px-4 py-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-ink">{player.playerName}</p>
-                      <p className="mt-1 text-xs text-ink/55">
-                        Starting quota {player.startQuota} • Points scored {player.totalPoints}
-                      </p>
-                    </div>
-                    <p className="text-sm font-semibold text-ink">New quota {player.nextQuota}</p>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                    <div className="rounded-2xl bg-white px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Starting</p>
-                      <p className="mt-1 font-semibold text-ink">{player.startQuota}</p>
-                    </div>
-                    <div className="rounded-2xl bg-white px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points</p>
-                      <p className="mt-1 font-semibold text-ink">{player.totalPoints}</p>
-                    </div>
-                    <div className="rounded-2xl bg-white px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Adjustment</p>
-                      <p
-                        className={classNames(
-                          "mt-1 font-semibold",
-                          player.quotaAdjustment > 0
-                            ? "text-pine"
-                            : player.quotaAdjustment < 0
-                              ? "text-danger"
-                              : "text-ink"
-                        )}
-                      >
-                        {formatPlusMinus(player.quotaAdjustment)}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">New quota</p>
-                      <p className="mt-1 font-semibold text-ink">{player.nextQuota}</p>
-                    </div>
-                  </div>
+            <div className="space-y-3 pb-4">
+              <SectionCard className="space-y-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+                    Quota Confirmation
+                  </p>
+                  <p className="mt-1 text-sm text-ink/70">{quotaAdjustmentPreview.warning}</p>
+                  {quotaAdjustmentPreview.readOnly && quotaAdjustmentPreview.approvedAt ? (
+                    <p className="mt-2 text-sm font-semibold text-pine">
+                      {`Already approved on ${new Date(quotaAdjustmentPreview.approvedAt).toLocaleString([], {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit"
+                      })}.`}
+                    </p>
+                  ) : null}
                 </div>
-              ))}
-            </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-45"
-                onClick={closeQuotaAdjustmentPreview}
-                disabled={isPending}
-              >
-                Back to Results
-              </button>
-              <button
-                type="button"
-                className="club-btn-primary min-h-12 disabled:opacity-45"
-                onClick={approveAndPostRound}
-                disabled={isPending}
-              >
-                {isPending ? "Posting Round..." : "Approve & Post Round"}
-              </button>
+                {quotaAdjustmentError ? (
+                  <div className="rounded-[22px] bg-[#FCE5E2] px-4 py-3 text-sm font-medium text-danger">
+                    {quotaAdjustmentError}
+                  </div>
+                ) : null}
+              </SectionCard>
+
+              <div className="space-y-3">
+                {quotaAdjustmentPreview.rows.map((player) => (
+                  <SectionCard key={player.playerId} className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-base font-semibold text-ink">{player.playerName}</p>
+                        <p className="mt-1 text-sm text-ink/60">{`Points scored: ${player.totalPoints}`}</p>
+                      </div>
+                      <div className="rounded-2xl bg-canvas px-3 py-2 text-right">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">New quota</p>
+                        <p className="mt-1 text-lg font-semibold text-ink">{player.nextQuota}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="rounded-2xl bg-canvas px-3 py-2.5">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Starting quota</p>
+                        <p className="mt-1 font-semibold text-ink">{player.startQuota}</p>
+                      </div>
+                      <div className="rounded-2xl bg-canvas px-3 py-2.5">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points scored</p>
+                        <p className="mt-1 font-semibold text-ink">{player.totalPoints}</p>
+                      </div>
+                      <div className="rounded-2xl bg-canvas px-3 py-2.5">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Quota adjustment</p>
+                        <p
+                          className={classNames(
+                            "mt-1 font-semibold",
+                            player.quotaAdjustment > 0
+                              ? "text-pine"
+                              : player.quotaAdjustment < 0
+                                ? "text-danger"
+                                : "text-ink"
+                          )}
+                        >
+                          {formatPlusMinus(player.quotaAdjustment)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-canvas px-3 py-2.5">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Math check</p>
+                        <p className="mt-1 font-semibold text-ink">
+                          {`${player.startQuota} ${player.quotaAdjustment >= 0 ? "+" : "-"} ${Math.abs(player.quotaAdjustment)} = ${player.nextQuota}`}
+                        </p>
+                      </div>
+                    </div>
+                  </SectionCard>
+                ))}
+              </div>
+
+              <SectionCard className="space-y-3">
+                <p className="text-sm text-ink/70">
+                  Once approved, these quotas become the starting quotas for the next round.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-45"
+                    onClick={closeQuotaAdjustmentPreview}
+                    disabled={isPending}
+                  >
+                    Back to Results
+                  </button>
+                  <button
+                    type="button"
+                    className="club-btn-primary min-h-12 disabled:opacity-45"
+                    onClick={approveAndPostRound}
+                    disabled={isPending || quotaAdjustmentPreview.readOnly}
+                  >
+                    {quotaAdjustmentPreview.readOnly
+                      ? "Already Posted"
+                      : isPending
+                        ? "Posting Round..."
+                        : "Approve & Post Round"}
+                  </button>
+                </div>
+              </SectionCard>
             </div>
-          </SectionCard>
+          </div>
         </div>
       ) : null}
+
 
       {isScoreUnlockOpen ? (
         <div className="fixed inset-0 z-50 flex items-end bg-ink/35 p-3 sm:items-center sm:justify-center">
@@ -3782,5 +3831,8 @@ function SettingsTab({
     </div>
   );
 }
+
+
+
 
 

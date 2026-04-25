@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { SectionCard } from "@/components/section-card";
@@ -490,7 +490,7 @@ export function MatchRoundView({
           <SectionCard className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Archive Round</p>
             <p className="text-sm text-ink/65">
-              Archiving is the final step. Review the quota changes first, then approve the post to move this round to Past Games and clear it from Current Round.
+              Results are ready. Continue to quota confirmation before the round is posted.
             </p>
             <button
               type="button"
@@ -498,7 +498,7 @@ export function MatchRoundView({
               disabled={isArchiving}
               className="club-btn-primary min-h-12 w-full rounded-[22px] disabled:opacity-45"
             >
-              {isArchiving ? "Posting Round..." : "Review & Archive Round"}
+              {isArchiving ? "Loading Quota Changes..." : "Continue"}
             </button>
           </SectionCard>
 
@@ -606,4 +606,5 @@ export function SkinsOnlyRoundView({
     </div>
   );
 }
+
 

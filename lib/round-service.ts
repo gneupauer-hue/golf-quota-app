@@ -238,13 +238,10 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
     throw new Error("Canceled rounds cannot be posted.");
   }
 
-  if (round.completedAt) {
-    throw new Error("This round has already been posted.");
-  }
-
+  const readOnly = Boolean(round.completedAt);
   const pendingBackNine = round.entries.filter((entry) => !entry.backSubmittedAt).length;
 
-  if (pendingBackNine > 0) {
+  if (!readOnly && pendingBackNine > 0) {
     throw new Error("All players must submit their back nine before completing the round.");
   }
 
@@ -262,6 +259,13 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
   return {
     roundId: round.id,
     isTestRound: Boolean(round.isTestRound),
+    readOnly,
+    approvedAt: round.completedAt ? round.completedAt.toISOString() : null,
+    warning: readOnly
+      ? "These quota changes were already approved and saved for this round."
+      : Boolean(round.isTestRound)
+        ? "Review carefully. This is a test round, so quotas will not be updated when you post it."
+        : "Review carefully. These quotas will be used for the next round.",
     rows: recalculated
       .map((row) => ({
         playerId: row.playerId,
@@ -601,5 +605,6 @@ export async function createOrReplaceRoundEntries(
     await syncRoundComputedState(tx, input.roundId);
   }
 }
+
 
 
