@@ -295,54 +295,6 @@ export function MatchRoundView({
     return teamRows.map((row) => `${row.playerName} (${row.startQuota})`).join(", ");
   }
 
-  function getWinningTeams(key: "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus") {
-    if (!teamStandings.length) return [];
-    const best = Math.max(...teamStandings.map((team) => team[key]));
-    return teamStandings.filter((team) => team[key] === best);
-  }
-
-  const frontWinners = allTeamsSubmitted ? getWinningTeams("frontPlusMinus") : [];
-  const backWinners = allTeamsSubmitted ? getWinningTeams("backPlusMinus") : [];
-  const totalWinners = allTeamsSubmitted ? getWinningTeams("totalPlusMinus") : [];
-
-  function renderTeamComparison(
-    label: string,
-    key: "frontPlusMinus" | "backPlusMinus" | "totalPlusMinus",
-    winners: TeamStanding[]
-  ) {
-    const winnerCodes = new Set(winners.map((team) => team.team));
-    const sortedTeams = sortTeamsAlphabetically(teamStandings);
-
-    return (
-      <div className="rounded-[22px] bg-canvas px-4 py-3">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{label}</p>
-        <div className="mt-2 space-y-2">
-          {sortedTeams.map((team) => {
-            const isWinner = winnerCodes.has(team.team);
-            return (
-              <div
-                key={`${label}-${team.team}`}
-                className={classNames(
-                  "flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5",
-                  isWinner ? "border border-[#5A9764]/20 bg-[#EAF6EC]" : "bg-white"
-                )}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">{`Team ${team.team}`}</p>
-                  {isWinner ? (
-                    <span className="mt-1 inline-flex items-center rounded-full bg-pine/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-pine">
-                      Winner
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-lg font-semibold text-ink">{formatPlusMinus(team[key])}</p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -427,62 +379,54 @@ export function MatchRoundView({
       {allTeamsSubmitted ? (
         <>
           <SectionCard className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Final Results</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {renderTeamComparison("Front", "frontPlusMinus", frontWinners)}
-              {renderTeamComparison("Back", "backPlusMinus", backWinners)}
-              {renderTeamComparison("Total", "totalPlusMinus", totalWinners)}
-            </div>
-            <div className="rounded-[22px] bg-canvas px-4 py-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Good Skins</p>
-              {awardedSkins.length ? (
-                <div className="mt-2 space-y-2">
-                  {awardedSkins.map((hole) => (
-                    <div key={hole.holeNumber} className="text-sm">
-                      <p className="font-medium text-ink">{`Hole ${hole.holeNumber} - ${hole.winnerName}`}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-ink/65">No good skins were won this round.</p>
-              )}
-            </div>
-            </SectionCard>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Good Skins</p>
+            {awardedSkins.length ? (
+              <div className="space-y-2">
+                {awardedSkins.map((hole) => (
+                  <div key={hole.holeNumber} className="rounded-[22px] bg-canvas px-4 py-4 text-sm">
+                    <p className="font-medium text-ink">{`Hole ${hole.holeNumber} - ${hole.winnerName}`}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-ink/65">No good skins were won this round.</p>
+            )}
+          </SectionCard>
 
-            <SectionCard className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Indy Rankings</p>
-              {indyRankings.length ? (
-                <div className="space-y-2">
-                  {indyRankings.map((player) => {
-                    const isIndyWinner = indyWinnerIds.has(player.playerId);
+          <SectionCard className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Indy Rankings</p>
+            {indyRankings.length ? (
+              <div className="space-y-2">
+                {indyRankings.map((player) => {
+                  const isIndyWinner = indyWinnerIds.has(player.playerId);
 
-                    return (
-                      <div
-                        key={`indy-ranking-${player.playerId}`}
-                        className={classNames(
-                          "rounded-[22px] border px-4 py-3",
-                          isIndyWinner ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className="w-6 shrink-0 pt-0.5 text-sm font-semibold text-ink/55">
-                            {`${player.rank}.`}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="truncate text-base font-semibold text-ink">{player.playerName}</p>
-                            <p className="mt-1 text-sm text-ink/70">
-                              {formatIndyRankingDetail(player.totalPoints, player.startQuota, player.plusMinus)}
-                            </p>
-                          </div>
+                  return (
+                    <div
+                      key={`indy-ranking-${player.playerId}`}
+                      className={classNames(
+                        "rounded-[22px] border px-4 py-3",
+                        isIndyWinner ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="w-6 shrink-0 pt-0.5 text-sm font-semibold text-ink/55">
+                          {`${player.rank}.`}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-semibold text-ink">{player.playerName}</p>
+                          <p className="mt-1 text-sm text-ink/70">
+                            {formatIndyRankingDetail(player.totalPoints, player.startQuota, player.plusMinus)}
+                          </p>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-ink/65">No Indy results</p>
-              )}
-            </SectionCard>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-ink/65">No Indy results</p>
+            )}
+          </SectionCard>
 
             <SectionCard className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Payout Summary</p>

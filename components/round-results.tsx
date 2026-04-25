@@ -124,13 +124,6 @@ function formatQuotaResult(value: number) {
   return value === 0 ? "Even" : formatPlusMinus(value);
 }
 
-function renderWinnerValue(value: number | null | undefined) {
-  if (value == null) {
-    return "Tied";
-  }
-
-  return formatPlusMinus(value);
-}
 
 function formatIndyRankingDetail(totalPoints: number, startQuota: number, plusMinus: number) {
   return `Points ${totalPoints} / Quota ${startQuota} = ${formatQuotaResult(plusMinus)}`;
@@ -168,25 +161,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
   const indyRankings = data.money.individualRankings;
   const indyWinnerIds = new Set(indyCashers.map((player) => player.playerId));
   const goodSkins = data.money.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
-  const hasTeamWinnerSummary = !isSkinsOnly && data.teamStandings.length > 0;
-  const topIndividual = data.entries[0] ?? null;
-  const winnerCards = [
-    {
-      label: "Front",
-      team: data.leaders.frontTeam?.team ?? null,
-      value: data.leaders.frontTeam?.frontPlusMinus
-    },
-    {
-      label: "Back",
-      team: data.leaders.backTeam?.team ?? null,
-      value: data.leaders.backTeam?.backPlusMinus
-    },
-    {
-      label: "Total",
-      team: data.leaders.totalTeam?.team ?? null,
-      value: data.leaders.totalTeam?.totalPlusMinus
-    }
-  ];
 
   return (
     <div className="space-y-3 pb-8">
@@ -194,127 +168,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
         title="Results"
         subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`}
       />
-      <SectionCard className="space-y-4 bg-grove text-white">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/65">
-              Final Results
-            </p>
-            <p className="mt-2 text-2xl font-bold tracking-tight">Round Complete</p>
-            <p className="mt-1 text-sm text-white/75">
-              {payoutAudit.passed
-                ? "Winners, payouts, and pots all reconcile cleanly."
-                : "Review the payout audit before paying out."}
-            </p>
-          </div>
-          <span
-              className={classNames(
-                "rounded-full px-3 py-1.5 text-xs font-semibold",
-                payoutAudit.passed ? "bg-white/14 text-white" : "bg-[#FCE5E2] text-danger"
-              )}
-            >
-              {payoutAudit.passed ? "Pot Check Passed" : "Needs Review"}
-            </span>
-          </div>
-
-        {hasTeamWinnerSummary ? (
-          <div className="grid grid-cols-3 gap-2">
-            {winnerCards.map((winner) => (
-              <div key={winner.label} className="rounded-[22px] border border-white/12 bg-white/8 px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
-                  {winner.label}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-white">{getTeamLabel(winner.team)}</p>
-                <p className="mt-1 text-xl font-bold tracking-tight text-[#D9C08B]">
-                  {renderWinnerValue(winner.value)}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div className="rounded-[22px] border border-white/12 bg-white/8 px-4 py-3.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Round Summary</p>
-              <p className="mt-2 text-xl font-bold tracking-tight text-white">
-                {topIndividual ? topIndividual.playerName : "Results Summary"}
-              </p>
-              <p className="mt-2 text-sm text-white/75">
-                {topIndividual
-                  ? formatIndyRankingDetail(topIndividual.totalPoints, topIndividual.startQuota, topIndividual.plusMinus)
-                  : "No saved team winner data for this archived round."}
-              </p>
-            </div>
-            <div className="rounded-[22px] border border-white/12 bg-white/8 px-4 py-3.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Field</p>
-              <p className="mt-2 text-xl font-bold tracking-tight text-white">{`${data.entries.length} players`}</p>
-              <p className="mt-2 text-sm text-white/75">
-                {isSkinsOnly ? "Skins-only round" : "Team winner summary unavailable for this archived round."}
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-[22px] border border-white/12 bg-white/8 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
-              Overall Pot
-            </p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-white">
-              {formatCurrency(payoutAudit.overallPot)}
-            </p>
-          </div>
-          <div className="rounded-[22px] border border-white/12 bg-white/8 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
-              Paid Out
-            </p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-white">
-              {formatCurrency(payoutAudit.overallPaidOut)}
-            </p>
-            <p className="mt-1 text-xs text-white/65">{`${formatCurrency(payoutAudit.leftover)} leftover`}</p>
-          </div>
-        </div>
-      </SectionCard>
-
-      <SectionCard className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Pot Summary
-            </p>
-            <p className="mt-1 text-sm text-ink/65">Round pots and paid-player summary.</p>
-          </div>
-          <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink/70">
-            {`${payoutSummary.players.length} paid`}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <ResultStatCard
-            title="Team Pots"
-            value={formatCurrency(data.money.overallPot.teamPot)}
-            detail={`${formatCurrency(data.money.overallPot.frontPot)} / ${formatCurrency(data.money.overallPot.backPot)} / ${formatCurrency(data.money.overallPot.totalTeamPot)}`}
-          />
-          <ResultStatCard
-            title="Indy Pot"
-            value={formatCurrency(data.money.overallPot.indyPot)}
-            detail={`${data.money.overallPot.placesPaid} places paid`}
-          />
-          <ResultStatCard
-            title="Skins Pot"
-            value={formatCurrency(data.money.overallPot.skinsPot)}
-            detail={
-              data.money.skins.totalSkinSharesWon
-                ? `${data.money.skins.totalSkinSharesWon} awarded`
-                : "No skins won"
-            }
-          />
-          <ResultStatCard
-            title="Total Pot"
-            value={formatCurrency(data.money.overallPot.totalPot)}
-            detail={`${data.money.overallPot.playerCount} players`}
-          />
-        </div>
-      </SectionCard>
-
       {data.teamStandings.length ? (
         <SectionCard className="space-y-3">
           <div>
@@ -322,7 +175,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
               Team Results
             </p>
             <p className="mt-1 text-sm text-ink/65">
-              Front, back, and total results with each team&apos;s quota targets.
+              Front, back, and total results with each team's quota targets.
             </p>
           </div>
           <div className="space-y-2">
@@ -397,6 +250,46 @@ export function RoundResults({ data }: { data: ResultsData }) {
           </div>
         </SectionCard>
       ) : null}
+
+      <SectionCard className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+              Pot Summary
+            </p>
+            <p className="mt-1 text-sm text-ink/65">Round pots and paid-player summary.</p>
+          </div>
+          <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink/70">
+            {`${payoutSummary.players.length} paid`}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          <ResultStatCard
+            title="Team Pots"
+            value={formatCurrency(data.money.overallPot.teamPot)}
+            detail={`${formatCurrency(data.money.overallPot.frontPot)} / ${formatCurrency(data.money.overallPot.backPot)} / ${formatCurrency(data.money.overallPot.totalTeamPot)}`}
+          />
+          <ResultStatCard
+            title="Indy Pot"
+            value={formatCurrency(data.money.overallPot.indyPot)}
+            detail={`${data.money.overallPot.placesPaid} places paid`}
+          />
+          <ResultStatCard
+            title="Skins Pot"
+            value={formatCurrency(data.money.overallPot.skinsPot)}
+            detail={
+              data.money.skins.totalSkinSharesWon
+                ? `${data.money.skins.totalSkinSharesWon} awarded`
+                : "No skins won"
+            }
+          />
+          <ResultStatCard
+            title="Total Pot"
+            value={formatCurrency(data.money.overallPot.totalPot)}
+            detail={`${data.money.overallPot.playerCount} players`}
+          />
+        </div>
+      </SectionCard>
 
       {!isSkinsOnly && indyCashers.length ? (
         <SectionCard className="space-y-3">
@@ -650,6 +543,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
+
+
 
 
 
