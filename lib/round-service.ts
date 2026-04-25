@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+﻿import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   calculateSideGameResults,
   calculateRoundRows,
@@ -129,17 +129,21 @@ export function shouldSkipQuotaProgression(round: {
 function resolveHistoricalStartQuota(
   priorQuota: number | undefined,
   storedStartQuota: number | null | undefined,
-  liveQuota: number | undefined
+  baseQuota: number | undefined
 ) {
   if (priorQuota != null) {
     return priorQuota;
+  }
+
+  if (baseQuota != null) {
+    return baseQuota;
   }
 
   if (storedStartQuota != null && storedStartQuota > 0) {
     return storedStartQuota;
   }
 
-  return liveQuota ?? 0;
+  return 0;
 }
 
 async function syncRoundComputedState(tx: Tx, roundId: string) {
@@ -238,9 +242,9 @@ export async function recomputeHistoricalState(tx: Tx) {
     orderBy: { name: "asc" }
   });
 
-  const liveQuotaMap = new Map(
-    players.map((player) => [player.id, player.quota ?? player.currentQuota ?? player.startingQuota])
-  );
+  // Historical rebuilds must always start from each player's base quota so
+  // bad live quota values cannot contaminate earlier rounds.
+  const baseQuotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
   const quotaMap = new Map<string, number>();
 
   const rounds = await tx.round.findMany({
@@ -278,7 +282,7 @@ export async function recomputeHistoricalState(tx: Tx) {
         startQuota: resolveHistoricalStartQuota(
           quotaMap.get(entry.playerId),
           entry.startQuota,
-          liveQuotaMap.get(entry.playerId)
+          baseQuotaMap.get(entry.playerId)
         )
       }))
     );
@@ -317,12 +321,14 @@ export async function recomputeHistoricalState(tx: Tx) {
   }
 
   for (const player of players) {
+    const nextQuota =
+      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? player.startingQuota;
+
     await tx.player.update({
       where: { id: player.id },
       data: {
-        quota: quotaMap.get(player.id) ?? player.quota ?? player.currentQuota ?? player.startingQuota,
-        currentQuota:
-          quotaMap.get(player.id) ?? player.quota ?? player.currentQuota ?? player.startingQuota
+        quota: nextQuota,
+        currentQuota: nextQuota
       }
     });
   }
@@ -336,9 +342,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
   const targetRound = await tx.round.findUnique({
     where: { id: roundId },
     select: {
-      id: true,
-      roundDate: true,
-      createdAt: true
+      id: true
     }
   });
 
@@ -346,29 +350,14 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     throw new Error("Round not found");
   }
 
-  const liveQuotaMap = new Map(
-    players.map((player) => [player.id, player.quota ?? player.currentQuota ?? player.startingQuota])
-  );
+  const baseQuotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
   const quotaMap = new Map<string, number>();
 
-  const priorRounds = await tx.round.findMany({
+  const completedRounds = await tx.round.findMany({
     where: {
       completedAt: {
         not: null
-      },
-      OR: [
-        {
-          roundDate: {
-            lt: targetRound.roundDate
-          }
-        },
-        {
-          roundDate: targetRound.roundDate,
-          createdAt: {
-            lt: targetRound.createdAt
-          }
-        }
-      ]
+      }
     },
     include: {
       entries: {
@@ -385,7 +374,11 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     orderBy: [{ completedAt: "asc" }, { roundDate: "asc" }, { createdAt: "asc" }]
   });
 
-  for (const round of priorRounds) {
+  for (const round of completedRounds) {
+    if (round.id === targetRound.id) {
+      break;
+    }
+
     const recalculated = calculateRoundRows(
       round.entries.map((entry) => ({
         playerId: entry.playerId,
@@ -395,7 +388,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
         startQuota: resolveHistoricalStartQuota(
           quotaMap.get(entry.playerId),
           entry.startQuota,
-          liveQuotaMap.get(entry.playerId)
+          baseQuotaMap.get(entry.playerId)
         )
       }))
     );
@@ -406,10 +399,11 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
       }
     }
   }
+
   return Object.fromEntries(
     players.map((player) => [
       player.id,
-      quotaMap.get(player.id) ?? player.quota ?? player.currentQuota ?? player.startingQuota
+      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? player.startingQuota
     ])
   );
 }
@@ -521,4 +515,5 @@ export async function createOrReplaceRoundEntries(
     await syncRoundComputedState(tx, input.roundId);
   }
 }
+
 
