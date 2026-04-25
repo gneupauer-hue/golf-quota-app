@@ -16,6 +16,7 @@ import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
 import { getSeasonConfig } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { formatDisplayDate } from "@/lib/utils";
+import { rebuildPlayerQuotaHistory } from "@/lib/quota-history";
 
 function normalizeRoundMode(value: string): RoundMode {
   return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
@@ -129,26 +130,33 @@ export async function getPlayersPageData() {
       }
     }
   }).then((players) =>
-    players.map((player) => ({
-      id: player.id,
-      name: player.name,
-      quota: player.currentQuota ?? player.quota ?? player.startingQuota,
-      isRegular: player.isRegular,
-      isActive: player.isActive,
-      conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId),
-      history: player.roundEntries.map((entry) => ({
-        roundId: entry.round.id,
-        roundName: entry.round.roundName,
-        roundDate: entry.round.roundDate,
-        completedAt: entry.round.completedAt,
-        createdAt: entry.round.createdAt,
-        totalPoints: entry.totalPoints,
-        startQuota: entry.startQuota,
-        plusMinus: entry.plusMinus,
-        nextQuota: entry.nextQuota,
-        quotaMovement: entry.nextQuota - entry.startQuota
-      }))
-    }))
+    players.map((player) => {
+      const rebuiltHistory = rebuildPlayerQuotaHistory({
+        startingQuota: player.startingQuota,
+        currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+        rounds: player.roundEntries.map((entry) => ({
+          roundId: entry.round.id,
+          roundName: entry.round.roundName,
+          roundDate: entry.round.roundDate,
+          completedAt: entry.round.completedAt,
+          createdAt: entry.round.createdAt,
+          totalPoints: entry.totalPoints,
+          startQuota: entry.startQuota,
+          plusMinus: entry.plusMinus,
+          nextQuota: entry.nextQuota
+        }))
+      });
+
+      return {
+        id: player.id,
+        name: player.name,
+        quota: rebuiltHistory.currentQuota,
+        isRegular: player.isRegular,
+        isActive: player.isActive,
+        conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId),
+        history: rebuiltHistory.roundsDescending
+      };
+    })
   );
 }
 
@@ -176,13 +184,18 @@ export async function getCurrentQuotaRows() {
             completedAt: "desc"
           }
         },
-        take: 1,
         select: {
           totalPoints: true,
+          startQuota: true,
+          plusMinus: true,
+          nextQuota: true,
           round: {
             select: {
+              id: true,
+              roundName: true,
               completedAt: true,
-              roundDate: true
+              roundDate: true,
+              createdAt: true
             }
           }
         }
@@ -191,18 +204,34 @@ export async function getCurrentQuotaRows() {
   });
 
   return players.map((player) => {
-    const latestRound = player.roundEntries[0]?.round;
+    const rebuiltHistory = rebuildPlayerQuotaHistory({
+      startingQuota: player.startingQuota,
+      currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+      rounds: player.roundEntries.map((entry) => ({
+        roundId: entry.round.id,
+        roundName: entry.round.roundName,
+        roundDate: entry.round.roundDate,
+        completedAt: entry.round.completedAt,
+        createdAt: entry.round.createdAt,
+        totalPoints: entry.totalPoints,
+        startQuota: entry.startQuota,
+        plusMinus: entry.plusMinus,
+        nextQuota: entry.nextQuota
+      }))
+    });
+
+    const latestRound = rebuiltHistory.latestRound;
     const latestRoundDate = latestRound?.completedAt ?? latestRound?.roundDate ?? null;
 
     return {
       id: player.id,
       name: player.name,
-      quota: player.currentQuota ?? player.quota ?? player.startingQuota,
+      quota: rebuiltHistory.currentQuota,
       group: player.isRegular ? "Regular" : "Other",
       isActive: player.isActive,
       lastRoundPlayed: latestRoundDate ? formatDisplayDate(latestRoundDate) : "-",
       lastRoundDate: null,
-      lastScore: player.roundEntries[0]?.totalPoints ?? null
+      lastScore: latestRound?.totalPoints ?? null
     };
   });
 }
