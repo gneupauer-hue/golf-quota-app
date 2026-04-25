@@ -238,8 +238,34 @@ function formatQuotaResult(value: number) {
   return value === 0 ? "Even" : formatPlusMinus(value);
 }
 
-function formatIndyRankingDetail(totalPoints: number, startQuota: number, plusMinus: number) {
-  return `Points ${totalPoints} / Quota ${startQuota} = ${formatQuotaResult(plusMinus)}`;
+function buildIndyRankings<T extends { playerId: string; playerName: string; startQuota: number; totalPoints: number; plusMinus: number }>(rows: T[]) {
+  const sorted = [...rows].sort((left, right) => {
+    if (right.plusMinus !== left.plusMinus) {
+      return right.plusMinus - left.plusMinus;
+    }
+
+    if (right.totalPoints !== left.totalPoints) {
+      return right.totalPoints - left.totalPoints;
+    }
+
+    return left.playerName.localeCompare(right.playerName);
+  });
+
+  let previousKey = "";
+  let currentRank = 0;
+
+  return sorted.map((row, index) => {
+    const rankKey = `${row.plusMinus}:${row.totalPoints}`;
+    if (rankKey !== previousKey) {
+      currentRank = index + 1;
+      previousKey = rankKey;
+    }
+
+    return {
+      ...row,
+      rank: currentRank
+    };
+  });
 }
 
 export function MatchRoundView({
@@ -281,7 +307,24 @@ export function MatchRoundView({
   const paidPlayers = allTeamsSubmitted
     ? payoutSummary.players.filter((player) => player.projectedTotal > 0)
     : [];
-  const indyRankings = allTeamsSubmitted ? payoutSummary.individualRankings : [];
+  const indyRankings = allTeamsSubmitted
+    ? buildIndyRankings(
+        rows.map((row) => ({
+          playerId: row.playerId,
+          playerName: row.playerName,
+          startQuota: row.startQuota,
+          totalPoints: row.totalPoints,
+          plusMinus: row.plusMinus
+        }))
+      )
+    : [];
+  const indyPayoutsByPlayerId = new Map(
+    allTeamsSubmitted
+      ? payoutSummary.players
+          .filter((player) => player.indy > 0)
+          .map((player) => [player.playerId, player.indy])
+      : []
+  );
   const indyWinnerIds = new Set(
     allTeamsSubmitted
       ? payoutSummary.players
@@ -399,6 +442,7 @@ export function MatchRoundView({
               <div className="space-y-2">
                 {indyRankings.map((player) => {
                   const isIndyWinner = indyWinnerIds.has(player.playerId);
+                  const indyPayout = indyPayoutsByPlayerId.get(player.playerId) ?? 0;
 
                   return (
                     <div
@@ -408,14 +452,34 @@ export function MatchRoundView({
                         isIndyWinner ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
                       )}
                     >
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 shrink-0 pt-0.5 text-sm font-semibold text-ink/55">
-                          {`${player.rank}.`}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-base font-semibold text-ink">{player.playerName}</p>
-                          <p className="mt-1 text-sm text-ink/70">
-                            {formatIndyRankingDetail(player.totalPoints, player.startQuota, player.plusMinus)}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className="w-6 shrink-0 pt-0.5 text-sm font-semibold text-ink/55">
+                            {`${player.rank}.`}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-semibold text-ink">{player.playerName}</p>
+                          </div>
+                        </div>
+                        {indyPayout > 0 ? (
+                          <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-pine">
+                            {formatCurrency(indyPayout)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                        <div className="rounded-2xl bg-white px-3 py-2.5">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Starting quota</p>
+                          <p className="mt-1 font-semibold text-ink">{player.startQuota}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-3 py-2.5">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points scored</p>
+                          <p className="mt-1 font-semibold text-ink">{player.totalPoints}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-3 py-2.5">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Result</p>
+                          <p className={classNames("mt-1 font-semibold", isIndyWinner ? "text-pine" : "text-ink")}>
+                            {formatQuotaResult(player.plusMinus)}
                           </p>
                         </div>
                       </div>
