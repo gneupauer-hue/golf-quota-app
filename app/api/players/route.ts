@@ -26,8 +26,8 @@ async function syncConflicts(
 }
 
 export async function GET() {
-  const players = await getPlayersPageData();
-  return NextResponse.json({ players });
+  const data = await getPlayersPageData();
+  return NextResponse.json(data);
 }
 
 export async function POST(request: Request) {
@@ -64,8 +64,8 @@ export async function POST(request: Request) {
       await syncConflicts(tx, player.id, conflictIds);
     });
 
-    const players = await getPlayersPageData();
-    return NextResponse.json({ players });
+    const data = await getPlayersPageData();
+    return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not create player." },
@@ -73,4 +73,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

@@ -94,15 +94,6 @@ function getStartingQuotaLastRound(player: PlayerItem) {
   return latestRound ? latestRound.startQuota : null;
 }
 
-function getLastAdjustment(player: PlayerItem) {
-  const latestRound = getLatestRound(player);
-  if (!latestRound) {
-    return "No history yet";
-  }
-
-  return formatMovement(latestRound.quotaMovement);
-}
-
 function getLastAdjustmentLabel(player: PlayerItem) {
   const latestRound = getLatestRound(player);
   if (!latestRound) {
@@ -128,37 +119,70 @@ function getRoundsThisYear(player: PlayerItem) {
   }).length;
 }
 
-function QuotaAuditWarning({ quotaAudit }: { quotaAudit: QuotaValidationSummary }) {
-  if (quotaAudit.mismatchCount === 0) {
+function QuotaAuditWarning({
+  quotaAudit,
+  canManage,
+  isRepairPending,
+  onRepair
+}: {
+  quotaAudit: QuotaValidationSummary;
+  canManage: boolean;
+  isRepairPending: boolean;
+  onRepair: () => void;
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+
+  if (quotaAudit.mismatchCount === 0 || !canManage) {
     return null;
   }
 
   return (
     <SectionCard className="border border-danger/20 bg-[#FCE5E2] p-4">
       <div className="space-y-3">
-        <div>
+        <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-danger/80">
             Quota Audit Warning
           </p>
-          <p className="mt-1 text-sm text-ink/80">
+          <p className="text-sm text-ink/80">
             {`${quotaAudit.mismatchCount} mismatch${quotaAudit.mismatchCount === 1 ? "" : "es"} found across ${quotaAudit.totalPlayersChecked} players and ${quotaAudit.totalRoundsChecked} rounds.`}
           </p>
         </div>
-        <div className="space-y-2">
-          {quotaAudit.issues.map((issue, index) => (
-            <div
-              key={`${issue.playerId}-${issue.roundId ?? "current"}-${issue.fieldLabel}-${index}`}
-              className="rounded-2xl bg-white/80 px-3 py-3 text-sm text-ink/80"
-            >
-              <p className="font-semibold text-ink">{issue.playerName}</p>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-danger/80">
-                {issue.roundLabel}
-              </p>
-              <p className="mt-1">{issue.fieldLabel}</p>
-              <p className="mt-1 text-danger">{`Expected ${issue.expected}, found ${issue.actual}.`}</p>
-            </div>
-          ))}
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="club-btn-secondary min-h-11 text-sm"
+            onClick={() => setShowDetails((current) => !current)}
+          >
+            {showDetails ? "Hide Details" : "View Details"}
+          </button>
+          <button
+            type="button"
+            disabled={isRepairPending}
+            className="club-btn-primary min-h-11 text-sm disabled:opacity-60"
+            onClick={onRepair}
+          >
+            {isRepairPending ? "Recalculating..." : "Recalculate Quotas"}
+          </button>
         </div>
+
+        {showDetails ? (
+          <div className="space-y-2">
+            {quotaAudit.issues.map((issue, index) => (
+              <div
+                key={`${issue.playerId}-${issue.roundId ?? "current"}-${issue.fieldLabel}-${index}`}
+                className="rounded-2xl bg-white/80 px-3 py-3 text-sm text-ink/80"
+              >
+                <p className="font-semibold text-ink">{issue.playerName}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-danger/80">
+                  {issue.roundLabel}
+                </p>
+                <p className="mt-1">{issue.fieldLabel}</p>
+                <p className="mt-1 text-danger">{`Expected ${issue.expected}, found ${issue.actual}.`}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </SectionCard>
   );
@@ -184,7 +208,9 @@ export function PlayersManager({
   const [pendingEditPlayer, setPendingEditPlayer] = useState<PlayerItem | null>(null);
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
+  const [isRepairPending, startRepairTransition] = useTransition();
   const hasPlayers = players.length > 0;
+  const showAdminQuotaAudit = process.env.NODE_ENV !== "production" || isEditUnlocked;
 
   const groupedPlayers = useMemo(() => {
     return [...players].sort((a, b) => {
@@ -195,6 +221,18 @@ export function PlayersManager({
       return a.name.localeCompare(b.name);
     });
   }, [players]);
+
+  function applyPlayersResponse(result: {
+    players: PlayerItem[];
+    quotaAudit: QuotaValidationSummary;
+    message?: string;
+  }) {
+    setPlayers(result.players);
+    setQuotaAudit(result.quotaAudit);
+    if (result.message) {
+      setMessage(result.message);
+    }
+  }
 
   function openCreateEditor() {
     setForm(emptyForm);
@@ -298,6 +336,27 @@ export function PlayersManager({
     });
   }
 
+  function handleRepairQuotas() {
+    startRepairTransition(async () => {
+      try {
+        setMessage("");
+        const response = await fetch("/api/players/recalculate-quotas", {
+          method: "POST"
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          setMessage(result.error ?? "Could not recalculate quotas.");
+          return;
+        }
+
+        applyPlayersResponse(result);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not recalculate quotas.");
+      }
+    });
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -331,8 +390,7 @@ export function PlayersManager({
         return;
       }
 
-      setPlayers(result.players);
-      setQuotaAudit(result.quotaAudit);
+      applyPlayersResponse(result);
       setIsEditorOpen(false);
       setForm(emptyForm);
       setIsManageOpen(true);
@@ -344,7 +402,12 @@ export function PlayersManager({
     <div className="space-y-4">
       <PageTitle title="Players" />
 
-      <QuotaAuditWarning quotaAudit={quotaAudit} />
+      <QuotaAuditWarning
+        quotaAudit={quotaAudit}
+        canManage={showAdminQuotaAudit}
+        isRepairPending={isRepairPending}
+        onRepair={handleRepairQuotas}
+      />
 
       {!hasPlayers ? (
         <SectionCard className="p-5">
@@ -513,6 +576,17 @@ export function PlayersManager({
                 >
                   Add Player
                 </button>
+
+                {showAdminQuotaAudit ? (
+                  <button
+                    type="button"
+                    disabled={isRepairPending}
+                    className="club-btn-secondary min-h-12 w-full text-base disabled:opacity-60"
+                    onClick={handleRepairQuotas}
+                  >
+                    {isRepairPending ? "Recalculating..." : "Recalculate Quotas"}
+                  </button>
+                ) : null}
 
                 <div className="space-y-2">
                   {groupedPlayers.map((player) => (
@@ -717,4 +791,3 @@ export function PlayersManager({
     </div>
   );
 }
-

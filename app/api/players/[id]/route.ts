@@ -71,8 +71,8 @@ export async function PUT(
       await syncConflicts(tx, id, conflictIds);
     });
 
-    const players = await getPlayersPageData();
-    return NextResponse.json({ players });
+    const data = await getPlayersPageData();
+    return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not update player." },
@@ -80,4 +80,3 @@ export async function PUT(
     );
   }
 }
-
