@@ -24,7 +24,7 @@ function makeRound(args: {
   };
 }
 
-test("Gary Neupauer carries a +2 result forward into the next round", () => {
+test("+4 raw result moves quota up by the capped +2 maximum", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
     startingQuota: 17,
     currentQuota: 18,
@@ -33,7 +33,7 @@ test("Gary Neupauer carries a +2 result forward into the next round", () => {
         roundId: "gary-1",
         roundName: "Apr 19",
         completedAt: "2026-04-19T12:00:00.000Z",
-        totalPoints: 19,
+        totalPoints: 21,
         startQuota: 17,
         plusMinus: 2,
         nextQuota: 18
@@ -53,43 +53,85 @@ test("Gary Neupauer carries a +2 result forward into the next round", () => {
   assert.deepEqual(
     rebuilt.roundsAscending.map((round) => ({
       startQuota: round.startQuota,
+      rawResult: round.plusMinus,
       movement: round.quotaMovement,
-      nextQuota: round.nextQuota,
-      plusMinus: round.plusMinus
+      nextQuota: round.nextQuota
     })),
     [
-      { startQuota: 17, movement: 2, nextQuota: 19, plusMinus: 2 },
-      { startQuota: 19, movement: 0, nextQuota: 19, plusMinus: 0 }
+      { startQuota: 17, rawResult: 4, movement: 2, nextQuota: 19 },
+      { startQuota: 19, rawResult: 0, movement: 0, nextQuota: 19 }
     ]
   );
   assert.equal(rebuilt.currentQuota, 19);
 });
 
-test("Billy Mattioli keeps full negative adjustment instead of a capped drop", () => {
+test("+2 raw result moves quota up by +2", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
-    startingQuota: 27,
-    currentQuota: 26,
+    startingQuota: 20,
+    currentQuota: 20,
     rounds: [
       makeRound({
-        roundId: "billy-1",
+        roundId: "plus-two",
         roundName: "Apr 19",
         completedAt: "2026-04-19T12:00:00.000Z",
-        totalPoints: 25,
-        startQuota: 26,
-        plusMinus: -1,
-        nextQuota: 26
+        totalPoints: 22,
+        startQuota: 20,
+        plusMinus: 1,
+        nextQuota: 21
       })
     ]
   });
 
-  assert.equal(rebuilt.roundsAscending[0]?.startQuota, 27);
-  assert.equal(rebuilt.roundsAscending[0]?.plusMinus, -2);
-  assert.equal(rebuilt.roundsAscending[0]?.quotaMovement, -2);
-  assert.equal(rebuilt.roundsAscending[0]?.nextQuota, 25);
-  assert.equal(rebuilt.currentQuota, 25);
+  assert.equal(rebuilt.roundsAscending[0]?.plusMinus, 2);
+  assert.equal(rebuilt.roundsAscending[0]?.quotaMovement, 2);
+  assert.equal(rebuilt.roundsAscending[0]?.nextQuota, 22);
 });
 
-test("Bob Lipski keeps the true starting quota and full -4 movement", () => {
+test("+1 raw result moves quota up by +1", () => {
+  const rebuilt = rebuildPlayerQuotaHistory({
+    startingQuota: 20,
+    currentQuota: 20,
+    rounds: [
+      makeRound({
+        roundId: "plus-one",
+        roundName: "Apr 19",
+        completedAt: "2026-04-19T12:00:00.000Z",
+        totalPoints: 21,
+        startQuota: 20,
+        plusMinus: 0,
+        nextQuota: 20
+      })
+    ]
+  });
+
+  assert.equal(rebuilt.roundsAscending[0]?.plusMinus, 1);
+  assert.equal(rebuilt.roundsAscending[0]?.quotaMovement, 1);
+  assert.equal(rebuilt.roundsAscending[0]?.nextQuota, 21);
+});
+
+test("Even raw result leaves quota unchanged", () => {
+  const rebuilt = rebuildPlayerQuotaHistory({
+    startingQuota: 19,
+    currentQuota: 19,
+    rounds: [
+      makeRound({
+        roundId: "even",
+        roundName: "Apr 24",
+        completedAt: "2026-04-24T12:00:00.000Z",
+        totalPoints: 19,
+        startQuota: 21,
+        plusMinus: -2,
+        nextQuota: 20
+      })
+    ]
+  });
+
+  assert.equal(rebuilt.roundsAscending[0]?.plusMinus, 0);
+  assert.equal(rebuilt.roundsAscending[0]?.quotaMovement, 0);
+  assert.equal(rebuilt.roundsAscending[0]?.nextQuota, 19);
+});
+
+test("any negative raw result moves quota down by the capped -1 maximum", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
     startingQuota: 34,
     currentQuota: 32,
@@ -108,7 +150,7 @@ test("Bob Lipski keeps the true starting quota and full -4 movement", () => {
 
   assert.equal(rebuilt.roundsAscending[0]?.startQuota, 34);
   assert.equal(rebuilt.roundsAscending[0]?.plusMinus, -4);
-  assert.equal(rebuilt.roundsAscending[0]?.quotaMovement, -4);
-  assert.equal(rebuilt.roundsAscending[0]?.nextQuota, 30);
-  assert.equal(rebuilt.currentQuota, 30);
+  assert.equal(rebuilt.roundsAscending[0]?.quotaMovement, -1);
+  assert.equal(rebuilt.roundsAscending[0]?.nextQuota, 33);
+  assert.equal(rebuilt.currentQuota, 33);
 });

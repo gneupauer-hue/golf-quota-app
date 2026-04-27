@@ -400,9 +400,16 @@ export function splitQuota(startQuota: number) {
 export function calculateNextQuota(startQuota: number, totalPoints: number) {
   const plusMinus = totalPoints - startQuota;
 
+  let quotaMovement = 0;
+  if (plusMinus > 0) {
+    quotaMovement = Math.min(2, plusMinus);
+  } else if (plusMinus < 0) {
+    quotaMovement = -1;
+  }
+
   return {
     plusMinus,
-    nextQuota: startQuota + plusMinus
+    nextQuota: startQuota + quotaMovement
   };
 }
 
@@ -1771,5 +1778,6 @@ export function calculatePayoutAudit(
     passed: checks.every((check) => check.passed)
   };
 }
+
 
 
