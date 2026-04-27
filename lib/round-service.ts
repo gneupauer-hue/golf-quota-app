@@ -10,6 +10,7 @@ import {
   type RoundMode,
   type TeamCode
 } from "@/lib/quota";
+import { validateAllPlayerQuotas, type PlayerQuotaValidationInput } from "@/lib/quota-history";
 import { formatRoundNameFromDate } from "@/lib/utils";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -24,6 +25,8 @@ type HoleEntryPayload = {
   backSubmittedAt?: Date | null;
   holes: Array<number | null>;
 };
+
+type CompletionPreviewValidation = ReturnType<typeof validateAllPlayerQuotas>;
 
 function getHoleScores(entry: Record<HoleFieldName, number | null>) {
   return holeFieldNames.map((fieldName) => entry[fieldName]);
@@ -210,6 +213,123 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
   await persistRoundSummaries(tx, roundId, recalculated);
 }
 
+async function buildQuotaValidationSummary(
+  tx: Tx,
+  args: {
+    roundId: string;
+    roundName: string;
+    roundDate: Date;
+    completedAt: Date | null;
+    createdAt: Date;
+    readOnly: boolean;
+    previewRows: Array<{
+      playerId: string;
+      playerName: string;
+      startQuota: number;
+      totalPoints: number;
+      quotaAdjustment: number;
+      nextQuota: number;
+    }>;
+  }
+): Promise<CompletionPreviewValidation> {
+  const players = await tx.player.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      quota: true,
+      currentQuota: true,
+      startingQuota: true,
+      roundEntries: {
+        where: {
+          round: {
+            completedAt: {
+              not: null
+            }
+          }
+        },
+        orderBy: [
+          {
+            round: {
+              completedAt: "asc"
+            }
+          },
+          {
+            round: {
+              roundDate: "asc"
+            }
+          },
+          {
+            round: {
+              createdAt: "asc"
+            }
+          }
+        ],
+        select: {
+          totalPoints: true,
+          startQuota: true,
+          plusMinus: true,
+          nextQuota: true,
+          round: {
+            select: {
+              id: true,
+              roundName: true,
+              roundDate: true,
+              completedAt: true,
+              createdAt: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const previewRowsByPlayerId = new Map(args.previewRows.map((row) => [row.playerId, row]));
+
+  const validationInputs: Array<PlayerQuotaValidationInput> = players.map((player) => {
+    const rounds = player.roundEntries.map((entry) => ({
+      roundId: entry.round.id,
+      roundName: entry.round.roundName,
+      roundDate: entry.round.roundDate,
+      completedAt: entry.round.completedAt,
+      createdAt: entry.round.createdAt,
+      totalPoints: entry.totalPoints,
+      startQuota: entry.startQuota,
+      plusMinus: entry.plusMinus,
+      nextQuota: entry.nextQuota
+    }));
+
+    const previewRow = previewRowsByPlayerId.get(player.id);
+
+    if (!args.readOnly && previewRow) {
+      rounds.push({
+        roundId: args.roundId,
+        roundName: args.roundName,
+        roundDate: args.roundDate,
+        completedAt: args.completedAt,
+        createdAt: args.createdAt,
+        totalPoints: previewRow.totalPoints,
+        startQuota: previewRow.startQuota,
+        plusMinus: previewRow.totalPoints - previewRow.startQuota,
+        nextQuota: previewRow.nextQuota
+      });
+    }
+
+    return {
+      playerId: player.id,
+      playerName: player.name,
+      startingQuota: player.startingQuota,
+      currentQuota:
+        !args.readOnly && previewRow
+          ? previewRow.nextQuota
+          : player.currentQuota ?? player.quota ?? player.startingQuota,
+      rounds
+    };
+  });
+
+  return validateAllPlayerQuotas(validationInputs);
+}
+
 export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
   const round = await tx.round.findUnique({
     where: { id: roundId },
@@ -256,6 +376,27 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
     }))
   );
 
+  const previewRows = recalculated
+    .map((row) => ({
+      playerId: row.playerId,
+      playerName: row.playerName,
+      startQuota: row.startQuota,
+      totalPoints: row.totalPoints,
+      quotaAdjustment: row.nextQuota - row.startQuota,
+      nextQuota: row.nextQuota
+    }))
+    .sort((left, right) => left.playerName.localeCompare(right.playerName));
+
+  const validation = await buildQuotaValidationSummary(tx, {
+    roundId: round.id,
+    roundName: round.roundName,
+    roundDate: round.roundDate,
+    completedAt: round.completedAt,
+    createdAt: round.createdAt,
+    readOnly,
+    previewRows
+  });
+
   return {
     roundId: round.id,
     isTestRound: Boolean(round.isTestRound),
@@ -266,16 +407,8 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
       : Boolean(round.isTestRound)
         ? "Review carefully. This is a test round, so quotas will not be updated when you post it."
         : "Review carefully. These quotas will be used for the next round.",
-    rows: recalculated
-      .map((row) => ({
-        playerId: row.playerId,
-        playerName: row.playerName,
-        startQuota: row.startQuota,
-        totalPoints: row.totalPoints,
-        quotaAdjustment: row.nextQuota - row.startQuota,
-        nextQuota: row.nextQuota
-      }))
-      .sort((left, right) => left.playerName.localeCompare(right.playerName))
+    rows: previewRows,
+    validation
   };
 }
 
@@ -310,6 +443,15 @@ export async function finalizeRound(tx: Tx, roundId: string) {
 
   if (pendingBackNine > 0) {
     throw new Error("All players must submit their back nine before completing the round.");
+  }
+
+  const preview = await getRoundCompletionPreview(tx, roundId);
+
+  if (preview.validation.mismatchCount > 0) {
+    const affectedPlayers = Array.from(
+      new Set(preview.validation.issues.map((issue) => issue.playerName))
+    );
+    throw new Error(`Quota validation failed. Check: ${affectedPlayers.join(", ")}.`);
   }
 
   const finalizedAt = new Date();
@@ -605,6 +747,9 @@ export async function createOrReplaceRoundEntries(
     await syncRoundComputedState(tx, input.roundId);
   }
 }
+
+
+
 
 
 

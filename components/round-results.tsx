@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
+import type { QuotaValidationSummary } from "@/lib/quota-history";
 import {
   calculatePayoutAudit,
   calculateFinalPayoutSummary,
@@ -106,6 +107,7 @@ type ResultsData = {
       }>;
     };
   };
+  quotaAudit?: QuotaValidationSummary;
 };
 
 type CollapsibleSectionProps = {
@@ -218,6 +220,37 @@ function CollapsibleSection({ title, subtitle, badge, children }: CollapsibleSec
   );
 }
 
+function QuotaAuditWarning({ quotaAudit }: { quotaAudit?: QuotaValidationSummary }) {
+  if (!quotaAudit || quotaAudit.mismatchCount === 0) {
+    return null;
+  }
+
+  return (
+    <SectionCard className="border border-danger/20 bg-[#FCE5E2] p-4">
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-danger/80">
+            Quota Audit Warning
+          </p>
+          <p className="mt-1 text-sm text-ink/80">
+            {`${quotaAudit.mismatchCount} mismatch${quotaAudit.mismatchCount === 1 ? "" : "es"} found across ${quotaAudit.totalPlayersChecked} players and ${quotaAudit.totalRoundsChecked} rounds.`}
+          </p>
+        </div>
+        <div className="space-y-2">
+          {quotaAudit.issues.map((issue, index) => (
+            <div key={`${issue.playerId}-${issue.roundId ?? "current"}-${issue.fieldLabel}-${index}`} className="rounded-2xl bg-white/80 px-3 py-3 text-sm text-ink/80">
+              <p className="font-semibold text-ink">{issue.playerName}</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-danger/80">{issue.roundLabel}</p>
+              <p className="mt-1">{issue.fieldLabel}</p>
+              <p className="mt-1 text-danger">{`Expected ${issue.expected}, found ${issue.actual}.`}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 export function RoundResults({ data }: { data: ResultsData }) {
   const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
@@ -247,6 +280,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
   return (
     <div className="space-y-3 pb-8">
       <PageTitle title="Results" subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`} />
+      <QuotaAuditWarning quotaAudit={data.quotaAudit} />
+
       <Link
         href="/past-games"
         className="inline-flex min-h-11 items-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
@@ -596,6 +631,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
         </div>
       </CollapsibleSection>
 
+      <QuotaAuditWarning quotaAudit={data.quotaAudit} />
+
       <Link
         href="/past-games"
         className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
@@ -605,3 +642,10 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
+
+
+
+
+
+
+

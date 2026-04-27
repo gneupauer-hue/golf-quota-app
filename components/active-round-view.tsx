@@ -274,6 +274,10 @@ export function MatchRoundView({
   roundName,
   teamStandings,
   teamRowsByCode,
+  scoringGroups,
+  selectedScoringGroupKey,
+  visibleTeamCodes,
+  isAdminCorrectionMode,
   sideGames,
   payoutSummary,
   isTestRound,
@@ -284,16 +288,31 @@ export function MatchRoundView({
   isArchiving,
   onArchiveRound,
   onOpenTeam,
+  onSelectScoringGroup,
+  onEnterAdminCorrectionMode,
+  onExitAdminCorrectionMode,
   onRefresh
 }: SharedProps & {
   roundName: string;
   teamStandings: TeamStanding[];
   teamRowsByCode: Map<TeamCode, CalculatedRoundRow[]>;
+  scoringGroups: Array<{
+    key: string;
+    label: string;
+    teams: TeamCode[];
+    playerNames: string[];
+  }>;
+  selectedScoringGroupKey: string | null;
+  visibleTeamCodes: Set<TeamCode>;
+  isAdminCorrectionMode: boolean;
   sideGames: SideGameResults;
   payoutSummary: PayoutPredictionsSummary;
   isArchiving: boolean;
   onArchiveRound: () => void;
   onOpenTeam: (team: TeamCode) => void;
+  onSelectScoringGroup: (groupKey: string) => void;
+  onEnterAdminCorrectionMode: () => void;
+  onExitAdminCorrectionMode: () => void;
   onRefresh: () => void;
 }) {
   const lastRefreshedLabel = formatTimeLabel(lastRefreshedAt);
@@ -301,6 +320,11 @@ export function MatchRoundView({
     teamStandings.length > 0 &&
     teamStandings.every((team) => getTeamSubmissionState(teamRowsByCode.get(team.team) ?? [], rowStates));
   const orderedTeamStandings = sortTeamsAlphabetically(teamStandings);
+  const selectedScoringGroup =
+    selectedScoringGroupKey == null
+      ? scoringGroups[0] ?? null
+      : scoringGroups.find((group) => group.key === selectedScoringGroupKey) ?? scoringGroups[0] ?? null;
+  const visibleTeamStandings = orderedTeamStandings.filter((team) => visibleTeamCodes.has(team.team));
   const awardedSkins = allTeamsSubmitted
     ? sideGames.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName)
     : [];
@@ -341,8 +365,65 @@ export function MatchRoundView({
 
   return (
     <div className="space-y-4">
+      <SectionCard className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Scoring Scope</p>
+            <h3 className="mt-1 text-lg font-semibold">
+              {isAdminCorrectionMode ? "Admin Fix Scores" : selectedScoringGroup?.label ?? "Select your foursome"}
+            </h3>
+            <p className="mt-1 text-sm text-ink/70">
+              {isAdminCorrectionMode
+                ? "Warning: you can edit any team and clear saved scores while this mode is on."
+                : "Live scoring only shows the teams in your selected foursome so another scorer's teams stay protected."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={isAdminCorrectionMode ? onExitAdminCorrectionMode : onEnterAdminCorrectionMode}
+            className={classNames(
+              "min-h-11 rounded-2xl px-4 py-2 text-sm font-semibold",
+              isAdminCorrectionMode ? "bg-danger/12 text-danger" : "bg-canvas text-ink"
+            )}
+          >
+            {isAdminCorrectionMode ? "Exit Fix Mode" : "Admin Fix Scores"}
+          </button>
+        </div>
+
+        {scoringGroups.length > 1 ? (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {scoringGroups.map((group) => {
+              const selected = group.key === selectedScoringGroupKey;
+              return (
+                <button
+                  key={group.key}
+                  type="button"
+                  disabled={isAdminCorrectionMode}
+                  onClick={() => onSelectScoringGroup(group.key)}
+                  className={classNames(
+                    "rounded-[22px] border px-4 py-3 text-left transition",
+                    selected
+                      ? "border-pine bg-pine text-white"
+                      : "border-ink/10 bg-canvas text-ink",
+                    isAdminCorrectionMode ? "opacity-60" : ""
+                  )}
+                >
+                  <span className="block text-sm font-semibold">{group.label}</span>
+                  <span className={classNames("mt-1 block text-xs", selected ? "text-white/75" : "text-ink/60")}>
+                    {group.teams.map((team) => `Team ${team}`).join(" • ")}
+                  </span>
+                  <span className={classNames("mt-2 block text-xs leading-5", selected ? "text-white/80" : "text-ink/65")}>
+                    {group.playerNames.join(", ")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </SectionCard>
+
       <div className="space-y-3">
-        {orderedTeamStandings.map((team) => {
+        {visibleTeamStandings.map((team) => {
           const teamRows = teamRowsByCode.get(team.team) ?? [];
           const progress = getTeamProgress(teamRows);
           const teamSubmitted = getTeamSubmissionState(teamRows, rowStates);
@@ -358,8 +439,8 @@ export function MatchRoundView({
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                  <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
-                  <p className="mt-1 text-sm leading-6 text-ink/70">{playerSummary}</p>
+                    <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
+                    <p className="mt-1 text-sm leading-6 text-ink/70">{playerSummary}</p>
                   </div>
                   <div className={classNames("rounded-2xl px-4 py-3 text-center", teamSubmitted ? "bg-[#E2F4E6]" : "bg-canvas")}>
                     <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">
@@ -391,7 +472,7 @@ export function MatchRoundView({
         })}
       </div>
 
-        <div className="pt-1">
+      <div className="pt-1">
           <button
             type="button"
             onClick={onRefresh}
@@ -670,5 +751,8 @@ export function SkinsOnlyRoundView({
     </div>
   );
 }
+
+
+
 
 

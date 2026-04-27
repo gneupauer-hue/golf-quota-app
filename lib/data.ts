@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+﻿import { prisma } from "@/lib/prisma";
 import { resolveActiveRound } from "@/lib/active-round";
 import { unstable_noStore as noStore } from "next/cache";
 import {
@@ -16,7 +16,7 @@ import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
 import { getSeasonConfig } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { formatDisplayDate } from "@/lib/utils";
-import { rebuildPlayerQuotaHistory } from "@/lib/quota-history";
+import { rebuildPlayerQuotaHistory, validateAllPlayerQuotas, validatePlayerQuotaHistory, type QuotaValidationSummary } from "@/lib/quota-history";
 
 function normalizeRoundMode(value: string): RoundMode {
   return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
@@ -72,7 +72,7 @@ export async function getPlayersForSelection() {
 }
 
 export async function getPlayersPageData() {
-  return prisma.player.findMany({
+  const players = await prisma.player.findMany({
     orderBy: [{ isRegular: "desc" }, { name: "asc" }],
     select: {
       id: true,
@@ -129,23 +129,34 @@ export async function getPlayersPageData() {
         }
       }
     }
-  }).then((players) =>
-    players.map((player) => {
-      const rebuiltHistory = rebuildPlayerQuotaHistory({
-        startingQuota: player.startingQuota,
-        currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
-        rounds: player.roundEntries.map((entry) => ({
-          roundId: entry.round.id,
-          roundName: entry.round.roundName,
-          roundDate: entry.round.roundDate,
-          completedAt: entry.round.completedAt,
-          createdAt: entry.round.createdAt,
-          totalPoints: entry.totalPoints,
-          startQuota: entry.startQuota,
-          plusMinus: entry.plusMinus,
-          nextQuota: entry.nextQuota
-        }))
-      });
+  });
+
+  const validationInputs = players.map((player) => ({
+    playerId: player.id,
+    playerName: player.name,
+    startingQuota: player.startingQuota,
+    currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+    rounds: player.roundEntries.map((entry) => ({
+      roundId: entry.round.id,
+      roundName: entry.round.roundName,
+      roundDate: entry.round.roundDate,
+      completedAt: entry.round.completedAt,
+      createdAt: entry.round.createdAt,
+      totalPoints: entry.totalPoints,
+      startQuota: entry.startQuota,
+      plusMinus: entry.plusMinus,
+      nextQuota: entry.nextQuota
+    }))
+  }));
+
+  const quotaAudit = validateAllPlayerQuotas(validationInputs);
+  const rebuiltByPlayerId = new Map(
+    validationInputs.map((player) => [player.playerId, validatePlayerQuotaHistory(player).rebuilt])
+  );
+
+  return {
+    players: players.map((player) => {
+      const rebuiltHistory = rebuiltByPlayerId.get(player.id)!;
 
       return {
         id: player.id,
@@ -156,8 +167,9 @@ export async function getPlayersPageData() {
         conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId),
         history: rebuiltHistory.roundsDescending
       };
-    })
-  );
+    }),
+    quotaAudit
+  };
 }
 
 export async function getCurrentQuotaRows() {
@@ -939,6 +951,78 @@ export async function getRoundResultsData(roundId: string) {
     rank: entry.rank
   }));
 
+  const quotaAuditPlayers = await prisma.player.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      quota: true,
+      currentQuota: true,
+      startingQuota: true,
+      roundEntries: {
+        where: {
+          round: {
+            completedAt: {
+              not: null
+            }
+          }
+        },
+        orderBy: [
+          {
+            round: {
+              completedAt: "asc"
+            }
+          },
+          {
+            round: {
+              roundDate: "asc"
+            }
+          },
+          {
+            round: {
+              createdAt: "asc"
+            }
+          }
+        ],
+        select: {
+          totalPoints: true,
+          startQuota: true,
+          plusMinus: true,
+          nextQuota: true,
+          round: {
+            select: {
+              id: true,
+              roundName: true,
+              roundDate: true,
+              completedAt: true,
+              createdAt: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const quotaAudit = validateAllPlayerQuotas(
+    quotaAuditPlayers.map((player) => ({
+      playerId: player.id,
+      playerName: player.name,
+      startingQuota: player.startingQuota,
+      currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+      rounds: player.roundEntries.map((entry) => ({
+        roundId: entry.round.id,
+        roundName: entry.round.roundName,
+        roundDate: entry.round.roundDate,
+        completedAt: entry.round.completedAt,
+        createdAt: entry.round.createdAt,
+        totalPoints: entry.totalPoints,
+        startQuota: entry.startQuota,
+        plusMinus: entry.plusMinus,
+        nextQuota: entry.nextQuota
+      }))
+    }))
+  );
+
   const settlement = getRoundSettlementState(round);
   console.info("[scoreboard] getRoundResultsData", {
     roundId,
@@ -971,7 +1055,8 @@ export async function getRoundResultsData(roundId: string) {
     entries,
     teamStandings: calculateTeamStandings(entries),
     leaders: calculateLiveLeaders(entries),
-    money: calculateSideGameResults(entries)
+    money: calculateSideGameResults(entries),
+    quotaAudit
   };
 }
 
@@ -1013,4 +1098,9 @@ export async function getHomePageData() {
     currentRound
   };
 }
+
+
+
+
+
 

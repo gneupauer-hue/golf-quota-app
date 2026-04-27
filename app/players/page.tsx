@@ -1,9 +1,9 @@
-import { PlayersManager } from "@/components/players-manager";
+﻿import { PlayersManager } from "@/components/players-manager";
 import { getPlayersPageData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function PlayersPage() {
-  const players = await getPlayersPageData();
-  return <PlayersManager initialPlayers={players} />;
+  const data = await getPlayersPageData();
+  return <PlayersManager initialPlayers={data.players} initialQuotaAudit={data.quotaAudit} />;
 }

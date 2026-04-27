@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+﻿import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getPlayersPageData } from "@/lib/data";
 import { prisma } from "@/lib/prisma";
@@ -73,3 +73,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

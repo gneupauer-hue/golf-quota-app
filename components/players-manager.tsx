@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
+import type { QuotaValidationSummary } from "@/lib/quota-history";
 import { classNames, formatDisplayDate, getRoundDisplayDate } from "@/lib/utils";
 
 type PlayerHistoryItem = {
@@ -69,42 +70,114 @@ function getLatestRound(player: PlayerItem) {
   return player.history[0] ?? null;
 }
 
-function getLastRoundLabel(player: PlayerItem) {
-  const latestRound = getLatestRound(player);
-  if (!latestRound) {
+function getRoundDateLabel(round: PlayerHistoryItem | null) {
+  if (!round) {
     return "No rounds yet";
   }
 
   return formatDisplayDate(
     getRoundDisplayDate({
-      roundName: latestRound.roundName,
-      roundDate: latestRound.roundDate,
-      completedAt: latestRound.completedAt,
-      createdAt: latestRound.createdAt
+      roundName: round.roundName,
+      roundDate: round.roundDate,
+      completedAt: round.completedAt,
+      createdAt: round.createdAt
     })
   );
 }
 
-function getPreviousQuota(player: PlayerItem) {
+function getLastRoundLabel(player: PlayerItem) {
+  return getRoundDateLabel(getLatestRound(player));
+}
+
+function getStartingQuotaLastRound(player: PlayerItem) {
   const latestRound = getLatestRound(player);
   return latestRound ? latestRound.startQuota : null;
 }
 
-function getAdjustmentLabel(player: PlayerItem) {
+function getLastAdjustment(player: PlayerItem) {
   const latestRound = getLatestRound(player);
   if (!latestRound) {
     return "No history yet";
   }
 
-  return `${formatMovement(latestRound.quotaMovement)} on ${getLastRoundLabel(player)}`;
+  return formatMovement(latestRound.quotaMovement);
 }
 
-export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[] }) {
+function getLastAdjustmentLabel(player: PlayerItem) {
+  const latestRound = getLatestRound(player);
+  if (!latestRound) {
+    return "No history yet";
+  }
+
+  return `${formatMovement(latestRound.quotaMovement)} on ${getRoundDateLabel(latestRound)}`;
+}
+
+function getRoundsThisYear(player: PlayerItem) {
+  const currentYear = new Date().getFullYear();
+
+  return player.history.filter((item) => {
+    const displayDate = getRoundDisplayDate({
+      roundName: item.roundName,
+      roundDate: item.roundDate,
+      completedAt: item.completedAt,
+      createdAt: item.createdAt
+    });
+    const parsed =
+      displayDate instanceof Date ? displayDate.getTime() : Date.parse(displayDate);
+    return !Number.isNaN(parsed) && new Date(parsed).getFullYear() === currentYear;
+  }).length;
+}
+
+function QuotaAuditWarning({ quotaAudit }: { quotaAudit: QuotaValidationSummary }) {
+  if (quotaAudit.mismatchCount === 0) {
+    return null;
+  }
+
+  return (
+    <SectionCard className="border border-danger/20 bg-[#FCE5E2] p-4">
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-danger/80">
+            Quota Audit Warning
+          </p>
+          <p className="mt-1 text-sm text-ink/80">
+            {`${quotaAudit.mismatchCount} mismatch${quotaAudit.mismatchCount === 1 ? "" : "es"} found across ${quotaAudit.totalPlayersChecked} players and ${quotaAudit.totalRoundsChecked} rounds.`}
+          </p>
+        </div>
+        <div className="space-y-2">
+          {quotaAudit.issues.map((issue, index) => (
+            <div
+              key={`${issue.playerId}-${issue.roundId ?? "current"}-${issue.fieldLabel}-${index}`}
+              className="rounded-2xl bg-white/80 px-3 py-3 text-sm text-ink/80"
+            >
+              <p className="font-semibold text-ink">{issue.playerName}</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-danger/80">
+                {issue.roundLabel}
+              </p>
+              <p className="mt-1">{issue.fieldLabel}</p>
+              <p className="mt-1 text-danger">{`Expected ${issue.expected}, found ${issue.actual}.`}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+export function PlayersManager({
+  initialPlayers,
+  initialQuotaAudit
+}: {
+  initialPlayers: PlayerItem[];
+  initialQuotaAudit: QuotaValidationSummary;
+}) {
   const [players, setPlayers] = useState(initialPlayers);
+  const [quotaAudit, setQuotaAudit] = useState(initialQuotaAudit);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isManageOpen, setIsManageOpen] = useState(false);
   const [isEditUnlocked, setIsEditUnlocked] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -125,6 +198,7 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
 
   function openCreateEditor() {
     setForm(emptyForm);
+    setIsManageOpen(false);
     setIsEditorOpen(true);
     setMessage("");
   }
@@ -138,16 +212,34 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
       isActive: player.isActive,
       conflictIds: player.conflictIds
     });
+    setIsManageOpen(false);
     setIsEditorOpen(true);
     setMessage("");
   }
 
-  function handleEdit(player: PlayerItem) {
+  function requestEditAccess(player: PlayerItem | null = null) {
     if (!isEditUnlocked) {
       setPendingEditPlayer(player);
       setPasswordInput("");
       setPasswordMessage("");
       setIsUnlockOpen(true);
+      return false;
+    }
+
+    return true;
+  }
+
+  function openPlayerManagement() {
+    if (!requestEditAccess()) {
+      return;
+    }
+
+    setIsManageOpen(true);
+    setMessage("");
+  }
+
+  function handleEdit(player: PlayerItem) {
+    if (!requestEditAccess(player)) {
       return;
     }
 
@@ -161,6 +253,10 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
   function closeEditor() {
     setIsEditorOpen(false);
     setForm(emptyForm);
+  }
+
+  function closeManagement() {
+    setIsManageOpen(false);
   }
 
   function closeUnlock() {
@@ -193,6 +289,8 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
         closeUnlock();
         if (playerToEdit) {
           openEditorForPlayer(playerToEdit);
+        } else {
+          setIsManageOpen(true);
         }
       } catch (error) {
         setPasswordMessage(error instanceof Error ? error.message : "Could not unlock editing.");
@@ -234,8 +332,10 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
       }
 
       setPlayers(result.players);
+      setQuotaAudit(result.quotaAudit);
       setIsEditorOpen(false);
       setForm(emptyForm);
+      setIsManageOpen(true);
       setMessage(form.id ? "Player updated" : "Player added");
     });
   }
@@ -243,6 +343,8 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
   return (
     <div className="space-y-4">
       <PageTitle title="Players" />
+
+      <QuotaAuditWarning quotaAudit={quotaAudit} />
 
       {!hasPlayers ? (
         <SectionCard className="p-5">
@@ -269,106 +371,99 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
 
       {hasPlayers ? (
         <>
-          <SectionCard className="p-5">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-ink">Player Actions</h3>
-                <p className="text-sm leading-6 text-ink/75">
-                  Add a player, view round history, or update player details. Editing existing quotas remains password protected.
+          <SectionCard className="p-4">
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-semibold text-ink">Players</h3>
+                <p className="text-sm leading-5 text-ink/75">
+                  Scan current quotas, recent changes, and season activity at a glance.
                 </p>
               </div>
 
-              <div>
-                <button
-                  type="button"
-                  className="club-btn-primary min-h-12 w-full text-base"
-                  onClick={openCreateEditor}
-                >
-                  Add Player
-                </button>
-              </div>
+              <button
+                type="button"
+                className="club-btn-primary min-h-11 w-full text-sm"
+                onClick={openCreateEditor}
+              >
+                Add Player
+              </button>
 
               {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
             </div>
           </SectionCard>
 
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {groupedPlayers.map((player) => {
               const isHistoryOpen = openHistoryPlayerId === player.id;
 
               return (
-                <SectionCard key={player.id} className="p-3">
-                  <div className="space-y-2.5">
+                <SectionCard key={player.id} className="p-2.5">
+                  <div className="space-y-2">
                     <div className="min-w-0">
-                      <h3 className="text-base font-semibold text-ink">{player.name}</h3>
-                      <div className="mt-1.5 space-y-0.5 text-sm leading-5 text-ink/70">
+                      <h3 className="text-[15px] font-semibold leading-5 text-ink">{player.name}</h3>
+                      <div className="mt-1.5 grid gap-x-3 gap-y-0.5 text-[13px] leading-5 text-ink/72 sm:grid-cols-2">
                         <p>
                           Current quota: <span className="font-semibold text-ink">{player.quota}</span>
                         </p>
                         <p>
-                          Previous quota: <span className="font-semibold text-ink">{getPreviousQuota(player) ?? "-"}</span>
+                          Previous quota: <span className="font-semibold text-ink">{getStartingQuotaLastRound(player) ?? "-"}</span>
                         </p>
                         <p>
-                          Adjustment: <span className="font-semibold text-ink">{getAdjustmentLabel(player)}</span>
+                          Last adjustment: <span className="font-semibold text-ink">{getLastAdjustmentLabel(player)}</span>
+                        </p>
+                        <p>
+                          Rounds this year: <span className="font-semibold text-ink">{getRoundsThisYear(player)}</span>
                         </p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[12px] text-ink/55">
+                        Last played: <span className="font-medium text-ink/75">{getLastRoundLabel(player)}</span>
+                      </p>
                       <button
-                        className="club-btn-primary min-h-11 text-sm"
+                        className="club-btn-primary min-h-10 px-4 text-sm"
                         type="button"
                         onClick={() => toggleHistory(player.id)}
                       >
                         {isHistoryOpen ? "Hide History" : "See History"}
                       </button>
-                      <button
-                        className="club-btn-secondary min-h-11 text-sm"
-                        type="button"
-                        onClick={() => handleEdit(player)}
-                      >
-                        Edit
-                      </button>
                     </div>
 
                     {isHistoryOpen ? (
-                      <div className="rounded-[24px] border border-ink/10 bg-canvas px-4 py-4">
+                      <div className="rounded-[22px] border border-ink/10 bg-canvas px-3.5 py-3.5">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/50">Round History</p>
-                          <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-ink/70">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
+                            Round History
+                          </p>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-ink/70">
                             {player.history.length} {player.history.length === 1 ? "round" : "rounds"}
                           </span>
                         </div>
 
                         {player.history.length ? (
-                          <div className="mt-3 space-y-2">
+                          <div className="mt-2.5 space-y-2">
                             {player.history.map((item) => (
-                              <div key={`${player.id}-${item.roundId}`} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="text-base font-semibold text-ink">
-                                      {formatDisplayDate(
-                                        getRoundDisplayDate({
-                                          roundName: item.roundName,
-                                          roundDate: item.roundDate,
-                                          completedAt: item.completedAt,
-                                          createdAt: item.createdAt
-                                        })
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
-                                <p className="mt-3 text-sm text-ink/80">
-                                  {`${item.totalPoints} points / quota ${item.startQuota} = ${formatQuotaResult(item.plusMinus)}`}
+                              <div key={`${player.id}-${item.roundId}`} className="rounded-2xl bg-white px-3.5 py-3 shadow-sm">
+                                <p className="text-sm font-semibold text-ink">
+                                  {formatDisplayDate(
+                                    getRoundDisplayDate({
+                                      roundName: item.roundName,
+                                      roundDate: item.roundDate,
+                                      completedAt: item.completedAt,
+                                      createdAt: item.createdAt
+                                    })
+                                  )}
                                 </p>
-                                <p className="mt-1 text-sm text-ink/65">
-                                  {`Quota moved ${formatMovement(item.quotaMovement)}`}
-                                </p>
+                                <p className="mt-2 text-sm text-ink/80">{`Points scored: ${item.totalPoints}`}</p>
+                                <p className="mt-1 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
+                                <p className="mt-1 text-sm text-ink/80">{`Result vs quota: ${formatQuotaResult(item.plusMinus)}`}</p>
+                                <p className="mt-1 text-sm text-ink/65">{`Quota moved: ${formatMovement(item.quotaMovement)}`}</p>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <p className="mt-3 text-sm text-ink/65">No rounds yet.</p>
+                          <p className="mt-2.5 text-sm text-ink/65">No rounds yet.</p>
                         )}
                       </div>
                     ) : null}
@@ -377,7 +472,68 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
               );
             })}
           </div>
+
+          <SectionCard className="p-4">
+            <button
+              type="button"
+              className="club-btn-secondary min-h-12 w-full text-base"
+              onClick={openPlayerManagement}
+            >
+              Edit Players
+            </button>
+          </SectionCard>
         </>
+      ) : null}
+
+      {isManageOpen ? (
+        <div className="fixed inset-0 z-40 bg-ink/35 px-3 py-4">
+          <div className="mx-auto flex h-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-mist bg-white shadow-card">
+            <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-ink">Edit Players</h3>
+                <p className="mt-1 text-sm text-ink/65">
+                  Choose a player to edit quotas and settings, or add someone new.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="club-btn-secondary min-h-11"
+                onClick={closeManagement}
+              >
+                Done
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  className="club-btn-primary min-h-12 w-full text-base"
+                  onClick={openCreateEditor}
+                >
+                  Add Player
+                </button>
+
+                <div className="space-y-2">
+                  {groupedPlayers.map((player) => (
+                    <button
+                      key={`manage-${player.id}`}
+                      type="button"
+                      className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-mist bg-card px-4 text-left"
+                      onClick={() => handleEdit(player)}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{player.name}</p>
+                        <p className="text-xs text-ink/60">Current quota: {player.quota}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-pine">Edit</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {isEditorOpen ? (
@@ -561,3 +717,4 @@ export function PlayersManager({ initialPlayers }: { initialPlayers: PlayerItem[
     </div>
   );
 }
+

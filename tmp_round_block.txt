@@ -1,0 +1,80 @@
+  const teamRowsByCode = useMemo(() => {
+    const map = new Map<TeamCode, CalculatedRoundRow[]>();
+    for (const team of teamOptions) {
+      map.set(
+        team,
+        calculatedRows.filter((row) => row.team === team)
+      );
+    }
+    return map;
+  }, [calculatedRows]);
+  const orderedTeamStandings = useMemo(() => sortTeamsAlphabetically(teamStandings), [teamStandings]);
+  const availableTeams = useMemo(
+    () => orderedTeamStandings.map((team) => team.team),
+    [orderedTeamStandings]
+  );
+
+  function openTeam(team: TeamCode) {
+    const nextHole = getCheckpointAwareTeamHole(rows.filter((row) => row.team === team));
+    setMessage("");
+    setSelectedTeam(team);
+    setActiveHoleByTeam((current) => ({
+      ...current,
+      [team]: nextHole
+    }));
+  }
+
+  function openSkinsEntry() {
+    const nextHole = getSuggestedHole(calculatedRows);
+    setMessage("");
+    setSkinsEntryOpen(true);
+    setSkinsActiveHole(nextHole);
+  }
+
+  function setActiveHole(team: TeamCode, hole: number) {
+    const teamRows = rows.filter((row) => row.team === team);
+    const holeIndex = hole - 1;
+    const targetRow = teamRows[0];
+
+    if (
+      targetRow &&
+      isHoleLockedForRow(targetRow, holeIndex) &&
+      !isScoreEditUnlocked
+    ) {
+      openLockedScorePrompt({ type: "select-hole", team, hole });
+      return;
+    }
+
+    setActiveHoleByTeam((current) => ({
+      ...current,
+      [team]: Math.max(1, Math.min(18, hole))
+    }));
+  }
+
+  function switchTeam(direction: -1 | 1) {
+    if (!selectedTeam || !availableTeams.length) {
+      return;
+    }
+
+    const currentIndex = availableTeams.indexOf(selectedTeam);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const nextIndex = (currentIndex + direction + availableTeams.length) % availableTeams.length;
+    openTeam(availableTeams[nextIndex]);
+  }
+
+  function saveSkinsHole() {
+    const holeNumber = skinsActiveHole;
+    const holeIndex = holeNumber - 1;
+
+    if (!calculatedRows.length) {
+      setMessage("No players are in this skins game.");
+      return;
+    }
+
+    if (calculatedRows.some((row) => row.holeScores[holeIndex] == null)) {
+      setMessage(`Enter a score for every player on hole ${holeNumber}.`);
+      return;
+    }

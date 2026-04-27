@@ -1,0 +1,24 @@
+        <MatchRoundView
+          rows={calculatedRows}
+          rowStates={rows}
+          roundName={round.roundName}
+          teamStandings={teamStandings}
+          teamRowsByCode={teamRowsByCode}
+          sideGames={sideGames}
+          payoutSummary={payoutSummary}
+          isTestRound={isTestRound}
+          saveState={saveState}
+          lastSavedAt={lastSavedAt}
+          refreshState={refreshState}
+          lastRefreshedAt={lastRefreshedAt}
+          isArchiving={isPending}
+          onArchiveRound={archiveRound}
+          onOpenTeam={openTeam}
+          onRefresh={refreshRoundData}
+        />
+      )}
+
+      {quotaAdjustmentPreview ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-hero text-ink">
+          <div
+            className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col px-3.5 pb-8 sm:px-4"

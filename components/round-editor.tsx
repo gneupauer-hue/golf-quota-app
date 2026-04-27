@@ -111,17 +111,37 @@ type QuotaAdjustmentPreviewRow = {
   nextQuota: number;
 };
 
+type QuotaValidationIssue = {
+  playerId: string;
+  playerName: string;
+  roundId: string | null;
+  roundLabel: string;
+  fieldLabel: string;
+  expected: string;
+  actual: string;
+  expectedQuota: number | null;
+  actualQuota: number | null;
+};
+
+type QuotaValidationSummary = {
+  totalPlayersChecked: number;
+  totalRoundsChecked: number;
+  mismatchCount: number;
+  issues: QuotaValidationIssue[];
+};
+
 type QuotaAdjustmentPreview = {
   warning: string;
   isTestRound: boolean;
   readOnly: boolean;
   approvedAt: string | null;
   rows: QuotaAdjustmentPreviewRow[];
+  validation: QuotaValidationSummary;
 };
 
 type LockedScoreAction =
   | { type: "select-hole"; team: TeamCode; hole: number }
-  | { type: "update-score"; playerId: string; holeIndex: number; value: number };
+  | { type: "update-score"; playerId: string; holeIndex: number; value: number | null };
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -467,6 +487,129 @@ function sortTeamsAlphabetically<T extends { team: TeamCode }>(teams: T[]) {
   return [...teams].sort((left, right) => left.team.localeCompare(right.team));
 }
 
+type ScoringGroup = {
+  key: string;
+  label: string;
+  groupNumber: number | null;
+  teeTime: string | null;
+  teams: TeamCode[];
+  playerNames: string[];
+};
+
+function buildScoringGroups(
+  rows: RowState[],
+  teamStandings: TeamStanding[],
+  playerNamesById: Map<string, string>,
+  initialGroups: EditorProps["groups"]
+) {
+  const orderedTeams = sortTeamsAlphabetically(teamStandings);
+
+  if (!orderedTeams.length) {
+    return [] as ScoringGroup[];
+  }
+
+  const explicitGroups = new Map<string, ScoringGroup>();
+  const hasExplicitGroups = orderedTeams.some((team) =>
+    rows.some((row) => row.team === team.team && row.groupNumber != null)
+  );
+
+  if (hasExplicitGroups) {
+    for (const team of orderedTeams) {
+      const teamRows = rows.filter((row) => row.team === team.team);
+      const groupedRow = teamRows.find((row) => row.groupNumber != null) ?? teamRows[0] ?? null;
+      const groupNumber = groupedRow?.groupNumber ?? null;
+      const teeTime = groupedRow?.teeTime ?? null;
+      const key = groupNumber != null ? `group-${groupNumber}` : `team-${team.team}`;
+      const label = groupNumber != null ? `Group ${groupNumber}` : `Team ${team.team}`;
+      const current = explicitGroups.get(key) ?? {
+        key,
+        label: teeTime ? `${label} - ${teeTime}` : label,
+        groupNumber,
+        teeTime,
+        teams: [],
+        playerNames: []
+      };
+      current.teams.push(team.team);
+      current.playerNames.push(...team.players);
+      explicitGroups.set(key, current);
+    }
+
+    return Array.from(explicitGroups.values());
+  }
+
+  if (initialGroups.length > 0) {
+    const groupsFromSetup = initialGroups
+      .map((group) => {
+        const groupTeamSet = new Set<TeamCode>();
+
+        for (const playerName of group.players) {
+          const matchedRow = rows.find(
+            (row) => playerNamesById.get(row.playerId) === playerName && row.team != null
+          );
+
+          if (matchedRow?.team) {
+            groupTeamSet.add(matchedRow.team);
+          }
+        }
+
+        return {
+          key: `initial-group-${group.groupNumber}`,
+          label: group.teeTime ? `Group ${group.groupNumber} - ${group.teeTime}` : `Group ${group.groupNumber}`,
+          groupNumber: group.groupNumber,
+          teeTime: group.teeTime,
+          teams: Array.from(groupTeamSet),
+          playerNames: [...group.players]
+        } satisfies ScoringGroup;
+      })
+      .filter((group) => group.teams.length > 0);
+
+    if (groupsFromSetup.length > 0) {
+      return groupsFromSetup;
+    }
+  }
+
+  const derivedGroups: ScoringGroup[] = [];
+  let groupIndex = 1;
+  let currentTeams: TeamCode[] = [];
+  let currentPlayers: string[] = [];
+  let currentPlayerCount = 0;
+
+  for (const team of orderedTeams) {
+    const teamPlayerCount = team.players.length;
+    if (currentTeams.length > 0 && currentPlayerCount + teamPlayerCount > 4) {
+      derivedGroups.push({
+        key: `derived-${groupIndex}`,
+        label: `Group ${groupIndex}`,
+        groupNumber: groupIndex,
+        teeTime: null,
+        teams: currentTeams,
+        playerNames: currentPlayers
+      });
+      groupIndex += 1;
+      currentTeams = [];
+      currentPlayers = [];
+      currentPlayerCount = 0;
+    }
+
+    currentTeams.push(team.team);
+    currentPlayers.push(...team.players);
+    currentPlayerCount += teamPlayerCount;
+  }
+
+  if (currentTeams.length > 0) {
+    derivedGroups.push({
+      key: `derived-${groupIndex}`,
+      label: `Group ${groupIndex}`,
+      groupNumber: groupIndex,
+      teeTime: null,
+      teams: currentTeams,
+      playerNames: currentPlayers
+    });
+  }
+
+  return derivedGroups;
+}
+
 export function RoundEditor({ round, players, quotaSnapshot, groups: initialGroups }: EditorProps) {
   const router = useRouter();
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
@@ -487,6 +630,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
+  const [selectedScoringGroupKey, setSelectedScoringGroupKey] = useState<string | null>(null);
+  const [isAdminCorrectionMode, setIsAdminCorrectionMode] = useState(false);
   const [activeHoleByTeam, setActiveHoleByTeam] = useState<Partial<Record<TeamCode, number>>>({});
   const [skinsActiveHole, setSkinsActiveHole] = useState(1);
   const [skinsEntryOpen, setSkinsEntryOpen] = useState(false);
@@ -651,6 +796,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       };
     }
 
+    if (rows.some((row) => row.groupNumber == null)) {
+      return {
+        valid: false,
+        reason: "Assign playing groups before starting round."
+      };
+    }
+
     for (const [index, team] of setupTeamCodes.entries()) {
       const requiredPlayers = selectedMatchFormat.capacities[index] ?? 0;
       const assignedPlayers = rows.filter((row) => row.team === team).length;
@@ -691,6 +843,22 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }, [playersById, quotaSnapshot, rows, setupTeamCodes]);
 
   const canStartConfiguredRound = rows.length > 0 && setupValidation.valid;
+  const hasAssignedScoringGroups =
+    !isSkinsOnly &&
+    rows.length > 0 &&
+    rows.every((row) => row.team == null || row.groupNumber != null);
+  const setupScoringGroupsPreview = useMemo(
+    () =>
+      isSkinsOnly
+        ? []
+        : buildScoringGroups(
+            rows,
+            teamStandings,
+            new Map(calculatedRows.map((row) => [row.playerId, row.playerName])),
+            initialGroups
+          ),
+    [calculatedRows, initialGroups, isSkinsOnly, rows, teamStandings]
+  );
   const hasAutoBuiltTeams =
     !isSkinsOnly &&
     selectedMatchFormat != null &&
@@ -1053,6 +1221,56 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setMessage(`${player?.name ?? "Player"} added to ${getSetupTeamLabel(destinationTeam)}.`);
   }
 
+  function autoAssignScoringGroups() {
+    if (isSkinsOnly) {
+      return;
+    }
+
+    if (!hasAutoBuiltTeams || rows.some((row) => row.team == null)) {
+      setMessage("Build teams before assigning playing groups.");
+      return;
+    }
+
+    const previewGroups = buildScoringGroups(
+      rows,
+      teamStandings,
+      new Map(calculatedRows.map((row) => [row.playerId, row.playerName])),
+      []
+    );
+
+    if (!previewGroups.length) {
+      setMessage("Could not build playing groups for this round.");
+      return;
+    }
+
+    const groupNumberByTeam = new Map<TeamCode, number | null>();
+    const teeTimeByTeam = new Map<TeamCode, string | null>();
+
+    for (const group of previewGroups) {
+      for (const team of group.teams) {
+        groupNumberByTeam.set(team, group.groupNumber);
+        teeTimeByTeam.set(team, group.teeTime);
+      }
+    }
+
+    const orderedRows = previewGroups.flatMap((group) =>
+      rows.filter((row) => row.team != null && group.teams.includes(row.team))
+    );
+    const remainingRows = rows.filter(
+      (row) => !orderedRows.some((orderedRow) => orderedRow.playerId === row.playerId)
+    );
+    const nextRows = [...orderedRows, ...remainingRows].map((row) => ({
+      ...row,
+      groupNumber: row.team ? groupNumberByTeam.get(row.team) ?? null : null,
+      teeTime: row.team ? teeTimeByTeam.get(row.team) ?? null : null
+    }));
+
+    setRows(nextRows);
+    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+    setSelectedScoringGroupKey(previewGroups[0]?.key ?? null);
+    setMessage("Playing groups assigned. Live scoring will stay scoped to these foursomes.");
+  }
+
   function removePlayer(playerId: string) {
     if (isLocked) return;
     const targetPlayer = playersById.get(playerId);
@@ -1062,13 +1280,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     if (!confirmed) {
       return;
     }
-    setRows((current) => current.filter((row) => row.playerId !== playerId));
-    setSavedRows((current) => current.filter((row) => row.playerId !== playerId));
+    setRows((current) => current.filter((row) => row.playerId !== playerId).map((row) => ({ ...row, groupNumber: null, teeTime: null })));
+    setSavedRows((current) => current.filter((row) => row.playerId !== playerId).map((row) => ({ ...row, groupNumber: null, teeTime: null })));
     setTeamBuildVariant(0);
     setMessage(`${targetPlayer?.name ?? "Player"} removed from the round.`);
   }
 
-  function updateHole(playerId: string, holeIndex: number, value: number) {
+  function updateHole(playerId: string, holeIndex: number, value: number | null) {
     const row = rows.find((candidate) => candidate.playerId === playerId);
     if (row && isHoleLockedForRow(row, holeIndex) && !isScoreEditUnlocked) {
       openLockedScorePrompt({ type: "update-score", playerId, holeIndex, value });
@@ -1277,20 +1495,22 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     });
   }
 
-  async function submitTeamSegment(
+  async function submitScoringGroupSegment(
     team: TeamCode,
     segment: "front" | "back",
     workingRows: RowState[]
   ) {
-    const teamPlayerIds = workingRows
-      .filter((row) => row.team === team)
+    const scoringGroup = getScoringGroupByTeam(team, workingRows);
+    const groupTeams = scoringGroup?.teams ?? [team];
+    const groupPlayerIds = workingRows
+      .filter((row) => row.team != null && groupTeams.includes(row.team))
       .map((row) => row.playerId);
 
-    if (!teamPlayerIds.length) {
-      throw new Error(`Team ${team} has no players to submit.`);
+    if (!groupPlayerIds.length) {
+      throw new Error(`No players found for ${scoringGroup?.label ?? `Team ${team}`}.`);
     }
 
-    for (const playerId of teamPlayerIds) {
+    for (const playerId of groupPlayerIds) {
       const response = await fetch(`/api/rounds/${round.id}/submit-segment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1305,7 +1525,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     const submittedAt = new Date().toISOString();
     const nextRows = workingRows.map((row) =>
-      row.team === team
+      row.team != null && groupTeams.includes(row.team)
         ? {
             ...row,
             frontSubmittedAt: segment === "front" ? submittedAt : row.frontSubmittedAt,
@@ -1318,18 +1538,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
 
     if (segment === "front") {
-      setActiveHoleByTeam((current) => ({
-        ...current,
-        [team]: 10
-      }));
+      setActiveHoleForGroup(groupTeams, 10);
       setSelectedTeam(team);
       setSaved("Front nine submitted. Hole 10 ready.");
-      setMessage(`Team ${team} front nine submitted. Continue with hole 10.`);
+      setMessage(`${scoringGroup?.label ?? `Team ${team}`} front nine submitted. Continue with hole 10.`);
     } else {
       setSelectedTeam(null);
       setSaved("Final score submitted.");
       setMessage(
-        `Team ${team} final score submitted. Review results below once every team submits, then archive the round.`
+        `${scoringGroup?.label ?? `Team ${team}`} final score submitted. Review results below once every team submits, then archive the round.`
       );
     }
 
@@ -1518,7 +1735,16 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           isTestRound: Boolean(result.isTestRound),
           readOnly: Boolean(result.readOnly),
           approvedAt: result.approvedAt ?? null,
-          rows: Array.isArray(result.rows) ? result.rows : []
+          rows: Array.isArray(result.rows) ? result.rows : [],
+          validation:
+            result.validation && Array.isArray(result.validation.issues)
+              ? {
+                  totalPlayersChecked: Number(result.validation.totalPlayersChecked ?? 0),
+                  totalRoundsChecked: Number(result.validation.totalRoundsChecked ?? 0),
+                  mismatchCount: Number(result.validation.mismatchCount ?? 0),
+                  issues: result.validation.issues
+                }
+              : { totalPlayersChecked: 0, totalRoundsChecked: 0, mismatchCount: 0, issues: [] }
         });
         setMessage(
           result.readOnly
@@ -1559,6 +1785,17 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       const errorMessage = `Quota approval blocked. Check: ${invalidPlayers
         .map((player) => player.playerName)
         .join(", ")}.`;
+      setQuotaAdjustmentError(errorMessage);
+      setMessage(errorMessage);
+      setSaveFailed(errorMessage);
+      return;
+    }
+
+    if (quotaAdjustmentPreview.validation.mismatchCount > 0) {
+      const affectedPlayers = Array.from(
+        new Set(quotaAdjustmentPreview.validation.issues.map((issue) => issue.playerName))
+      );
+      const errorMessage = `Quota approval blocked. Audit mismatches found for: ${affectedPlayers.join(", ")}.`;
       setQuotaAdjustmentError(errorMessage);
       setMessage(errorMessage);
       setSaveFailed(errorMessage);
@@ -1619,8 +1856,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       nextRows = rows.map((row) => ({
         ...row,
         team: isSkinsOnly ? null : row.team,
-        groupNumber: null,
-        teeTime: null
+        groupNumber: isSkinsOnly ? null : row.groupNumber,
+        teeTime: isSkinsOnly ? null : row.teeTime
       }));
       now = new Date().toISOString();
     } catch (error) {
@@ -1657,12 +1894,71 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     return map;
   }, [calculatedRows]);
   const orderedTeamStandings = useMemo(() => sortTeamsAlphabetically(teamStandings), [teamStandings]);
+  const scoringGroups = useMemo(
+    () =>
+      buildScoringGroups(
+        rows,
+        teamStandings,
+        new Map(calculatedRows.map((row) => [row.playerId, row.playerName])),
+        initialGroups
+      ),
+    [calculatedRows, initialGroups, rows, teamStandings]
+  );
+  const selectedScoringGroup = useMemo(
+    () =>
+      selectedScoringGroupKey == null
+        ? scoringGroups[0] ?? null
+        : scoringGroups.find((group) => group.key === selectedScoringGroupKey) ?? scoringGroups[0] ?? null,
+    [scoringGroups, selectedScoringGroupKey]
+  );
+  const visibleTeamCodes = useMemo(() => {
+    if (isAdminCorrectionMode || selectedScoringGroup == null) {
+      return new Set(orderedTeamStandings.map((team) => team.team));
+    }
+
+    return new Set(selectedScoringGroup.teams);
+  }, [isAdminCorrectionMode, orderedTeamStandings, selectedScoringGroup]);
   const availableTeams = useMemo(
-    () => orderedTeamStandings.map((team) => team.team),
-    [orderedTeamStandings]
+    () =>
+      orderedTeamStandings
+        .filter((team) => visibleTeamCodes.has(team.team))
+        .map((team) => team.team),
+    [orderedTeamStandings, visibleTeamCodes]
   );
 
+  useEffect(() => {
+    if (!scoringGroups.length) {
+      if (selectedScoringGroupKey != null) {
+        setSelectedScoringGroupKey(null);
+      }
+      return;
+    }
+
+    if (
+      selectedScoringGroupKey == null ||
+      !scoringGroups.some((group) => group.key === selectedScoringGroupKey)
+    ) {
+      setSelectedScoringGroupKey(scoringGroups[0].key);
+    }
+  }, [scoringGroups, selectedScoringGroupKey]);
+
+  useEffect(() => {
+    if (!selectedTeam || isAdminCorrectionMode) {
+      return;
+    }
+
+    if (!visibleTeamCodes.has(selectedTeam)) {
+      setSelectedTeam(null);
+      setMessage("Switched scoring group. Choose one of the teams in this foursome.");
+    }
+  }, [isAdminCorrectionMode, selectedTeam, visibleTeamCodes]);
+
   function openTeam(team: TeamCode) {
+    if (!isAdminCorrectionMode && !visibleTeamCodes.has(team)) {
+      setMessage("That team belongs to another foursome. Use Admin Fix Scores only when you intentionally need to correct another group.");
+      return;
+    }
+
     const nextHole = getCheckpointAwareTeamHole(rows.filter((row) => row.team === team));
     setMessage("");
     setSelectedTeam(team);
@@ -1670,6 +1966,77 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       ...current,
       [team]: nextHole
     }));
+  }
+
+  function enterAdminCorrectionMode() {
+    const confirmed = window.confirm(
+      "Admin Fix Scores lets you edit any team and any saved score.\n\nUse this only to correct mistakes for another foursome."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsAdminCorrectionMode(true);
+    setMessage("Admin Fix Scores is on. You can now open any team to correct mistakes.");
+  }
+
+  function exitAdminCorrectionMode() {
+    setIsAdminCorrectionMode(false);
+    setMessage("Admin Fix Scores is off. Live scoring is limited to your selected foursome again.");
+  }
+
+  function getScoringGroupByTeam(team: TeamCode, sourceRows: RowState[] = rows) {
+    return buildScoringGroups(
+      sourceRows,
+      teamStandings,
+      new Map(calculatedRows.map((row) => [row.playerId, row.playerName])),
+      initialGroups
+    ).find((group) => group.teams.includes(team)) ?? null;
+  }
+
+  function getScoringGroupRows(team: TeamCode, sourceRows: RowState[] = rows) {
+    const scoringGroup = getScoringGroupByTeam(team, sourceRows);
+    const allowedTeams = new Set(scoringGroup?.teams ?? [team]);
+    return sourceRows.filter((row) => row.team != null && allowedTeams.has(row.team));
+  }
+
+  function getOrderedCalculatedRowsForGroup(groupRows: RowState[]) {
+    const calculatedRowsByPlayerId = new Map(calculatedRows.map((row) => [row.playerId, row]));
+    return groupRows
+      .map((row) => calculatedRowsByPlayerId.get(row.playerId) ?? null)
+      .filter(Boolean) as CalculatedRoundRow[];
+  }
+
+  function getActiveHoleForGroup(team: TeamCode, sourceRows: RowState[] = rows) {
+    const groupRows = getScoringGroupRows(team, sourceRows);
+    if (!groupRows.length) {
+      return 1;
+    }
+
+    const explicitHole = groupRows.reduce<number | null>((current, row) => {
+      if (!row.team) {
+        return current;
+      }
+      const teamHole = activeHoleByTeam[row.team];
+      if (teamHole == null) {
+        return current;
+      }
+      return current == null ? teamHole : Math.max(current, teamHole);
+    }, null);
+
+    return explicitHole ?? getCheckpointAwareTeamHole(groupRows);
+  }
+
+  function setActiveHoleForGroup(groupTeams: TeamCode[], hole: number) {
+    setActiveHoleByTeam((current) => {
+      const nextState = { ...current };
+      const nextHole = Math.max(1, Math.min(18, hole));
+      for (const groupTeam of groupTeams) {
+        nextState[groupTeam] = nextHole;
+      }
+      return nextState;
+    });
   }
 
   function openSkinsEntry() {
@@ -1774,19 +2141,22 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   function saveTeamHole(team: TeamCode) {
-    const teamRows = teamRowsByCode.get(team) ?? [];
+    const scoringGroup = getScoringGroupByTeam(team);
+    const groupLabel = scoringGroup?.label ?? `Team ${team}`;
+    const groupTeams = scoringGroup?.teams ?? [team];
     const workingRows = rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
-    const teamStateRows = workingRows.filter((row) => row.team === team);
-    const holeNumber = activeHoleByTeam[team] ?? getCheckpointAwareTeamHole(teamStateRows);
+    const groupStateRows = getScoringGroupRows(team, workingRows);
+    const groupCalculatedRows = getOrderedCalculatedRowsForGroup(groupStateRows);
+    const holeNumber = getActiveHoleForGroup(team, groupStateRows);
     const holeIndex = holeNumber - 1;
 
-    if (!teamRows.length) {
-      setMessage(`Team ${team} has no players.`);
+    if (!groupCalculatedRows.length) {
+      setMessage(`${groupLabel} has no players.`);
       return;
     }
 
-    if (teamRows.some((row) => row.holeScores[holeIndex] == null)) {
-      setMessage(`Enter a score for every Team ${team} player on hole ${holeNumber}.`);
+    if (groupCalculatedRows.some((row) => row.holeScores[holeIndex] == null)) {
+      setMessage(`Enter a score for every player in ${groupLabel} on hole ${holeNumber}.`);
       return;
     }
 
@@ -1811,21 +2181,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
           if (shouldSubmit) {
             setSaving("Submitting front nine...");
-            await submitTeamSegment(team, "front", workingRows);
+            await submitScoringGroupSegment(team, "front", workingRows);
           } else {
             setMessage(
-              `Team ${team} front nine saved. Review scores, then tap Submit Front 9 Score when ready.`
+              `${groupLabel} front nine saved. Review scores, then tap Submit Front 9 Score when ready.`
             );
             setSaved("Hole 9 saved");
-            setActiveHoleByTeam((current) => ({
-              ...current,
-              [team]: 9
-            }));
+            setActiveHoleForGroup(groupTeams, 9);
             router.refresh();
           }
         } catch (error) {
           const errorMessage =
-            error instanceof Error ? error.message : "Could not save team scores.";
+            error instanceof Error ? error.message : "Could not save group scores.";
           setMessage(errorMessage);
           setSaveFailed(errorMessage);
         }
@@ -1848,19 +2215,16 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
           if (shouldSubmit) {
             setSaving("Submitting final score...");
-            await submitTeamSegment(team, "back", workingRows);
+            await submitScoringGroupSegment(team, "back", workingRows);
           } else {
-            setMessage(`Team ${team} final holes saved. Review scores, then tap save again to submit final score.`);
+            setMessage(`${groupLabel} final holes saved. Review scores, then tap save again to submit final score.`);
             setSaved("Hole 18 saved");
-            setActiveHoleByTeam((current) => ({
-              ...current,
-              [team]: 18
-            }));
+            setActiveHoleForGroup(groupTeams, 18);
             router.refresh();
           }
         } catch (error) {
           const errorMessage =
-            error instanceof Error ? error.message : "Could not save team scores.";
+            error instanceof Error ? error.message : "Could not save group scores.";
           setMessage(errorMessage);
           setSaveFailed(errorMessage);
         }
@@ -1876,17 +2240,14 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         await persistRound(workingRows);
         setSavedRows(workingRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setRows(workingRows);
-        setActiveHoleByTeam((current) => ({
-          ...current,
-          [team]: nextHole
-        }));
+        setActiveHoleForGroup(groupTeams, nextHole);
         setToast("Hole saved");
         setMessage("");
         setSaved("Hole saved");
         router.refresh();
       } catch (error) {
         const errorMessage =
-          error instanceof Error ? error.message : "Could not save team scores.";
+          error instanceof Error ? error.message : "Could not save group scores.";
         setMessage(errorMessage);
         setSaveFailed(errorMessage);
       }
@@ -1894,12 +2255,10 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   function goToPreviousHole(team: TeamCode) {
-    const currentHole =
-      activeHoleByTeam[team] ?? getCheckpointAwareTeamHole(rows.filter((row) => row.team === team));
-    setActiveHoleByTeam((current) => ({
-      ...current,
-      [team]: Math.max(1, currentHole - 1)
-    }));
+    const scoringGroup = getScoringGroupByTeam(team);
+    const groupTeams = scoringGroup?.teams ?? [team];
+    const currentHole = getActiveHoleForGroup(team);
+    setActiveHoleForGroup(groupTeams, Math.max(1, currentHole - 1));
   }
 
   if (skinsEntryOpen && isSkinsOnly) {
@@ -1932,37 +2291,38 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }
 
   if (selectedTeam) {
-    const teamRows = teamRowsByCode.get(selectedTeam) ?? [];
-    const activeHole =
-      activeHoleByTeam[selectedTeam] ??
-      getCheckpointAwareTeamHole(rows.filter((row) => row.team === selectedTeam));
+    const scoringGroup = getScoringGroupByTeam(selectedTeam);
+    const groupRowStates = getScoringGroupRows(selectedTeam);
+    const groupRows = getOrderedCalculatedRowsForGroup(groupRowStates);
+    const activeHole = getActiveHoleForGroup(selectedTeam);
     const activeHoleIndex = activeHole - 1;
-    const teamStanding = orderedTeamStandings.find((team) => team.team === selectedTeam) ?? null;
-    const currentHoleLockState = rows
-      .filter((row) => row.team === selectedTeam)
-      .reduce(
-        (state, row) => {
-          if (row.backSubmittedAt) {
-            return "final";
-          }
-          if (activeHoleIndex < 9 && row.frontSubmittedAt) {
-            return state === "final" ? "final" : "front";
-          }
-          return state;
-        },
-        "none" as "none" | "front" | "final"
-      );
+    const groupTeams = scoringGroup?.teams ?? [selectedTeam];
+    const currentHoleLockState = groupRowStates.reduce(
+      (state, row) => {
+        if (row.backSubmittedAt) {
+          return "final";
+        }
+        if (activeHoleIndex < 9 && row.frontSubmittedAt) {
+          return state === "final" ? "final" : "front";
+        }
+        return state;
+      },
+      "none" as "none" | "front" | "final"
+    );
     const canGoBack = activeHole > 1;
     const canSaveHole =
-      teamRows.length > 0 && teamRows.every((row) => row.holeScores[activeHoleIndex] != null);
+      groupRows.length > 0 && groupRows.every((row) => row.holeScores[activeHoleIndex] != null);
 
     return (
       <TeamScoreEntry
         team={selectedTeam}
+        title={scoringGroup?.label ?? `Team ${selectedTeam}`}
+        subtitle={groupTeams.map((teamCode) => `Team ${teamCode}`).join(" • ")}
+        backButtonLabel="Back To Groups"
         isTestRound={isTestRound}
         activeHole={activeHole}
-        rows={teamRows}
-        teamStanding={teamStanding}
+        rows={groupRows}
+        teamStanding={null}
         message={message}
         toast={toast}
         saveState={saveState}
@@ -1972,15 +2332,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         isPending={isPending}
         lastSavedAt={lastSavedAt}
         lastRefreshedAt={lastRefreshedAt}
-          canGoBack={canGoBack}
-          canSaveHole={canSaveHole}
-          onUpdateHole={updateHole}
-          onPreviousHole={goToPreviousHole}
-          onSaveHole={saveTeamHole}
-          onSelectHole={setActiveHole}
-          onBackToTeams={() => setSelectedTeam(null)}
-          onRefresh={refreshRoundData}
-        />
+        canGoBack={canGoBack}
+        canSaveHole={canSaveHole}
+        onUpdateHole={updateHole}
+        onPreviousHole={goToPreviousHole}
+        onSaveHole={saveTeamHole}
+        onSelectHole={setActiveHole}
+        onBackToTeams={() => setSelectedTeam(null)}
+        onRefresh={refreshRoundData}
+      />
     );
   }
 
@@ -2305,8 +2665,62 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   </SectionCard>
 
                   <SectionCard className="space-y-4">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 4</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 4</p>
+                          <h3 className="mt-1 text-lg font-semibold">Assign playing groups</h3>
+                          <p className="mt-1 text-sm text-ink/65">
+                            Build the foursomes that will actually score together on the course.
+                          </p>
+                        </div>
+                        {hasAssignedScoringGroups ? (
+                          <span className="rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
+                            Ready
+                          </span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!hasAutoBuiltTeams}
+                        className="min-h-12 w-full rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                        onClick={autoAssignScoringGroups}
+                      >
+                        {hasAssignedScoringGroups ? "Rebuild Foursomes" : "Build Foursomes"}
+                      </button>
+                      {setupScoringGroupsPreview.length ? (
+                        <div className="grid gap-3">
+                          {setupScoringGroupsPreview.map((group) => (
+                            <div key={group.key} className="rounded-2xl bg-canvas px-4 py-4">
+                              <p className="text-base font-semibold text-ink">{group.label}</p>
+                              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/55">
+                                {group.teams.map((team) => `Team ${team}`).join(" • ")}
+                              </p>
+                              <div className="mt-3 space-y-2">
+                                {rows
+                                  .filter((row) => row.team != null && group.teams.includes(row.team))
+                                  .map((row) => {
+                                    const player = playersById.get(row.playerId);
+                                    return (
+                                      <div key={`group-${group.key}-${row.playerId}`} className="rounded-2xl bg-white px-4 py-3">
+                                        <p className="text-sm font-semibold text-ink">{player?.name ?? "Unknown Player"}</p>
+                                        <p className="mt-1 text-xs text-ink/55">{row.team ? `Team ${row.team}` : "Unassigned team"}</p>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/60">
+                          Build teams first, then assign the foursomes that will score together.
+                        </div>
+                      )}
+                    </SectionCard>
+
+                    <SectionCard className="space-y-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 5</p>
                       <h3 className="mt-1 text-lg font-semibold">Start round</h3>
                       <p className="mt-1 text-sm text-ink/65">
                         Lock setup and move this round into Current Round for live scoring.
@@ -2385,6 +2799,10 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           roundName={round.roundName}
           teamStandings={teamStandings}
           teamRowsByCode={teamRowsByCode}
+          scoringGroups={scoringGroups}
+          selectedScoringGroupKey={selectedScoringGroup?.key ?? null}
+          visibleTeamCodes={visibleTeamCodes}
+          isAdminCorrectionMode={isAdminCorrectionMode}
           sideGames={sideGames}
           payoutSummary={payoutSummary}
           isTestRound={isTestRound}
@@ -2395,6 +2813,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           isArchiving={isPending}
           onArchiveRound={archiveRound}
           onOpenTeam={openTeam}
+          onSelectScoringGroup={setSelectedScoringGroupKey}
+          onEnterAdminCorrectionMode={enterAdminCorrectionMode}
+          onExitAdminCorrectionMode={exitAdminCorrectionMode}
           onRefresh={refreshRoundData}
         />
       )}
@@ -2432,6 +2853,24 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     </p>
                   ) : null}
                 </div>
+
+                {quotaAdjustmentPreview.validation.mismatchCount > 0 ? (
+                  <div className="rounded-[22px] bg-[#FCE5E2] px-4 py-3 text-sm text-danger">
+                    <p className="font-semibold">
+                      {`${quotaAdjustmentPreview.validation.mismatchCount} quota mismatch${quotaAdjustmentPreview.validation.mismatchCount === 1 ? "" : "es"} found across ${quotaAdjustmentPreview.validation.totalPlayersChecked} players.`}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {quotaAdjustmentPreview.validation.issues.map((issue, index) => (
+                        <div key={`${issue.playerId}-${issue.roundId ?? "current"}-${issue.fieldLabel}-${index}`} className="rounded-2xl bg-white/80 px-3 py-3 text-sm text-ink/80">
+                          <p className="font-semibold text-ink">{issue.playerName}</p>
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-danger/80">{issue.roundLabel}</p>
+                          <p className="mt-1">{issue.fieldLabel}</p>
+                          <p className="mt-1 text-danger">{`Expected ${issue.expected}, found ${issue.actual}.`}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 {quotaAdjustmentError ? (
                   <div className="rounded-[22px] bg-[#FCE5E2] px-4 py-3 text-sm font-medium text-danger">
@@ -2506,7 +2945,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     type="button"
                     className="club-btn-primary min-h-12 disabled:opacity-45"
                     onClick={approveAndPostRound}
-                    disabled={isPending || quotaAdjustmentPreview.readOnly}
+                    disabled={isPending || quotaAdjustmentPreview.readOnly || quotaAdjustmentPreview.validation.mismatchCount > 0}
                   >
                     {quotaAdjustmentPreview.readOnly
                       ? "Already Posted"
@@ -2577,6 +3016,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
 function TeamScoreEntry({
   team,
+  title,
+  subtitle,
+  backButtonLabel,
   isTestRound,
   activeHole,
   rows,
@@ -2600,6 +3042,9 @@ function TeamScoreEntry({
   onRefresh
 }: {
   team: TeamCode;
+  title: string;
+  subtitle: string;
+  backButtonLabel: string;
   isTestRound: boolean;
   activeHole: number;
   rows: CalculatedRoundRow[];
@@ -2615,7 +3060,7 @@ function TeamScoreEntry({
   lastRefreshedAt: string | null;
   canGoBack: boolean;
   canSaveHole: boolean;
-  onUpdateHole: (playerId: string, holeIndex: number, value: number) => void;
+  onUpdateHole: (playerId: string, holeIndex: number, value: number | null) => void;
   onPreviousHole: (team: TeamCode) => void;
   onSaveHole: (team: TeamCode) => void;
   onSelectHole: (team: TeamCode, hole: number) => void;
@@ -2702,7 +3147,7 @@ function TeamScoreEntry({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Live Scoring</p>
-            <h2 className="mt-1 text-xl font-semibold">{`Team ${team}`}</h2>
+            <h2 className="mt-1 text-xl font-semibold">{title}</h2>`r`n            <p className="mt-1 text-sm text-ink/65">{subtitle}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white">
                 {`Hole ${activeHole} of 18`}
@@ -2753,7 +3198,7 @@ function TeamScoreEntry({
             onClick={onBackToTeams}
             className="min-h-11 rounded-2xl bg-canvas px-4 py-2.5 text-sm font-semibold text-ink"
           >
-            Back To Teams
+            {backButtonLabel}
           </button>
           {refreshState.tone === "failed" && refreshState.message ? (
             <span className="text-xs font-semibold text-danger">{refreshState.message}</span>
@@ -3278,7 +3723,7 @@ function SkinsOnlyScoreEntry({
   lastRefreshedAt: string | null;
   canGoBack: boolean;
   canSaveHole: boolean;
-  onUpdateHole: (playerId: string, holeIndex: number, value: number) => void;
+  onUpdateHole: (playerId: string, holeIndex: number, value: number | null) => void;
   onPreviousHole: () => void;
   onSaveHole: () => void;
   onSelectHole: (hole: number) => void;
@@ -3831,6 +4276,31 @@ function SettingsTab({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

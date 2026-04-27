@@ -1,4 +1,4 @@
-export type ScoringRule = {
+﻿export type ScoringRule = {
   label: string;
   value: number;
 };
@@ -400,23 +400,9 @@ export function splitQuota(startQuota: number) {
 export function calculateNextQuota(startQuota: number, totalPoints: number) {
   const plusMinus = totalPoints - startQuota;
 
-  if (plusMinus < 0) {
-    return {
-      plusMinus,
-      nextQuota: Math.ceil(startQuota - 1)
-    };
-  }
-
-  if (plusMinus === 0) {
-    return {
-      plusMinus,
-      nextQuota: Math.ceil(startQuota)
-    };
-  }
-
   return {
     plusMinus,
-    nextQuota: Math.ceil(startQuota + Math.min(2, plusMinus / 2))
+    nextQuota: startQuota + plusMinus
   };
 }
 
@@ -1785,4 +1771,5 @@ export function calculatePayoutAudit(
     passed: checks.every((check) => check.passed)
   };
 }
+
 

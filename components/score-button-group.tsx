@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { classNames } from "@/lib/utils";
@@ -19,7 +19,7 @@ export function ScoreButtonGroup({
   compact = false
 }: {
   value: number | null;
-  onSelect: (value: number) => void;
+  onSelect: (value: number | null) => void;
   disabled?: boolean;
   compact?: boolean;
 }) {
@@ -35,7 +35,7 @@ export function ScoreButtonGroup({
   ) {
     event.preventDefault();
     event.stopPropagation();
-    onSelect(nextValue);
+    onSelect(value === nextValue ? null : nextValue);
   }
 
   function handleKeyboardSelect(
@@ -48,7 +48,7 @@ export function ScoreButtonGroup({
 
     event.preventDefault();
     event.stopPropagation();
-    onSelect(nextValue);
+    onSelect(value === nextValue ? null : nextValue);
   }
 
   return (
@@ -73,7 +73,7 @@ export function ScoreButtonGroup({
             onKeyDown={(event) => handleKeyboardSelect(event, option.value)}
             className={classNames(
               "border text-center transition active:scale-[0.98]",
-              compact ? "min-h-[3.35rem] rounded-[18px] px-1 py-1.5" : "rounded-[22px] px-2 py-3.5 min-h-[4.9rem]",
+              compact ? "min-h-[3.35rem] rounded-[18px] px-1 py-1.5" : "rounded-[22px] min-h-[4.9rem] px-2 py-3.5",
               disabled
                 ? "border-ink/5 bg-white/50 text-ink/30"
                 : selected
