@@ -26,7 +26,7 @@ export async function POST() {
     });
 
     const [data, currentQuotaRows] = await Promise.all([getPlayersPageData(), getCurrentQuotaRows()]);
-    const updatedLabel = `${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundsProcessed} round${repair.roundsProcessed === 1 ? "" : "s"}`;
+    const updatedLabel = `${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundEntriesUpdated} round record${repair.roundEntriesUpdated === 1 ? "" : "s"}`;
 
     return NextResponse.json({
       ...data,
