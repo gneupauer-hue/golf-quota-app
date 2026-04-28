@@ -711,35 +711,18 @@ function handleRepairButtonPress() {
             subtitle="Read-only quota snapshot from completed 2026 rounds."
           >
             <div className="space-y-2">
-              <button
-                type="button"
-                disabled={isRepairPending}
-                className="club-btn-primary min-h-12 w-full text-base disabled:opacity-60"
-                onClick={handleRepairButtonPress}
-              >
-                {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
-              </button>
-
-              {repairDebugLines.length ? (
-                <div className="rounded-2xl border border-mist bg-white px-4 py-3 text-sm text-ink/80">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">Rebuild Debug</p>
-                  <div className="mt-2 space-y-1 whitespace-pre-wrap break-words font-mono text-xs text-ink/75">
-                    {repairDebugLines.map((line, index) => (
-                      <p key={"repair-debug-" + index}>{line}</p>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
               {currentQuotaRows.map((row) => {
                 const isOpen = openCurrentQuotaPlayerId === row.id;
+                const latestChange = getLatestQuotaChange(row.history);
+                const hasRecentChange = latestChange != null && latestChange !== 0;
 
                 return (
                   <div
                     key={row.id}
                     className={classNames(
                       "overflow-hidden rounded-2xl border bg-white",
-                      row.mismatchCount > 0 ? "border-danger/30" : "border-mist"
+                      row.mismatchCount > 0 ? "border-danger/30" : "border-mist",
+                      hasRecentChange ? "shadow-[0_0_0_1px_rgba(28,110,74,0.08)]" : ""
                     )}
                   >
                     <button
@@ -749,6 +732,9 @@ function handleRepairButtonPress() {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-ink">{row.name}</p>
+                        <p className={classNames("mt-1 text-xs", hasRecentChange ? "font-semibold text-pine" : "text-ink/60")}>
+                          {"Last change: " + (latestChange == null ? "Baseline only" : formatMovement(latestChange))}
+                        </p>
                         {row.mismatchCount > 0 ? (
                           <p className="mt-1 text-xs font-semibold text-danger">
                             {"Audit warning: " + row.mismatchCount + " mismatch" + (row.mismatchCount === 1 ? "" : "es")}
@@ -849,7 +835,23 @@ function handleRepairButtonPress() {
             </div>
           </SectionCard>
 
-          <ReferenceSection
+                    <ReferenceSection
+            title="Admin Tools"
+            subtitle="Hidden repair and maintenance actions."
+          >
+            <div className="space-y-3">
+              <p className="text-sm text-ink/70">Only use this if quotas become inconsistent.</p>
+              <button
+                type="button"
+                disabled={isRepairPending}
+                className="club-btn-primary min-h-12 w-full text-base disabled:opacity-60"
+                onClick={handleRepairButtonPress}
+              >
+                {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
+              </button>
+            </div>
+          </ReferenceSection>
+<ReferenceSection
             title="2026 Starting Quotas"
             subtitle="Locked baseline before Apr 19, 2026"
           >
@@ -900,16 +902,7 @@ function handleRepairButtonPress() {
                   Add Player
                 </button>
 
-                {showAdminQuotaAudit ? (
-                  <button
-                    type="button"
-                    disabled={isRepairPending}
-                    className="club-btn-secondary min-h-12 w-full text-base disabled:opacity-60"
-                    onClick={handleRepairQuotas}
-                  >
-                    {isRepairPending ? "Rebuilding..." : "Rebuild Quotas From Baseline"}
-                  </button>
-                ) : null}
+                
 
                 <div className="space-y-2">
                   {groupedPlayers.map((player) => (
@@ -1114,6 +1107,8 @@ function handleRepairButtonPress() {
     </div>
   );
 }
+
+
 
 
 
