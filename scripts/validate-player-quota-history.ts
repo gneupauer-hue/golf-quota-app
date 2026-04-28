@@ -1,4 +1,5 @@
-﻿import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
+import { requireBaselineQuota2026 } from "../lib/baseline-quotas-2026";
 import { rebuildPlayerQuotaHistory } from "../lib/quota-history";
 
 type DbPlayer = {
@@ -87,7 +88,7 @@ function main() {
     const summary = players.map((player) => {
       const rounds = rowsByPlayer.get(player.id) ?? [];
       const rebuilt = rebuildPlayerQuotaHistory({
-        startingQuota: player.startingQuota,
+        baselineQuota: requireBaselineQuota2026(player.name),
         currentQuota: player.currentQuota,
         rounds: rounds.map((round) => ({
           roundId: round.roundId,

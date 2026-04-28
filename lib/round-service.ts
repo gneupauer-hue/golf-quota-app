@@ -1,4 +1,4 @@
-﻿import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   calculateSideGameResults,
   calculateRoundRows,
@@ -11,6 +11,7 @@ import {
   type TeamCode
 } from "@/lib/quota";
 import { validateAllPlayerQuotas, type PlayerQuotaValidationInput } from "@/lib/quota-history";
+import { getMissingBaselineQuota2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
 import { formatRoundNameFromDate } from "@/lib/utils";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -131,7 +132,6 @@ export function shouldSkipQuotaProgression(round: {
 
 function resolveHistoricalStartQuota(
   priorQuota: number | undefined,
-  _storedStartQuota: number | null | undefined,
   baseQuota: number | undefined
 ) {
   if (priorQuota != null) {
@@ -177,7 +177,7 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
       playerName: entry.player.name,
       team: (entry.team as TeamCode | null) ?? null,
       holeScores: getHoleScores(entry),
-      startQuota: quotaMap[entry.playerId] ?? entry.player.startingQuota
+      startQuota: quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name)
     }))
   );
 
@@ -315,7 +315,7 @@ async function buildQuotaValidationSummary(
     return {
       playerId: player.id,
       playerName: player.name,
-      startingQuota: player.startingQuota,
+      baselineQuota: requireBaselineQuota2026(player.name),
       currentQuota:
         !args.readOnly && previewRow
           ? previewRow.nextQuota
@@ -325,6 +325,20 @@ async function buildQuotaValidationSummary(
   });
 
   return validateAllPlayerQuotas(validationInputs);
+}
+
+function buildBaselineQuotaMap(players: Array<{ id: string; name: string }>) {
+  const missingBaselinePlayers = getMissingBaselineQuota2026(players.map((player) => player.name));
+
+  if (missingBaselinePlayers.length > 0) {
+    throw new Error(
+      `Missing 2026 baseline quota for: ${missingBaselinePlayers.join(", ")}. Rebuild skipped.`
+    );
+  }
+
+  return new Map(
+    players.map((player) => [player.id, requireBaselineQuota2026(player.name)])
+  );
 }
 
 async function buildStoredQuotaValidationSummary(tx: Tx) {
@@ -384,7 +398,7 @@ async function buildStoredQuotaValidationSummary(tx: Tx) {
     players.map((player) => ({
       playerId: player.id,
       playerName: player.name,
-      startingQuota: player.startingQuota,
+      baselineQuota: requireBaselineQuota2026(player.name),
       currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
       rounds: player.roundEntries.map((entry) => ({
         roundId: entry.round.id,
@@ -443,7 +457,7 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
       playerName: entry.player.name,
       team: (entry.team as TeamCode | null) ?? null,
       holeScores: getHoleScores(entry),
-      startQuota: quotaMap[entry.playerId] ?? entry.player.startingQuota
+      startQuota: quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name)
     }))
   );
 
@@ -547,7 +561,6 @@ export async function recomputeHistoricalState(tx: Tx) {
 
   // Historical rebuilds must always start from each player's base quota so
   // bad live quota values cannot contaminate earlier rounds.
-  const baseQuotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
   const quotaMap = new Map<string, number>();
 
   const rounds = await tx.round.findMany({
@@ -572,6 +585,8 @@ export async function recomputeHistoricalState(tx: Tx) {
     orderBy: [{ completedAt: "asc" }, { roundDate: "asc" }, { createdAt: "asc" }]
   });
 
+  const baseQuotaMap = buildBaselineQuotaMap(players);
+
   for (const round of rounds) {
     if (!round.entries.length) {
       continue;
@@ -585,7 +600,6 @@ export async function recomputeHistoricalState(tx: Tx) {
         holeScores: getHoleScores(entry),
         startQuota: resolveHistoricalStartQuota(
           quotaMap.get(entry.playerId),
-          entry.startQuota,
           baseQuotaMap.get(entry.playerId)
         )
       }))
@@ -626,7 +640,7 @@ export async function recomputeHistoricalState(tx: Tx) {
 
   for (const player of players) {
     const nextQuota =
-      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? player.startingQuota;
+      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
 
     await tx.player.update({
       where: { id: player.id },
@@ -660,7 +674,6 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     throw new Error("Round not found");
   }
 
-  const baseQuotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
   const quotaMap = new Map<string, number>();
 
   const completedRounds = await tx.round.findMany({
@@ -685,6 +698,8 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     orderBy: [{ completedAt: "asc" }, { roundDate: "asc" }, { createdAt: "asc" }]
   });
 
+  const baseQuotaMap = buildBaselineQuotaMap(players);
+
   for (const round of completedRounds) {
     if (round.id === targetRound.id) {
       break;
@@ -698,7 +713,6 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
         holeScores: getHoleScores(entry),
         startQuota: resolveHistoricalStartQuota(
           quotaMap.get(entry.playerId),
-          entry.startQuota,
           baseQuotaMap.get(entry.playerId)
         )
       }))
@@ -714,7 +728,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
   return Object.fromEntries(
     players.map((player) => [
       player.id,
-      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? player.startingQuota
+      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name)
     ])
   );
 }
@@ -826,6 +840,8 @@ export async function createOrReplaceRoundEntries(
     await syncRoundComputedState(tx, input.roundId);
   }
 }
+
+
 
 
 

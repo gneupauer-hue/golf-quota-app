@@ -1,4 +1,4 @@
-﻿import { cookies } from "next/headers";
+import { cookies } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getPlayersPageData } from "@/lib/data";

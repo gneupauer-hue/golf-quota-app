@@ -1,4 +1,5 @@
-﻿import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
+import { getMissingBaselineQuota2026, requireBaselineQuota2026 } from "../lib/baseline-quotas-2026";
 import { calculateRoundRows, holeFieldNames, type TeamCode } from "../lib/quota";
 
 type PlayerRow = {
@@ -23,7 +24,6 @@ type EntryRow = {
   playerId: string;
   playerName: string;
   team: string | null;
-  startQuota: number;
   holeScores: Array<number | null>;
 };
 
@@ -81,7 +81,6 @@ function getEntriesForRound(db: DatabaseSync, roundId: string) {
         e.playerId,
         p.name as playerName,
         e.team,
-        e.startQuota,
         ${holeFieldNames.map((fieldName) => `e.${fieldName}`).join(", ")}
       from RoundEntry e
       join Player p on p.id = e.playerId
@@ -95,12 +94,23 @@ function getEntriesForRound(db: DatabaseSync, roundId: string) {
     playerId: String(row.playerId),
     playerName: String(row.playerName),
     team: row.team == null ? null : String(row.team),
-    startQuota: Number(row.startQuota),
     holeScores: holeFieldNames.map((fieldName) => {
       const value = row[fieldName];
       return value == null ? null : Number(value);
     })
   })) as EntryRow[];
+}
+
+function buildBaselineQuotaMap(players: PlayerRow[]) {
+  const missingBaselinePlayers = getMissingBaselineQuota2026(players.map((player) => player.name));
+
+  if (missingBaselinePlayers.length > 0) {
+    throw new Error(
+      `Missing 2026 baseline quota for: ${missingBaselinePlayers.join(", ")}. Rebuild skipped.`
+    );
+  }
+
+  return new Map(players.map((player) => [player.id, requireBaselineQuota2026(player.name)]));
 }
 
 function formatEpoch(epoch: number | null) {
@@ -120,7 +130,8 @@ function main() {
       ...round,
       isTestRound: Boolean(round.isTestRound)
     })) as RoundRow[];
-    const quotaMap = new Map(players.map((player) => [player.id, player.startingQuota]));
+    const baseQuotaMap = buildBaselineQuotaMap(players);
+    const quotaMap = new Map(baseQuotaMap);
     const verificationMap = new Map<string, { playerName: string; oldestStartQuota: number; rounds: VerificationRound[] }>();
 
     const updateEntry = db.prepare(
@@ -159,7 +170,7 @@ function main() {
           playerName: entry.playerName,
           team: (entry.team as TeamCode | null) ?? null,
           holeScores: entry.holeScores,
-          startQuota: quotaMap.get(entry.playerId) ?? entry.startQuota
+          startQuota: quotaMap.get(entry.playerId) ?? baseQuotaMap.get(entry.playerId) ?? requireBaselineQuota2026(entry.playerName)
         }))
       );
 
@@ -205,7 +216,7 @@ function main() {
     }
 
     for (const player of players) {
-      const nextQuota = quotaMap.get(player.id) ?? player.currentQuota ?? player.startingQuota;
+      const nextQuota = quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
       if (playerColumns.has("quota")) {
         updatePlayer.run(nextQuota, nextQuota, player.id);
       } else {
@@ -219,9 +230,9 @@ function main() {
       const history = verificationMap.get(player.id);
       return {
         playerName: player.name,
-        oldestStartQuota: history?.oldestStartQuota ?? player.startingQuota,
+        oldestStartQuota: history?.oldestStartQuota ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name),
         rounds: history?.rounds ?? [],
-        finalCurrentQuota: quotaMap.get(player.id) ?? player.currentQuota ?? player.startingQuota
+        finalCurrentQuota: quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name)
       };
     });
 

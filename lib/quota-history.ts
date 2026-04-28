@@ -1,4 +1,4 @@
-﻿import { calculateNextQuota } from "@/lib/quota";
+import { calculateNextQuota } from "@/lib/quota";
 import { formatDisplayDate, getRoundDisplayDate } from "@/lib/utils";
 
 export type QuotaHistoryRoundInput = {
@@ -23,7 +23,7 @@ export type RebuiltQuotaHistoryRound = Omit<QuotaHistoryRoundInput, "startQuota"
 export type PlayerQuotaValidationInput<T extends QuotaHistoryRoundInput = QuotaHistoryRoundInput> = {
   playerId: string;
   playerName: string;
-  startingQuota?: number | null;
+  baselineQuota?: number | null;
   currentQuota?: number | null;
   rounds: T[];
 };
@@ -64,6 +64,16 @@ function getRoundSortValue(round: {
   return getDateValue(round.completedAt) ?? getDateValue(round.roundDate) ?? getDateValue(round.createdAt) ?? 0;
 }
 
+function resolveBaseQuota(
+  baselineQuota: number | null | undefined,
+  currentQuota: number | null | undefined
+) {
+  if (baselineQuota != null && baselineQuota > 0) {
+    return baselineQuota;
+  }
+
+  return currentQuota ?? 0;
+}
 function getRoundLabel(round: {
   roundName?: string | null;
   roundDate?: string | Date | null;
@@ -112,7 +122,7 @@ function buildRoundIssue(args: {
 }
 
 export function rebuildPlayerQuotaHistory<T extends QuotaHistoryRoundInput>(input: {
-  startingQuota?: number | null;
+  baselineQuota?: number | null;
   currentQuota?: number | null;
   rounds: T[];
 }) {
@@ -120,8 +130,10 @@ export function rebuildPlayerQuotaHistory<T extends QuotaHistoryRoundInput>(inpu
     return getRoundSortValue(left) - getRoundSortValue(right);
   });
 
-  const fallbackBaseQuota = chronologicalRounds[0]?.startQuota ?? input.currentQuota ?? 0;
-  const baseQuota = input.startingQuota ?? fallbackBaseQuota;
+  const baseQuota = resolveBaseQuota(
+    input.baselineQuota,
+    input.currentQuota
+  );
 
   let runningQuota = baseQuota;
 
@@ -145,7 +157,7 @@ export function rebuildPlayerQuotaHistory<T extends QuotaHistoryRoundInput>(inpu
     baseQuota,
     currentQuota: rebuiltChronological.length
       ? runningQuota
-      : (input.currentQuota ?? input.startingQuota ?? 0),
+      : (input.currentQuota ?? input.baselineQuota ?? 0),
     latestRound,
     roundsAscending: rebuiltChronological,
     roundsDescending: [...rebuiltChronological].reverse()
@@ -276,3 +288,9 @@ export function validateAllPlayerQuotas<T extends QuotaHistoryRoundInput>(
 
   return summary;
 }
+
+
+
+
+
+

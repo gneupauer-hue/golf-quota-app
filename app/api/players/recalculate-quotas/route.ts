@@ -1,4 +1,4 @@
-﻿import { cookies } from "next/headers";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getPlayersPageData } from "@/lib/data";
 import { hasValidPlayerEditSession, PLAYER_EDIT_COOKIE } from "@/lib/player-edit-auth";
@@ -16,7 +16,7 @@ export async function POST() {
 
     if (!canUseRepairTool(cookieValue)) {
       return NextResponse.json(
-        { error: "Quota recalculation requires admin access." },
+        { error: "Baseline quota rebuild requires admin access." },
         { status: 403 }
       );
     }
@@ -29,12 +29,12 @@ export async function POST() {
     return NextResponse.json({
       ...data,
       message: data.quotaAudit.mismatchCount === 0
-        ? "Quota history recalculated successfully."
-        : `Quota recalculated with ${data.quotaAudit.mismatchCount} remaining mismatch${data.quotaAudit.mismatchCount === 1 ? "" : "es"}.`
+        ? "Quota history rebuilt from the 2026 baseline successfully."
+        : `Baseline rebuild finished with ${data.quotaAudit.mismatchCount} remaining mismatch${data.quotaAudit.mismatchCount === 1 ? "" : "es"}.`
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not recalculate quotas." },
+      { error: error instanceof Error ? error.message : "Could not rebuild quotas from baseline." },
       { status: 500 }
     );
   }

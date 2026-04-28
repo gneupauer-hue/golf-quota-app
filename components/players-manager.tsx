@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
@@ -141,10 +141,10 @@ function QuotaAuditWarning({
       <div className="space-y-3">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-danger/80">
-            Quota Audit Warning
+            Baseline Quota Warning
           </p>
           <p className="text-sm text-ink/80">
-            {`${quotaAudit.mismatchCount} mismatch${quotaAudit.mismatchCount === 1 ? "" : "es"} found across ${quotaAudit.totalPlayersChecked} players and ${quotaAudit.totalRoundsChecked} rounds.`}
+            {`Quota mismatch detected - consider rebuild from baseline. ${quotaAudit.mismatchCount} mismatch${quotaAudit.mismatchCount === 1 ? "" : "es"} found.`}
           </p>
         </div>
 
@@ -162,7 +162,7 @@ function QuotaAuditWarning({
             className="club-btn-primary min-h-11 text-sm disabled:opacity-60"
             onClick={onRepair}
           >
-            {isRepairPending ? "Recalculating..." : "Recalculate Quotas"}
+            {isRepairPending ? "Rebuilding..." : "Rebuild From Baseline"}
           </button>
         </div>
 
@@ -346,13 +346,13 @@ export function PlayersManager({
         const result = await response.json();
 
         if (!response.ok) {
-          setMessage(result.error ?? "Could not recalculate quotas.");
+          setMessage(result.error ?? "Could not rebuild quotas from baseline.");
           return;
         }
 
         applyPlayersResponse(result);
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not recalculate quotas.");
+        setMessage(error instanceof Error ? error.message : "Could not rebuild quotas from baseline.");
       }
     });
   }
@@ -584,7 +584,7 @@ export function PlayersManager({
                     className="club-btn-secondary min-h-12 w-full text-base disabled:opacity-60"
                     onClick={handleRepairQuotas}
                   >
-                    {isRepairPending ? "Recalculating..." : "Recalculate Quotas"}
+                    {isRepairPending ? "Rebuilding..." : "Rebuild From Baseline"}
                   </button>
                 ) : null}
 

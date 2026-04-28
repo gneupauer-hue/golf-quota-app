@@ -1,4 +1,4 @@
-﻿import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { resolveActiveRound } from "@/lib/active-round";
 import { unstable_noStore as noStore } from "next/cache";
 import {
@@ -16,6 +16,7 @@ import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
 import { getSeasonConfig } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { formatDisplayDate } from "@/lib/utils";
+import { baseline_quotas_2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
 import { rebuildPlayerQuotaHistory, validateAllPlayerQuotas, validatePlayerQuotaHistory, type QuotaValidationSummary } from "@/lib/quota-history";
 
 function normalizeRoundMode(value: string): RoundMode {
@@ -134,7 +135,7 @@ export async function getPlayersPageData() {
   const validationInputs = players.map((player) => ({
     playerId: player.id,
     playerName: player.name,
-    startingQuota: player.startingQuota,
+    baselineQuota: requireBaselineQuota2026(player.name),
     currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
     rounds: player.roundEntries.map((entry) => ({
       roundId: entry.round.id,
@@ -217,7 +218,7 @@ export async function getCurrentQuotaRows() {
 
   return players.map((player) => {
     const rebuiltHistory = rebuildPlayerQuotaHistory({
-      startingQuota: player.startingQuota,
+      baselineQuota: requireBaselineQuota2026(player.name),
       currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
       rounds: player.roundEntries.map((entry) => ({
         roundId: entry.round.id,
@@ -1007,7 +1008,7 @@ export async function getRoundResultsData(roundId: string) {
     quotaAuditPlayers.map((player) => ({
       playerId: player.id,
       playerName: player.name,
-      startingQuota: player.startingQuota,
+      baselineQuota: requireBaselineQuota2026(player.name),
       currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
       rounds: player.roundEntries.map((entry) => ({
         roundId: entry.round.id,
@@ -1104,3 +1105,12 @@ export async function getHomePageData() {
 
 
 
+
+export async function getBaselineQuotaRows() {
+  return baseline_quotas_2026
+    .map((entry) => ({
+      playerName: entry.player_name,
+      baselineQuota: entry.baseline_quota
+    }))
+    .sort((left, right) => left.playerName.localeCompare(right.playerName));
+}

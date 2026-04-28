@@ -1,9 +1,9 @@
+import { getBaselineQuotaRows } from "@/lib/data";
 import { CurrentQuotas } from "@/components/current-quotas";
-import { getCurrentQuotaRows } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function CurrentQuotasPage() {
-  const rows = await getCurrentQuotaRows();
+  const rows = await getBaselineQuotaRows();
   return <CurrentQuotas rows={rows} />;
 }

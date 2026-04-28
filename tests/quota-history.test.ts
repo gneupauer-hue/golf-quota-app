@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { rebuildPlayerQuotaHistory } from "@/lib/quota-history";
 
@@ -26,7 +26,7 @@ function makeRound(args: {
 
 test("+4 raw result moves quota up by the capped +2 maximum", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
-    startingQuota: 17,
+    baselineQuota: 17,
     currentQuota: 18,
     rounds: [
       makeRound({
@@ -67,7 +67,7 @@ test("+4 raw result moves quota up by the capped +2 maximum", () => {
 
 test("+2 raw result moves quota up by +2", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
-    startingQuota: 20,
+    baselineQuota: 20,
     currentQuota: 20,
     rounds: [
       makeRound({
@@ -89,7 +89,7 @@ test("+2 raw result moves quota up by +2", () => {
 
 test("+1 raw result moves quota up by +1", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
-    startingQuota: 20,
+    baselineQuota: 20,
     currentQuota: 20,
     rounds: [
       makeRound({
@@ -111,7 +111,7 @@ test("+1 raw result moves quota up by +1", () => {
 
 test("Even raw result leaves quota unchanged", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
-    startingQuota: 19,
+    baselineQuota: 19,
     currentQuota: 19,
     rounds: [
       makeRound({
@@ -133,7 +133,7 @@ test("Even raw result leaves quota unchanged", () => {
 
 test("any negative raw result moves quota down by the capped -1 maximum", () => {
   const rebuilt = rebuildPlayerQuotaHistory({
-    startingQuota: 34,
+    baselineQuota: 34,
     currentQuota: 32,
     rounds: [
       makeRound({
