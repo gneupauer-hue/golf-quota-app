@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getCurrentQuotaRows, getPlayersPageData } from "@/lib/data";
 import { hasValidPlayerEditSession, PLAYER_EDIT_COOKIE } from "@/lib/player-edit-auth";
@@ -8,6 +8,8 @@ import { recomputeHistoricalState } from "@/lib/round-service";
 function canUseRepairTool(cookieValue: string | undefined) {
   return process.env.NODE_ENV !== "production" || hasValidPlayerEditSession(cookieValue);
 }
+
+const DEBUG_PLAYER_NAMES = ["John Thomas", "Bob Lipski", "Gary Neupauer"];
 
 export async function POST() {
   try {
@@ -21,14 +23,26 @@ export async function POST() {
       );
     }
 
+    const beforePlayers = await prisma.player.findMany({
+      where: { name: { in: DEBUG_PLAYER_NAMES } },
+      select: {
+        id: true,
+        name: true,
+        currentQuota: true,
+        quota: true,
+        startingQuota: true
+      }
+    });
+
     const repair = await prisma.$transaction(async (tx) => {
       return recomputeHistoricalState(tx);
     });
 
-    const [data, currentQuotaRows, verifyPlayers] = await Promise.all([
+    const [data, currentQuotaRows, afterPlayers] = await Promise.all([
       getPlayersPageData(),
       getCurrentQuotaRows(),
       prisma.player.findMany({
+        where: { name: { in: DEBUG_PLAYER_NAMES } },
         select: {
           id: true,
           name: true,
@@ -38,15 +52,49 @@ export async function POST() {
         }
       })
     ]);
-    const updatedLabel = `${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundEntriesUpdated} round record${repair.roundEntriesUpdated === 1 ? "" : "s"}`;
 
-    const johnThomas = verifyPlayers.find((player) => player.name === "John Thomas");
-    console.info("[quota-rebuild] POST-REBUILD DB VALUE", {
-      playerName: "John Thomas",
-      currentQuota: johnThomas?.currentQuota ?? null,
-      quota: johnThomas?.quota ?? null,
-      startingQuota: johnThomas?.startingQuota ?? null
+    const diagnostics = DEBUG_PLAYER_NAMES.map((playerName) => {
+      const before = beforePlayers.find((player) => player.name === playerName) ?? null;
+      const after = afterPlayers.find((player) => player.name === playerName) ?? null;
+      const expectedRow = currentQuotaRows.find((row) => row.name === playerName) ?? null;
+
+      return {
+        playerName,
+        beforeCurrentQuota: before?.currentQuota ?? null,
+        beforeQuota: before?.quota ?? null,
+        expectedCurrentQuota: expectedRow?.quota ?? null,
+        afterCurrentQuota: after?.currentQuota ?? null,
+        afterQuota: after?.quota ?? null,
+        afterStartingQuota: after?.startingQuota ?? null,
+        persistedCurrentQuotaSeenByRows: expectedRow?.persistedCurrentQuota ?? null
+      };
     });
+
+    console.info("[quota-rebuild] POST-REBUILD DB VALUE", diagnostics);
+
+    const failedDiagnostics = diagnostics.filter(
+      (item) => item.expectedCurrentQuota != null && item.afterCurrentQuota !== item.expectedCurrentQuota
+    );
+
+    if (failedDiagnostics.length > 0) {
+      return NextResponse.json(
+        {
+          ...data,
+          currentQuotaRows,
+          repair,
+          debug: {
+            endpointHit: true,
+            databaseReadAfterCommit: true,
+            diagnostics
+          },
+          error:
+            "Rebuild completed, but persisted currentQuota still does not match expected values for: " +
+            failedDiagnostics.map((item) => item.playerName).join(", ") +
+            "."
+        },
+        { status: 500 }
+      );
+    }
 
     if (data.quotaAudit.mismatchCount > 0) {
       return NextResponse.json(
@@ -54,6 +102,11 @@ export async function POST() {
           ...data,
           currentQuotaRows,
           repair,
+          debug: {
+            endpointHit: true,
+            databaseReadAfterCommit: true,
+            diagnostics
+          },
           error: `Rebuild wrote data, but ${data.quotaAudit.mismatchCount} quota mismatch${data.quotaAudit.mismatchCount === 1 ? " remains" : "es remain"}.`
         },
         { status: 500 }
@@ -64,7 +117,12 @@ export async function POST() {
       ...data,
       currentQuotaRows,
       repair,
-      message: `Updated ${updatedLabel}. 0 quota mismatches found.`
+      debug: {
+        endpointHit: true,
+        databaseReadAfterCommit: true,
+        diagnostics
+      },
+      message: `Updated ${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundEntriesUpdated} round record${repair.roundEntriesUpdated === 1 ? "" : "s"}. 0 quota mismatches found.`
     });
   } catch (error) {
     return NextResponse.json(

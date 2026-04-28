@@ -281,6 +281,7 @@ export function PlayersManager({
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
   const [openCurrentQuotaPlayerId, setOpenCurrentQuotaPlayerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [repairDebugLines, setRepairDebugLines] = useState<string[]>([]);
   const [isRepairPending, startRepairTransition] = useTransition();
   const hasPlayers = players.length > 0;
   const showAdminQuotaAudit = process.env.NODE_ENV !== "production" || isEditUnlocked;
@@ -440,7 +441,12 @@ export function PlayersManager({
 
         setIsEditUnlocked(true);
         const playerToEdit = pendingEditPlayer;
+        const unlockAction = pendingUnlockAction;
         closeUnlock();
+        if (unlockAction === "repair") {
+          handleRepairQuotas();
+          return;
+        }
         if (playerToEdit) {
           openEditorForPlayer(playerToEdit);
         } else {
@@ -456,10 +462,20 @@ export function PlayersManager({
     startRepairTransition(async () => {
       try {
         setMessage("");
+        setRepairDebugLines(["Button clicked", "POST sent to /api/players/recalculate-quotas"]);
         const response = await fetch("/api/players/recalculate-quotas", {
           method: "POST"
         });
         const result = await response.json();
+
+        setRepairDebugLines([
+          "Button clicked",
+          "POST sent to /api/players/recalculate-quotas",
+          "Response status: " + response.status,
+          "Response JSON: " + JSON.stringify(result, null, 2),
+          "Updated players count: " + String(result?.repair?.playersUpdated ?? "n/a"),
+          "Updated round records count: " + String(result?.repair?.roundEntriesUpdated ?? "n/a")
+        ]);
 
         if (!response.ok) {
           setMessage(result.error ?? "Could not rebuild quotas from baseline.");
@@ -468,10 +484,15 @@ export function PlayersManager({
 
         applyPlayersResponse(result);
       } catch (error) {
+        setRepairDebugLines((current) => [
+          ...current,
+          "Request error: " + (error instanceof Error ? error.message : "Unknown error")
+        ]);
         setMessage(error instanceof Error ? error.message : "Could not rebuild quotas from baseline.");
       }
     });
   }
+
   function handleRepairButtonPress() {
     if (showAdminQuotaAudit) {
       handleRepairQuotas();
@@ -710,6 +731,17 @@ export function PlayersManager({
               >
                 {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
               </button>
+
+              {repairDebugLines.length ? (
+                <div className="rounded-2xl border border-mist bg-white px-4 py-3 text-sm text-ink/80">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">Rebuild Debug</p>
+                  <div className="mt-2 space-y-1 whitespace-pre-wrap break-words font-mono text-xs text-ink/75">
+                    {repairDebugLines.map((line, index) => (
+                      <p key={"repair-debug-" + index}>{line}</p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {currentQuotaRows.map((row) => {
                 const isOpen = openCurrentQuotaPlayerId === row.id;
