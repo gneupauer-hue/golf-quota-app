@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
@@ -467,14 +467,35 @@ export function PlayersManager({
           method: "POST"
         });
         const result = await response.json();
+        const resultCurrentQuotaRows = Array.isArray(result?.currentQuotaRows) ? result.currentQuotaRows : [];
+        const formatPlayerDebug = (
+          label: string,
+          debug: {
+            beforeCurrentQuota?: number | null;
+            expectedCurrentQuota?: number | null;
+            afterCurrentQuota?: number | null;
+          } | null | undefined
+        ) => {
+          const badgeQuota =
+            resultCurrentQuotaRows.find((row: { name?: string; quota?: number }) => row?.name === label)?.quota ?? "n/a";
+          return (
+            label +
+            ": before " + String(debug?.beforeCurrentQuota ?? "n/a") +
+            " | expected " + String(debug?.expectedCurrentQuota ?? "n/a") +
+            " | after " + String(debug?.afterCurrentQuota ?? "n/a") +
+            " | badge " + String(badgeQuota)
+          );
+        };
 
         setRepairDebugLines([
           "Button clicked",
           "POST sent to /api/players/recalculate-quotas",
           "Response status: " + response.status,
-          "Response JSON: " + JSON.stringify(result, null, 2),
           "Updated players count: " + String(result?.repair?.playersUpdated ?? "n/a"),
-          "Updated round records count: " + String(result?.repair?.roundEntriesUpdated ?? "n/a")
+          "Updated round records count: " + String(result?.repair?.roundEntriesUpdated ?? "n/a"),
+          formatPlayerDebug("John Thomas", result?.debug?.johnThomas),
+          formatPlayerDebug("Bob Lipski", result?.debug?.bobLipski),
+          formatPlayerDebug("Gary Neupauer", result?.debug?.garyNeupauer)
         ]);
 
         if (!response.ok) {
@@ -492,8 +513,7 @@ export function PlayersManager({
       }
     });
   }
-
-  function handleRepairButtonPress() {
+function handleRepairButtonPress() {
     if (showAdminQuotaAudit) {
       handleRepairQuotas();
       return;
@@ -1126,4 +1146,5 @@ export function PlayersManager({
     </div>
   );
 }
+
 

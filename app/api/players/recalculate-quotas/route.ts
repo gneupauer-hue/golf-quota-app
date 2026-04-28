@@ -11,6 +11,38 @@ function canUseRepairTool(cookieValue: string | undefined) {
 
 const DEBUG_PLAYER_NAMES = ["John Thomas", "Bob Lipski", "Gary Neupauer"];
 
+type DebugPlayerRow = {
+  name: string;
+  currentQuota: number | null;
+  quota: number | null;
+  startingQuota: number | null;
+};
+
+type DebugQuotaRow = {
+  name: string;
+  quota: number;
+  persistedCurrentQuota: number;
+};
+
+function buildPlayerDebugSummary(
+  playerName: string,
+  beforePlayers: DebugPlayerRow[],
+  afterPlayers: DebugPlayerRow[],
+  currentQuotaRows: DebugQuotaRow[]
+) {
+  const before = beforePlayers.find((player) => player.name === playerName) ?? null;
+  const after = afterPlayers.find((player) => player.name === playerName) ?? null;
+  const expectedRow = currentQuotaRows.find((row) => row.name === playerName) ?? null;
+
+  return {
+    beforeCurrentQuota: before?.currentQuota ?? null,
+    expectedCurrentQuota: expectedRow?.quota ?? null,
+    afterCurrentQuota: after?.currentQuota ?? null,
+    badgeQuota: expectedRow?.quota ?? null,
+    persistedCurrentQuotaSeenByRows: expectedRow?.persistedCurrentQuota ?? null
+  };
+}
+
 export async function POST() {
   try {
     const cookieStore = await cookies();
@@ -53,27 +85,39 @@ export async function POST() {
       })
     ]);
 
-    const diagnostics = DEBUG_PLAYER_NAMES.map((playerName) => {
-      const before = beforePlayers.find((player) => player.name === playerName) ?? null;
-      const after = afterPlayers.find((player) => player.name === playerName) ?? null;
-      const expectedRow = currentQuotaRows.find((row) => row.name === playerName) ?? null;
+    const johnThomas = buildPlayerDebugSummary(
+      "John Thomas",
+      beforePlayers,
+      afterPlayers,
+      currentQuotaRows
+    );
+    const bobLipski = buildPlayerDebugSummary(
+      "Bob Lipski",
+      beforePlayers,
+      afterPlayers,
+      currentQuotaRows
+    );
+    const garyNeupauer = buildPlayerDebugSummary(
+      "Gary Neupauer",
+      beforePlayers,
+      afterPlayers,
+      currentQuotaRows
+    );
 
-      return {
-        playerName,
-        beforeCurrentQuota: before?.currentQuota ?? null,
-        beforeQuota: before?.quota ?? null,
-        expectedCurrentQuota: expectedRow?.quota ?? null,
-        afterCurrentQuota: after?.currentQuota ?? null,
-        afterQuota: after?.quota ?? null,
-        afterStartingQuota: after?.startingQuota ?? null,
-        persistedCurrentQuotaSeenByRows: expectedRow?.persistedCurrentQuota ?? null
-      };
+    console.info("[quota-rebuild] POST-REBUILD DB VALUE", {
+      johnThomas,
+      bobLipski,
+      garyNeupauer
     });
 
-    console.info("[quota-rebuild] POST-REBUILD DB VALUE", diagnostics);
+    const debugPlayers: Array<[string, ReturnType<typeof buildPlayerDebugSummary>]> = [
+      ["John Thomas", johnThomas],
+      ["Bob Lipski", bobLipski],
+      ["Gary Neupauer", garyNeupauer]
+    ];
 
-    const failedDiagnostics = diagnostics.filter(
-      (item) => item.expectedCurrentQuota != null && item.afterCurrentQuota !== item.expectedCurrentQuota
+    const failedDiagnostics = debugPlayers.filter(
+      ([, item]) => item.expectedCurrentQuota != null && item.afterCurrentQuota !== item.expectedCurrentQuota
     );
 
     if (failedDiagnostics.length > 0) {
@@ -85,11 +129,13 @@ export async function POST() {
           debug: {
             endpointHit: true,
             databaseReadAfterCommit: true,
-            diagnostics
+            johnThomas,
+            bobLipski,
+            garyNeupauer
           },
           error:
             "Rebuild completed, but persisted currentQuota still does not match expected values for: " +
-            failedDiagnostics.map((item) => item.playerName).join(", ") +
+            failedDiagnostics.map(([playerName]) => playerName).join(", ") +
             "."
         },
         { status: 500 }
@@ -105,7 +151,9 @@ export async function POST() {
           debug: {
             endpointHit: true,
             databaseReadAfterCommit: true,
-            diagnostics
+            johnThomas,
+            bobLipski,
+            garyNeupauer
           },
           error: `Rebuild wrote data, but ${data.quotaAudit.mismatchCount} quota mismatch${data.quotaAudit.mismatchCount === 1 ? " remains" : "es remain"}.`
         },
@@ -120,7 +168,9 @@ export async function POST() {
       debug: {
         endpointHit: true,
         databaseReadAfterCommit: true,
-        diagnostics
+        johnThomas,
+        bobLipski,
+        garyNeupauer
       },
       message: `Updated ${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundEntriesUpdated} round record${repair.roundEntriesUpdated === 1 ? "" : "s"}. 0 quota mismatches found.`
     });
@@ -131,3 +181,4 @@ export async function POST() {
     );
   }
 }
+
