@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { requireBaselineQuota2026 } from "../lib/baseline-quotas-2026";
+import { BASELINE_SEASON_START_2026, requireBaselineQuota2026 } from "../lib/baseline-quotas-2026";
 import { rebuildPlayerQuotaHistory } from "../lib/quota-history";
 
 type DbPlayer = {
@@ -51,10 +51,10 @@ function main() {
         from RoundEntry e
         join Player p on p.id = e.playerId
         join Round r on r.id = e.roundId
-        where r.completedAt is not null
+        where r.completedAt is not null and r.completedAt >= ?
         order by p.name asc, r.completedAt asc, r.roundDate asc, r.createdAt asc
       `)
-      .all() as Array<{
+      .all(BASELINE_SEASON_START_2026.getTime()) as Array<{
         playerId: string;
         playerName: string;
         roundId: string;

@@ -13,7 +13,7 @@ import {
   type TeamCode
 } from "@/lib/quota";
 import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
-import { getSeasonConfig } from "@/lib/season";
+import { getSeasonConfig, getSeasonStartDate } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { formatDisplayDate } from "@/lib/utils";
 import { baseline_quotas_2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
@@ -73,6 +73,8 @@ export async function getPlayersForSelection() {
 }
 
 export async function getPlayersPageData() {
+  const seasonStartDate = await getSeasonStartDate(prisma);
+
   const players = await prisma.player.findMany({
     orderBy: [{ isRegular: "desc" }, { name: "asc" }],
     select: {
@@ -92,8 +94,10 @@ export async function getPlayersPageData() {
         where: {
           round: {
             completedAt: {
-              not: null
-            }
+              not: null,
+              gte: seasonStartDate
+            },
+            canceledAt: null
           }
         },
         orderBy: [
@@ -174,6 +178,8 @@ export async function getPlayersPageData() {
 }
 
 export async function getCurrentQuotaRows() {
+  const seasonStartDate = await getSeasonStartDate(prisma);
+
   const players = await prisma.player.findMany({
     orderBy: [{ isRegular: "desc" }, { name: "asc" }],
     select: {
@@ -188,8 +194,10 @@ export async function getCurrentQuotaRows() {
         where: {
           round: {
             completedAt: {
-              not: null
-            }
+              not: null,
+              gte: seasonStartDate
+            },
+            canceledAt: null
           }
         },
         orderBy: {
@@ -909,6 +917,8 @@ export async function getArchivedSideMatchesData() {
 }
 
 export async function getRoundResultsData(roundId: string) {
+  const seasonStartDate = await getSeasonStartDate(prisma);
+
   const round = await (prisma as any).round.findUnique({
     where: { id: roundId },
     include: {
@@ -964,8 +974,10 @@ export async function getRoundResultsData(roundId: string) {
         where: {
           round: {
             completedAt: {
-              not: null
-            }
+              not: null,
+              gte: seasonStartDate
+            },
+            canceledAt: null
           }
         },
         orderBy: [

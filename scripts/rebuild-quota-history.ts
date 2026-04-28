@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { getMissingBaselineQuota2026, requireBaselineQuota2026 } from "../lib/baseline-quotas-2026";
+import { BASELINE_SEASON_START_2026, getMissingBaselineQuota2026, requireBaselineQuota2026 } from "../lib/baseline-quotas-2026";
 import { calculateRoundRows, holeFieldNames, type TeamCode } from "../lib/quota";
 
 type PlayerRow = {
@@ -59,10 +59,10 @@ function getCompletedRounds(db: DatabaseSync) {
     .prepare(
       `select id, roundName, completedAt, roundDate, createdAt, ${selectRoundMode}, ${selectIsTestRound}
        from Round
-       where completedAt is not null
+       where completedAt is not null and completedAt >= ?
        order by completedAt asc, roundDate asc, createdAt asc`
     )
-    .all() as Array<{
+    .all(BASELINE_SEASON_START_2026.getTime()) as Array<{
       id: string;
       roundName: string | null;
       completedAt: number | null;
@@ -131,6 +131,10 @@ function main() {
       isTestRound: Boolean(round.isTestRound)
     })) as RoundRow[];
     const baseQuotaMap = buildBaselineQuotaMap(players);
+    console.info("[quota-rebuild-script] baseline", {
+      playerName: "Bob Lipski",
+      baselineQuota: requireBaselineQuota2026("Bob Lipski")
+    });
     const quotaMap = new Map(baseQuotaMap);
     const verificationMap = new Map<string, { playerName: string; oldestStartQuota: number; rounds: VerificationRound[] }>();
 
@@ -208,6 +212,18 @@ function main() {
           nextQuota: row.nextQuota
         });
         verificationMap.set(row.playerId, verification);
+
+        if (row.playerName === "Bob Lipski") {
+          console.info("[quota-rebuild-script] Bob Lipski round", {
+            roundName: round.roundName,
+            completedAt: formatEpoch(round.completedAt),
+            startQuota: row.startQuota,
+            totalPoints: row.totalPoints,
+            result: row.plusMinus,
+            adjustment: row.nextQuota - row.startQuota,
+            newQuota: row.nextQuota
+          });
+        }
 
         if (!shouldSkipQuotaProgression(round)) {
           quotaMap.set(row.playerId, row.nextQuota);

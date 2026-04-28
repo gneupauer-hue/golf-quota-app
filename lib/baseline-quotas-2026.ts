@@ -3,6 +3,8 @@ export type BaselineQuota2026 = {
   baseline_quota: number;
 };
 
+export const BASELINE_SEASON_START_2026 = new Date("2026-04-19T00:00:00.000Z");
+
 export const baseline_quotas_2026: BaselineQuota2026[] = [
   { player_name: "AJ Kochanski", baseline_quota: 26 },
   { player_name: "Billy Mattioli", baseline_quota: 27 },

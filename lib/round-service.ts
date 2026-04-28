@@ -13,6 +13,7 @@ import {
 import { validateAllPlayerQuotas, type PlayerQuotaValidationInput } from "@/lib/quota-history";
 import { getMissingBaselineQuota2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
 import { formatRoundNameFromDate } from "@/lib/utils";
+import { getSeasonStartDate } from "@/lib/season";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 type HoleFieldName = (typeof holeFieldNames)[number];
@@ -342,6 +343,8 @@ function buildBaselineQuotaMap(players: Array<{ id: string; name: string }>) {
 }
 
 async function buildStoredQuotaValidationSummary(tx: Tx) {
+  const seasonStartDate = await getSeasonStartDate(tx);
+
   const players = await tx.player.findMany({
     orderBy: { name: "asc" },
     select: {
@@ -354,8 +357,10 @@ async function buildStoredQuotaValidationSummary(tx: Tx) {
         where: {
           round: {
             completedAt: {
-              not: null
-            }
+              not: null,
+              gte: seasonStartDate
+            },
+            canceledAt: null
           }
         },
         orderBy: [
@@ -587,6 +592,11 @@ export async function recomputeHistoricalState(tx: Tx) {
 
   const baseQuotaMap = buildBaselineQuotaMap(players);
 
+  console.info("[quota-rebuild] baseline", {
+    playerName: "Bob Lipski",
+    baselineQuota: players.find((player) => player.name === "Bob Lipski") ? requireBaselineQuota2026("Bob Lipski") : null
+  });
+
   for (const round of rounds) {
     if (!round.entries.length) {
       continue;
@@ -629,6 +639,18 @@ export async function recomputeHistoricalState(tx: Tx) {
           rank: row.rank
         }
       });
+
+      if (row.playerName === "Bob Lipski") {
+        console.info("[quota-rebuild] Bob Lipski round", {
+          roundName: round.roundName,
+          completedAt: round.completedAt,
+          startQuota: row.startQuota,
+          totalPoints: row.totalPoints,
+          result: row.plusMinus,
+          adjustment: row.nextQuota - row.startQuota,
+          newQuota: row.nextQuota
+        });
+      }
 
       if (!shouldSkipQuotaProgression(round)) {
         quotaMap.set(row.playerId, row.nextQuota);
@@ -700,6 +722,11 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
 
   const baseQuotaMap = buildBaselineQuotaMap(players);
 
+  console.info("[quota-rebuild] baseline", {
+    playerName: "Bob Lipski",
+    baselineQuota: players.find((player) => player.name === "Bob Lipski") ? requireBaselineQuota2026("Bob Lipski") : null
+  });
+
   for (const round of completedRounds) {
     if (round.id === targetRound.id) {
       break;
@@ -719,6 +746,18 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     );
 
     for (const row of recalculated) {
+      if (row.playerName === "Bob Lipski") {
+        console.info("[quota-rebuild] Bob Lipski round", {
+          roundName: round.roundName,
+          completedAt: round.completedAt,
+          startQuota: row.startQuota,
+          totalPoints: row.totalPoints,
+          result: row.plusMinus,
+          adjustment: row.nextQuota - row.startQuota,
+          newQuota: row.nextQuota
+        });
+      }
+
       if (!shouldSkipQuotaProgression(round)) {
         quotaMap.set(row.playerId, row.nextQuota);
       }
