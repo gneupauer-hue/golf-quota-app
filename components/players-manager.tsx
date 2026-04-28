@@ -34,6 +34,13 @@ type BaselineQuotaRow = {
   baselineQuota: number;
 };
 
+type CurrentQuotaRow = {
+  id: string;
+  name: string;
+  quota: number;
+  lastRoundPlayed: string;
+};
+
 type FormState = {
   id?: string;
   name: string;
@@ -124,6 +131,46 @@ function getRoundsThisYear(player: PlayerItem) {
   }).length;
 }
 
+function ReferenceSection({
+  title,
+  subtitle,
+  children
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <SectionCard className="overflow-hidden px-0 py-0">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-ink/50">{title}</p>
+          <p className="mt-1 text-sm text-ink/65">{subtitle}</p>
+        </div>
+        <span className="shrink-0 pt-0.5 text-xs font-semibold text-ink/55">
+          {open ? "Tap to collapse" : "Click to expand"}
+        </span>
+      </button>
+      <div
+        className={classNames(
+          "grid transition-all duration-200 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-ink/10 px-4 py-3">{children}</div>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 function QuotaAuditWarning({
   quotaAudit,
   canManage,
@@ -196,15 +243,18 @@ function QuotaAuditWarning({
 export function PlayersManager({
   initialPlayers,
   initialQuotaAudit,
-  initialBaselineRows
+  initialBaselineRows,
+  initialCurrentQuotaRows
 }: {
   initialPlayers: PlayerItem[];
   initialQuotaAudit: QuotaValidationSummary;
   initialBaselineRows: BaselineQuotaRow[];
+  initialCurrentQuotaRows: CurrentQuotaRow[];
 }) {
   const [players, setPlayers] = useState(initialPlayers);
   const [quotaAudit, setQuotaAudit] = useState(initialQuotaAudit);
   const [baselineRows] = useState(initialBaselineRows);
+  const [currentQuotaRows] = useState(initialCurrentQuotaRows);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
@@ -480,13 +530,6 @@ export function PlayersManager({
         <>
           <SectionCard className="p-4">
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <h3 className="text-lg font-semibold text-ink">Players</h3>
-                <p className="text-sm leading-5 text-ink/75">
-                  Scan current quotas, recent changes, and season activity at a glance.
-                </p>
-              </div>
-
               <label className="block">
                 <span className="sr-only">Search players</span>
                 <input
@@ -497,8 +540,6 @@ export function PlayersManager({
                   onChange={(event) => setSearchQuery(event.target.value)}
                 />
               </label>
-
-              <p className="text-sm text-ink/65">Search for a player to view quota history.</p>
 
               {shouldShowPlayerResults && availableLetters.length > 1 ? (
                 <div className="flex flex-wrap gap-1.5">
@@ -513,14 +554,6 @@ export function PlayersManager({
                   ))}
                 </div>
               ) : null}
-
-              <button
-                type="button"
-                className="club-btn-primary min-h-11 w-full text-sm"
-                onClick={openCreateEditor}
-              >
-                Add Player
-              </button>
 
               {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
             </div>
@@ -630,25 +663,55 @@ export function PlayersManager({
               </div>
             ))}
           </div>
+          <ReferenceSection
+            title="2026 Current Quotas"
+            subtitle="Read-only quota snapshot from completed 2026 rounds."
+          >
+            <div className="space-y-2">
+              {currentQuotaRows.map((row) => (
+                <div
+                  key={row.id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-2xl border border-mist bg-white px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+                >
+                  <p className="min-w-0 truncate text-sm font-semibold text-ink">{row.name}</p>
+                  <span className="justify-self-start rounded-full bg-pine px-3 py-1 text-sm font-bold text-white sm:justify-self-center">
+                    {row.quota}
+                  </span>
+                  <div className="col-span-2 text-right sm:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Last updated</p>
+                    <p className="mt-1 text-xs text-ink/60">
+                      {row.lastRoundPlayed === "-" ? "Baseline only" : row.lastRoundPlayed}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ReferenceSection>
+
           <SectionCard className="p-4">
-            <button
-              type="button"
-              className="club-btn-secondary min-h-12 w-full text-base"
-              onClick={openPlayerManagement}
-            >
-              Edit Players
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className="club-btn-secondary min-h-12 text-base"
+                onClick={openPlayerManagement}
+              >
+                Edit Players
+              </button>
+              <button
+                type="button"
+                className="club-btn-primary min-h-12 text-base"
+                onClick={openCreateEditor}
+              >
+                Add Player
+              </button>
+            </div>
           </SectionCard>
 
-          <SectionCard className="p-4">
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <h3 className="text-lg font-semibold text-ink">2026 Starting Quotas</h3>
-                <p className="text-sm leading-5 text-ink/75">
-                  Locked baseline quotas used as the source of truth before the April 19, 2026 round.
-                </p>
-              </div>
-
+          <ReferenceSection
+            title="2026 Starting Quotas"
+            subtitle="Locked baseline before Apr 19, 2026"
+          >
+            <div className="space-y-2">
               {showAdminQuotaAudit ? (
                 <button
                   type="button"
@@ -660,21 +723,19 @@ export function PlayersManager({
                 </button>
               ) : null}
 
-              <div className="space-y-2">
-                {baselineRows.map((row) => (
-                  <div
-                    key={row.playerName}
-                    className="flex items-center justify-between rounded-2xl border border-mist bg-white px-4 py-3"
-                  >
-                    <p className="text-sm font-semibold text-ink">{row.playerName}</p>
-                    <span className="rounded-full bg-pine px-3 py-1 text-sm font-bold text-white">
-                      {row.baselineQuota}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {baselineRows.map((row) => (
+                <div
+                  key={row.playerName}
+                  className="flex items-center justify-between rounded-2xl border border-mist bg-white px-4 py-3"
+                >
+                  <p className="text-sm font-semibold text-ink">{row.playerName}</p>
+                  <span className="rounded-full bg-pine px-3 py-1 text-sm font-bold text-white">
+                    {row.baselineQuota}
+                  </span>
+                </div>
+              ))}
             </div>
-          </SectionCard>
+          </ReferenceSection>
         </>
       ) : null}
 
