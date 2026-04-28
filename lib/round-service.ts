@@ -662,7 +662,19 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
         storedBefore.nextQuota !== row.nextQuota ||
         storedBefore.rank !== row.rank;
 
-      await tx.roundEntry.update({
+      if (row.playerName === "John Thomas") {
+        console.info("[quota-rebuild] Saving John Thomas round", {
+          roundName: round.roundName,
+          completedAt: round.completedAt,
+          startingQuota: row.startQuota,
+          pointsScored: row.totalPoints,
+          resultVsQuota: row.plusMinus,
+          quotaAdjustment: row.nextQuota - row.startQuota,
+          newQuota: row.nextQuota
+        });
+      }
+
+      const persistedEntry = await tx.roundEntry.update({
         where: { id: matchingEntry.id },
         data: {
           team: row.team,
@@ -677,8 +689,42 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
           plusMinus: row.plusMinus,
           nextQuota: row.nextQuota,
           rank: row.rank
+        },
+        select: {
+          id: true,
+          startQuota: true,
+          totalPoints: true,
+          plusMinus: true,
+          nextQuota: true
         }
       });
+
+      if (
+        persistedEntry.startQuota !== row.startQuota ||
+        persistedEntry.totalPoints !== row.totalPoints ||
+        persistedEntry.plusMinus !== row.plusMinus ||
+        persistedEntry.nextQuota !== row.nextQuota
+      ) {
+        throw new Error(
+          "Round entry persistence failed for " +
+            row.playerName +
+            " in round " +
+            (round.roundName ?? round.id) +
+            "."
+        );
+      }
+
+      if (row.playerName === "John Thomas") {
+        console.info("[quota-rebuild] Saved John Thomas round", {
+          roundName: round.roundName,
+          completedAt: round.completedAt,
+          startingQuota: persistedEntry.startQuota,
+          pointsScored: persistedEntry.totalPoints,
+          resultVsQuota: persistedEntry.plusMinus,
+          quotaAdjustment: persistedEntry.nextQuota - persistedEntry.startQuota,
+          newQuota: persistedEntry.nextQuota
+        });
+      }
 
       if (hasEntryChanges) {
         roundEntriesUpdated += 1;
@@ -723,14 +769,55 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
       player.currentQuota !== nextQuota ||
       player.startingQuota !== baselineQuota;
 
-    await tx.player.update({
+    if (player.name === "John Thomas") {
+      console.info("[quota-rebuild] Saving John Thomas quota", {
+        baselineQuota,
+        valueBeforeSave: player.currentQuota,
+        finalComputedQuota: nextQuota
+      });
+    }
+
+    const persistedPlayer = await tx.player.update({
       where: { id: player.id },
       data: {
         quota: nextQuota,
         currentQuota: nextQuota,
         startingQuota: baselineQuota
+      },
+      select: {
+        id: true,
+        name: true,
+        quota: true,
+        currentQuota: true,
+        startingQuota: true
       }
     });
+
+    if (
+      persistedPlayer.currentQuota !== nextQuota ||
+      persistedPlayer.quota !== nextQuota ||
+      persistedPlayer.startingQuota !== baselineQuota
+    ) {
+      throw new Error(
+        "Player quota persistence failed for " +
+          persistedPlayer.name +
+          ". Expected current quota " +
+          nextQuota +
+          ", found " +
+          persistedPlayer.currentQuota +
+          "."
+      );
+    }
+
+    if (player.name === "John Thomas") {
+      console.info("[quota-rebuild] Saved John Thomas quota", {
+        baselineQuota,
+        finalComputedQuota: nextQuota,
+        storedCurrentQuotaAfterSave: persistedPlayer.currentQuota,
+        storedQuotaAfterSave: persistedPlayer.quota,
+        storedStartingQuotaAfterSave: persistedPlayer.startingQuota
+      });
+    }
 
     if (hasPlayerChanges) {
       playersUpdated += 1;
