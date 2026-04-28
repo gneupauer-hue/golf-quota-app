@@ -411,7 +411,7 @@ async function buildStoredQuotaValidationSummary(tx: Tx) {
       playerId: player.id,
       playerName: player.name,
       baselineQuota: requireBaselineQuota2026(player.name),
-      currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+      currentQuota: player.currentQuota,
       rounds: player.roundEntries.map((entry) => ({
         roundId: entry.round.id,
         roundName: entry.round.roundName,

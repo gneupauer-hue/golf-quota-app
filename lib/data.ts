@@ -232,7 +232,7 @@ export async function getCurrentQuotaRows() {
         playerId: player.id,
         playerName: player.name,
         baselineQuota,
-        currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+        currentQuota: player.currentQuota,
         rounds: player.roundEntries.map((entry) => ({
           roundId: entry.round.id,
           roundName: entry.round.roundName,
@@ -248,7 +248,22 @@ export async function getCurrentQuotaRows() {
       const rebuiltHistory = validation.rebuilt;
       const latestRound = rebuiltHistory.latestRound;
       const latestRoundDate = latestRound?.completedAt ?? latestRound?.roundDate ?? null;
-      const persistedCurrentQuota = player.currentQuota ?? player.quota ?? player.startingQuota;
+      const persistedCurrentQuota = player.currentQuota;
+
+      if (validation.issues.length > 0) {
+        console.warn("[current-quota-rows] mismatch", {
+          playerName: player.name,
+          expectedFinalQuota: rebuiltHistory.currentQuota,
+          persistedCurrentQuota,
+          badgeQuota: rebuiltHistory.currentQuota,
+          issues: validation.issues.map((issue) => ({
+            roundLabel: issue.roundLabel,
+            fieldLabel: issue.fieldLabel,
+            expected: issue.expected,
+            actual: issue.actual
+          }))
+        });
+      }
 
       return {
         id: player.id,
@@ -337,7 +352,7 @@ export async function getSeasonStatsData(sortBy: SeasonStatsSort = "net") {
         isRegular: player.isRegular,
         isActive: player.isActive,
         roundsPlayed: 0,
-        currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+        currentQuota: player.currentQuota,
         startingQuota: null as number | null,
         quotaChange: 0,
         totalPaidIn: 0,
