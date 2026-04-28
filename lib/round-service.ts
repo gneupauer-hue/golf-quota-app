@@ -131,7 +131,7 @@ export function shouldSkipQuotaProgression(round: {
 
 function resolveHistoricalStartQuota(
   priorQuota: number | undefined,
-  storedStartQuota: number | null | undefined,
+  _storedStartQuota: number | null | undefined,
   baseQuota: number | undefined
 ) {
   if (priorQuota != null) {
@@ -140,10 +140,6 @@ function resolveHistoricalStartQuota(
 
   if (baseQuota != null) {
     return baseQuota;
-  }
-
-  if (storedStartQuota != null && storedStartQuota > 0) {
-    return storedStartQuota;
   }
 
   return 0;
@@ -158,7 +154,8 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
           player: {
             select: {
               id: true,
-              name: true
+              name: true,
+              startingQuota: true
             }
           }
         },
@@ -180,7 +177,7 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
       playerName: entry.player.name,
       team: (entry.team as TeamCode | null) ?? null,
       holeScores: getHoleScores(entry),
-      startQuota: quotaMap[entry.playerId] ?? entry.startQuota
+      startQuota: quotaMap[entry.playerId] ?? entry.player.startingQuota
     }))
   );
 
@@ -330,6 +327,79 @@ async function buildQuotaValidationSummary(
   return validateAllPlayerQuotas(validationInputs);
 }
 
+async function buildStoredQuotaValidationSummary(tx: Tx) {
+  const players = await tx.player.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      quota: true,
+      currentQuota: true,
+      startingQuota: true,
+      roundEntries: {
+        where: {
+          round: {
+            completedAt: {
+              not: null
+            }
+          }
+        },
+        orderBy: [
+          {
+            round: {
+              completedAt: "asc"
+            }
+          },
+          {
+            round: {
+              roundDate: "asc"
+            }
+          },
+          {
+            round: {
+              createdAt: "asc"
+            }
+          }
+        ],
+        select: {
+          totalPoints: true,
+          startQuota: true,
+          plusMinus: true,
+          nextQuota: true,
+          round: {
+            select: {
+              id: true,
+              roundName: true,
+              roundDate: true,
+              completedAt: true,
+              createdAt: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  return validateAllPlayerQuotas(
+    players.map((player) => ({
+      playerId: player.id,
+      playerName: player.name,
+      startingQuota: player.startingQuota,
+      currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+      rounds: player.roundEntries.map((entry) => ({
+        roundId: entry.round.id,
+        roundName: entry.round.roundName,
+        roundDate: entry.round.roundDate,
+        completedAt: entry.round.completedAt,
+        createdAt: entry.round.createdAt,
+        totalPoints: entry.totalPoints,
+        startQuota: entry.startQuota,
+        plusMinus: entry.plusMinus,
+        nextQuota: entry.nextQuota
+      }))
+    }))
+  );
+}
 export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
   const round = await tx.round.findUnique({
     where: { id: roundId },
@@ -339,7 +409,8 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
           player: {
             select: {
               id: true,
-              name: true
+              name: true,
+              startingQuota: true
             }
           }
         },
@@ -372,7 +443,7 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
       playerName: entry.player.name,
       team: (entry.team as TeamCode | null) ?? null,
       holeScores: getHoleScores(entry),
-      startQuota: quotaMap[entry.playerId] ?? entry.startQuota
+      startQuota: quotaMap[entry.playerId] ?? entry.player.startingQuota
     }))
   );
 
@@ -491,7 +562,8 @@ export async function recomputeHistoricalState(tx: Tx) {
           player: {
             select: {
               id: true,
-              name: true
+              name: true,
+              startingQuota: true
             }
           }
         }
@@ -564,6 +636,12 @@ export async function recomputeHistoricalState(tx: Tx) {
       }
     });
   }
+
+  const validation = await buildStoredQuotaValidationSummary(tx);
+  if (validation.mismatchCount > 0) {
+    const affectedPlayers = Array.from(new Set(validation.issues.map((issue) => issue.playerName)));
+    throw new Error(`Quota rebuild validation failed. Check: ${affectedPlayers.join(", ")}.`);
+  }
 }
 
 export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
@@ -597,7 +675,8 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
           player: {
             select: {
               id: true,
-              name: true
+              name: true,
+              startingQuota: true
             }
           }
         }
@@ -747,6 +826,9 @@ export async function createOrReplaceRoundEntries(
     await syncRoundComputedState(tx, input.roundId);
   }
 }
+
+
+
 
 
 
