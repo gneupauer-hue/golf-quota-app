@@ -18,6 +18,13 @@ import { getSeasonStartDate } from "@/lib/season";
 type Tx = Prisma.TransactionClient | PrismaClient;
 type HoleFieldName = (typeof holeFieldNames)[number];
 
+export type HistoricalRecomputeResult = {
+  roundsProcessed: number;
+  roundEntriesUpdated: number;
+  playersUpdated: number;
+  mismatchCount: number;
+};
+
 type HoleEntryPayload = {
   playerId: string;
   team: TeamCode | null;
@@ -559,20 +566,26 @@ export async function finalizeRound(tx: Tx, roundId: string) {
   await recomputeHistoricalState(tx);
 }
 
-export async function recomputeHistoricalState(tx: Tx) {
+export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomputeResult> {
+  const seasonStartDate = await getSeasonStartDate(tx);
   const players = await tx.player.findMany({
     orderBy: { name: "asc" }
   });
 
-  // Historical rebuilds must always start from each player's base quota so
-  // bad live quota values cannot contaminate earlier rounds.
+  // Historical rebuilds must always start from each player's locked 2026 baseline
+  // so stale live quotas and pre-season rounds cannot contaminate the chain.
   const quotaMap = new Map<string, number>();
+  const baseQuotaMap = buildBaselineQuotaMap(players);
+  let roundEntriesUpdated = 0;
+  let playersUpdated = 0;
 
   const rounds = await tx.round.findMany({
     where: {
       completedAt: {
-        not: null
-      }
+        not: null,
+        gte: seasonStartDate
+      },
+      canceledAt: null
     },
     include: {
       entries: {
@@ -589,8 +602,6 @@ export async function recomputeHistoricalState(tx: Tx) {
     },
     orderBy: [{ completedAt: "asc" }, { roundDate: "asc" }, { createdAt: "asc" }]
   });
-
-  const baseQuotaMap = buildBaselineQuotaMap(players);
 
   console.info("[quota-rebuild] baseline", {
     playerName: "Bob Lipski",
@@ -622,6 +633,35 @@ export async function recomputeHistoricalState(tx: Tx) {
         continue;
       }
 
+      const storedBefore = {
+        startQuota: matchingEntry.startQuota,
+        frontQuota: matchingEntry.frontQuota,
+        backQuota: matchingEntry.backQuota,
+        frontNine: matchingEntry.frontNine,
+        backNine: matchingEntry.backNine,
+        frontPlusMinus: matchingEntry.frontPlusMinus,
+        backPlusMinus: matchingEntry.backPlusMinus,
+        totalPoints: matchingEntry.totalPoints,
+        plusMinus: matchingEntry.plusMinus,
+        nextQuota: matchingEntry.nextQuota,
+        rank: matchingEntry.rank,
+        team: matchingEntry.team
+      };
+
+      const hasEntryChanges =
+        storedBefore.team !== row.team ||
+        storedBefore.startQuota !== row.startQuota ||
+        storedBefore.frontQuota !== row.frontQuota ||
+        storedBefore.backQuota !== row.backQuota ||
+        storedBefore.frontNine !== row.frontNine ||
+        storedBefore.backNine !== row.backNine ||
+        storedBefore.frontPlusMinus !== row.frontPlusMinus ||
+        storedBefore.backPlusMinus !== row.backPlusMinus ||
+        storedBefore.totalPoints !== row.totalPoints ||
+        storedBefore.plusMinus !== row.plusMinus ||
+        storedBefore.nextQuota !== row.nextQuota ||
+        storedBefore.rank !== row.rank;
+
       await tx.roundEntry.update({
         where: { id: matchingEntry.id },
         data: {
@@ -640,12 +680,18 @@ export async function recomputeHistoricalState(tx: Tx) {
         }
       });
 
+      if (hasEntryChanges) {
+        roundEntriesUpdated += 1;
+      }
+
       if (row.playerName === "Bob Lipski") {
-        console.info("[quota-rebuild] Bob Lipski round", {
+        console.info("[quota-rebuild] Bob Lipski persisted repair", {
           roundName: round.roundName,
           completedAt: round.completedAt,
-          startQuota: row.startQuota,
-          totalPoints: row.totalPoints,
+          baseline: requireBaselineQuota2026("Bob Lipski"),
+          storedBefore: storedBefore.startQuota,
+          storedAfter: row.startQuota,
+          points: row.totalPoints,
           result: row.plusMinus,
           adjustment: row.nextQuota - row.startQuota,
           newQuota: row.nextQuota
@@ -664,6 +710,8 @@ export async function recomputeHistoricalState(tx: Tx) {
     const nextQuota =
       quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
 
+    const hasPlayerChanges = player.quota !== nextQuota || player.currentQuota !== nextQuota;
+
     await tx.player.update({
       where: { id: player.id },
       data: {
@@ -671,6 +719,10 @@ export async function recomputeHistoricalState(tx: Tx) {
         currentQuota: nextQuota
       }
     });
+
+    if (hasPlayerChanges) {
+      playersUpdated += 1;
+    }
   }
 
   const validation = await buildStoredQuotaValidationSummary(tx);
@@ -678,8 +730,14 @@ export async function recomputeHistoricalState(tx: Tx) {
     const affectedPlayers = Array.from(new Set(validation.issues.map((issue) => issue.playerName)));
     throw new Error(`Quota rebuild validation failed. Check: ${affectedPlayers.join(", ")}.`);
   }
-}
 
+  return {
+    roundsProcessed: rounds.length,
+    roundEntriesUpdated,
+    playersUpdated,
+    mismatchCount: validation.mismatchCount
+  };
+}
 export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
   const players = await tx.player.findMany({
     orderBy: { name: "asc" }
@@ -698,11 +756,15 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
 
   const quotaMap = new Map<string, number>();
 
+  const seasonStartDate = await getSeasonStartDate(tx);
+
   const completedRounds = await tx.round.findMany({
     where: {
       completedAt: {
-        not: null
-      }
+        not: null,
+        gte: seasonStartDate
+      },
+      canceledAt: null
     },
     include: {
       entries: {

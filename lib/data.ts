@@ -173,7 +173,8 @@ export async function getPlayersPageData() {
         history: rebuiltHistory.roundsDescending
       };
     }),
-    quotaAudit
+    quotaAudit,
+    baselineRows: await getBaselineQuotaRows()
   };
 }
 

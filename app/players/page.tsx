@@ -5,5 +5,11 @@ export const dynamic = "force-dynamic";
 
 export default async function PlayersPage() {
   const data = await getPlayersPageData();
-  return <PlayersManager initialPlayers={data.players} initialQuotaAudit={data.quotaAudit} />;
+  return (
+    <PlayersManager
+      initialPlayers={data.players}
+      initialQuotaAudit={data.quotaAudit}
+      initialBaselineRows={data.baselineRows}
+    />
+  );
 }

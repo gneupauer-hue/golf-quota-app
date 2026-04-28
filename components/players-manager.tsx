@@ -29,6 +29,11 @@ type PlayerItem = {
   history: PlayerHistoryItem[];
 };
 
+type BaselineQuotaRow = {
+  playerName: string;
+  baselineQuota: number;
+};
+
 type FormState = {
   id?: string;
   name: string;
@@ -162,7 +167,7 @@ function QuotaAuditWarning({
             className="club-btn-primary min-h-11 text-sm disabled:opacity-60"
             onClick={onRepair}
           >
-            {isRepairPending ? "Rebuilding..." : "Rebuild From Baseline"}
+            {isRepairPending ? "Rebuilding..." : "Rebuild Quotas From Baseline"}
           </button>
         </div>
 
@@ -190,13 +195,16 @@ function QuotaAuditWarning({
 
 export function PlayersManager({
   initialPlayers,
-  initialQuotaAudit
+  initialQuotaAudit,
+  initialBaselineRows
 }: {
   initialPlayers: PlayerItem[];
   initialQuotaAudit: QuotaValidationSummary;
+  initialBaselineRows: BaselineQuotaRow[];
 }) {
   const [players, setPlayers] = useState(initialPlayers);
   const [quotaAudit, setQuotaAudit] = useState(initialQuotaAudit);
+  const [baselineRows] = useState(initialBaselineRows);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
@@ -208,6 +216,7 @@ export function PlayersManager({
   const [pendingEditPlayer, setPendingEditPlayer] = useState<PlayerItem | null>(null);
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isRepairPending, startRepairTransition] = useTransition();
   const hasPlayers = players.length > 0;
   const showAdminQuotaAudit = process.env.NODE_ENV !== "production" || isEditUnlocked;
@@ -222,6 +231,40 @@ export function PlayersManager({
     });
   }, [players]);
 
+  const filteredPlayers = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return groupedPlayers;
+    }
+
+    return groupedPlayers.filter((player) => player.name.toLowerCase().includes(normalizedQuery));
+  }, [groupedPlayers, searchQuery]);
+
+  const playerSections = useMemo(() => {
+    const sections = new Map<string, PlayerItem[]>();
+
+    for (const player of filteredPlayers) {
+      const normalized = player.name.trim().charAt(0).toUpperCase();
+      const letter = /[A-Z]/.test(normalized) ? normalized : "#";
+      const existing = sections.get(letter);
+
+      if (existing) {
+        existing.push(player);
+      } else {
+        sections.set(letter, [player]);
+      }
+    }
+
+    return Array.from(sections.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([letter, items]) => ({ letter, items }));
+  }, [filteredPlayers]);
+
+  const availableLetters = useMemo(
+    () => playerSections.map((section) => section.letter),
+    [playerSections]
+  );
   function applyPlayersResponse(result: {
     players: PlayerItem[];
     quotaAudit: QuotaValidationSummary;
@@ -443,6 +486,31 @@ export function PlayersManager({
                 </p>
               </div>
 
+              <label className="block">
+                <span className="sr-only">Search players</span>
+                <input
+                  type="search"
+                  className="club-input h-12 px-4 text-sm"
+                  placeholder="Search players..."
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+              </label>
+
+              {availableLetters.length > 1 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {availableLetters.map((letter) => (
+                    <a
+                      key={letter}
+                      href={"#players-letter-" + letter}
+                      className="rounded-full border border-mist bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/65"
+                    >
+                      {letter}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 className="club-btn-primary min-h-11 w-full text-sm"
@@ -455,87 +523,104 @@ export function PlayersManager({
             </div>
           </SectionCard>
 
-          <div className="space-y-2.5">
-            {groupedPlayers.map((player) => {
-              const isHistoryOpen = openHistoryPlayerId === player.id;
+          <div className="space-y-3">
+            {playerSections.length === 0 ? (
+              <SectionCard className="p-4">
+                <p className="text-sm text-ink/70">No players match that search.</p>
+              </SectionCard>
+            ) : null}
 
-              return (
-                <SectionCard key={player.id} className="p-2.5">
-                  <div className="space-y-2">
-                    <div className="min-w-0">
-                      <h3 className="text-[15px] font-semibold leading-5 text-ink">{player.name}</h3>
-                      <div className="mt-1.5 grid gap-x-3 gap-y-0.5 text-[13px] leading-5 text-ink/72 sm:grid-cols-2">
-                        <p>
-                          Current quota: <span className="font-semibold text-ink">{player.quota}</span>
-                        </p>
-                        <p>
-                          Previous quota: <span className="font-semibold text-ink">{getStartingQuotaLastRound(player) ?? "-"}</span>
-                        </p>
-                        <p>
-                          Last adjustment: <span className="font-semibold text-ink">{getLastAdjustmentLabel(player)}</span>
-                        </p>
-                        <p>
-                          Rounds this year: <span className="font-semibold text-ink">{getRoundsThisYear(player)}</span>
-                        </p>
-                      </div>
-                    </div>
+            {playerSections.map((section) => (
+              <div key={section.letter} id={"players-letter-" + section.letter} className="space-y-2">
+                <div className="px-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">
+                    {section.letter}
+                  </p>
+                </div>
 
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[12px] text-ink/55">
-                        Last played: <span className="font-medium text-ink/75">{getLastRoundLabel(player)}</span>
-                      </p>
-                      <button
-                        className="club-btn-primary min-h-10 px-4 text-sm"
-                        type="button"
-                        onClick={() => toggleHistory(player.id)}
-                      >
-                        {isHistoryOpen ? "Hide History" : "See History"}
-                      </button>
-                    </div>
+                <div className="space-y-2">
+                  {section.items.map((player) => {
+                    const isHistoryOpen = openHistoryPlayerId === player.id;
 
-                    {isHistoryOpen ? (
-                      <div className="rounded-[22px] border border-ink/10 bg-canvas px-3.5 py-3.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
-                            Round History
-                          </p>
-                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-ink/70">
-                            {player.history.length} {player.history.length === 1 ? "round" : "rounds"}
-                          </span>
-                        </div>
-
-                        {player.history.length ? (
-                          <div className="mt-2.5 space-y-2">
-                            {player.history.map((item) => (
-                              <div key={`${player.id}-${item.roundId}`} className="rounded-2xl bg-white px-3.5 py-3 shadow-sm">
-                                <p className="text-sm font-semibold text-ink">
-                                  {formatDisplayDate(
-                                    getRoundDisplayDate({
-                                      roundName: item.roundName,
-                                      roundDate: item.roundDate,
-                                      completedAt: item.completedAt,
-                                      createdAt: item.createdAt
-                                    })
-                                  )}
-                                </p>
-                                <p className="mt-2 text-sm text-ink/80">{`Points scored: ${item.totalPoints}`}</p>
-                                <p className="mt-1 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
-                                <p className="mt-1 text-sm text-ink/80">{`Result vs quota: ${formatQuotaResult(item.plusMinus)}`}</p>
-                                <p className="mt-1 text-sm text-ink/65">{`Quota moved: ${formatMovement(item.quotaMovement)}`}</p>
-                              </div>
-                            ))}
+                    return (
+                      <SectionCard key={player.id} className="p-2">
+                        <div className="space-y-1.5">
+                          <div className="min-w-0">
+                            <h3 className="text-[15px] font-semibold leading-5 text-ink">{player.name}</h3>
+                            <div className="mt-1 grid gap-x-3 gap-y-0 text-[12px] leading-5 text-ink/72 sm:grid-cols-2">
+                              <p>
+                                Current quota: <span className="font-semibold text-ink">{player.quota}</span>
+                              </p>
+                              <p>
+                                Previous quota: <span className="font-semibold text-ink">{getStartingQuotaLastRound(player) ?? "-"}</span>
+                              </p>
+                              <p>
+                                Last adjustment: <span className="font-semibold text-ink">{getLastAdjustmentLabel(player)}</span>
+                              </p>
+                              <p>
+                                Rounds this year: <span className="font-semibold text-ink">{getRoundsThisYear(player)}</span>
+                              </p>
+                            </div>
                           </div>
-                        ) : (
-                          <p className="mt-2.5 text-sm text-ink/65">No rounds yet.</p>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                </SectionCard>
-              );
-            })}
-          </div>
 
+                          <div className="flex items-center justify-between gap-2 pt-0.5">
+                            <p className="text-[12px] text-ink/55">
+                              Last played: <span className="font-medium text-ink/75">{getLastRoundLabel(player)}</span>
+                            </p>
+                            <button
+                              className="club-btn-primary min-h-9 px-3.5 text-sm"
+                              type="button"
+                              onClick={() => toggleHistory(player.id)}
+                            >
+                              {isHistoryOpen ? "Hide History" : "See History"}
+                            </button>
+                          </div>
+
+                          {isHistoryOpen ? (
+                            <div className="rounded-[20px] border border-ink/10 bg-canvas px-3 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
+                                  Round History
+                                </p>
+                                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-ink/70">
+                                  {player.history.length} {player.history.length === 1 ? "round" : "rounds"}
+                                </span>
+                              </div>
+
+                              {player.history.length ? (
+                                <div className="mt-2 space-y-2">
+                                  {player.history.map((item) => (
+                                    <div key={player.id + "-" + item.roundId} className="rounded-2xl bg-white px-3 py-2.5 shadow-sm">
+                                      <p className="text-sm font-semibold text-ink">
+                                        {formatDisplayDate(
+                                          getRoundDisplayDate({
+                                            roundName: item.roundName,
+                                            roundDate: item.roundDate,
+                                            completedAt: item.completedAt,
+                                            createdAt: item.createdAt
+                                          })
+                                        )}
+                                      </p>
+                                      <p className="mt-1.5 text-sm text-ink/80">{`Points scored: ${item.totalPoints}`}</p>
+                                      <p className="mt-1 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
+                                      <p className="mt-1 text-sm text-ink/80">{`Result vs quota: ${formatQuotaResult(item.plusMinus)}`}</p>
+                                      <p className="mt-1 text-sm text-ink/65">{`Quota moved: ${formatMovement(item.quotaMovement)}`}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-2.5 text-sm text-ink/65">No rounds yet.</p>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      </SectionCard>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
           <SectionCard className="p-4">
             <button
               type="button"
@@ -544,6 +629,42 @@ export function PlayersManager({
             >
               Edit Players
             </button>
+          </SectionCard>
+
+          <SectionCard className="p-4">
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <h3 className="text-lg font-semibold text-ink">2026 Starting Quotas</h3>
+                <p className="text-sm leading-5 text-ink/75">
+                  Locked baseline quotas used as the source of truth before the April 19, 2026 round.
+                </p>
+              </div>
+
+              {showAdminQuotaAudit ? (
+                <button
+                  type="button"
+                  disabled={isRepairPending}
+                  className="club-btn-primary min-h-11 w-full text-sm disabled:opacity-60"
+                  onClick={handleRepairQuotas}
+                >
+                  {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
+                </button>
+              ) : null}
+
+              <div className="space-y-2">
+                {baselineRows.map((row) => (
+                  <div
+                    key={row.playerName}
+                    className="flex items-center justify-between rounded-2xl border border-mist bg-white px-4 py-3"
+                  >
+                    <p className="text-sm font-semibold text-ink">{row.playerName}</p>
+                    <span className="rounded-full bg-pine px-3 py-1 text-sm font-bold text-white">
+                      {row.baselineQuota}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </SectionCard>
         </>
       ) : null}
@@ -584,7 +705,7 @@ export function PlayersManager({
                     className="club-btn-secondary min-h-12 w-full text-base disabled:opacity-60"
                     onClick={handleRepairQuotas}
                   >
-                    {isRepairPending ? "Rebuilding..." : "Rebuild From Baseline"}
+                    {isRepairPending ? "Rebuilding..." : "Rebuild Quotas From Baseline"}
                   </button>
                 ) : null}
 

@@ -21,16 +21,19 @@ export async function POST() {
       );
     }
 
-    await prisma.$transaction(async (tx) => {
-      await recomputeHistoricalState(tx);
+    const repair = await prisma.$transaction(async (tx) => {
+      return recomputeHistoricalState(tx);
     });
 
     const data = await getPlayersPageData();
+    const updatedLabel = `${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundsProcessed} round${repair.roundsProcessed === 1 ? "" : "s"}`;
+
     return NextResponse.json({
       ...data,
+      repair,
       message: data.quotaAudit.mismatchCount === 0
-        ? "Quota history rebuilt from the 2026 baseline successfully."
-        : `Baseline rebuild finished with ${data.quotaAudit.mismatchCount} remaining mismatch${data.quotaAudit.mismatchCount === 1 ? "" : "es"}.`
+        ? `Rebuilt quotas for ${updatedLabel}. 0 quota mismatches found.`
+        : `Rebuilt quotas for ${updatedLabel}, but ${data.quotaAudit.mismatchCount} mismatch${data.quotaAudit.mismatchCount === 1 ? " remains" : "es remain"}.`
     });
   } catch (error) {
     return NextResponse.json(
