@@ -157,7 +157,7 @@ export function rebuildPlayerQuotaHistory<T extends QuotaHistoryRoundInput>(inpu
     baseQuota,
     currentQuota: rebuiltChronological.length
       ? runningQuota
-      : (input.currentQuota ?? input.baselineQuota ?? 0),
+      : (input.baselineQuota ?? input.currentQuota ?? 0),
     latestRound,
     roundsAscending: rebuiltChronological,
     roundsDescending: [...rebuiltChronological].reverse()
