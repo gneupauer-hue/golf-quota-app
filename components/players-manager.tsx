@@ -34,10 +34,22 @@ type BaselineQuotaRow = {
   baselineQuota: number;
 };
 
+type CurrentQuotaAuditIssue = {
+  roundLabel: string;
+  fieldLabel: string;
+  expected: string;
+  actual: string;
+};
+
 type CurrentQuotaRow = {
   id: string;
   name: string;
   quota: number;
+  baselineQuota: number;
+  persistedCurrentQuota: number;
+  mismatchCount: number;
+  auditIssues: CurrentQuotaAuditIssue[];
+  history: PlayerHistoryItem[];
   lastRoundPlayed: string;
 };
 
@@ -266,6 +278,7 @@ export function PlayersManager({
   const [pendingEditPlayer, setPendingEditPlayer] = useState<PlayerItem | null>(null);
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
+  const [openCurrentQuotaPlayerId, setOpenCurrentQuotaPlayerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isRepairPending, startRepairTransition] = useTransition();
   const hasPlayers = players.length > 0;
@@ -380,6 +393,10 @@ export function PlayersManager({
 
   function toggleHistory(playerId: string) {
     setOpenHistoryPlayerId((current) => (current === playerId ? null : playerId));
+  }
+
+  function toggleCurrentQuotaDetails(playerId: string) {
+    setOpenCurrentQuotaPlayerId((current) => (current === playerId ? null : playerId));
   }
 
   function closeEditor() {
@@ -668,23 +685,102 @@ export function PlayersManager({
             subtitle="Read-only quota snapshot from completed 2026 rounds."
           >
             <div className="space-y-2">
-              {currentQuotaRows.map((row) => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-2xl border border-mist bg-white px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
-                >
-                  <p className="min-w-0 truncate text-sm font-semibold text-ink">{row.name}</p>
-                  <span className="justify-self-start rounded-full bg-pine px-3 py-1 text-sm font-bold text-white sm:justify-self-center">
-                    {row.quota}
-                  </span>
-                  <div className="col-span-2 text-right sm:col-span-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Last updated</p>
-                    <p className="mt-1 text-xs text-ink/60">
-                      {row.lastRoundPlayed === "-" ? "Baseline only" : row.lastRoundPlayed}
-                    </p>
+              {currentQuotaRows.map((row) => {
+                const isOpen = openCurrentQuotaPlayerId === row.id;
+
+                return (
+                  <div
+                    key={row.id}
+                    className={classNames(
+                      "overflow-hidden rounded-2xl border bg-white",
+                      row.mismatchCount > 0 ? "border-danger/30" : "border-mist"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleCurrentQuotaDetails(row.id)}
+                      className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 px-4 py-3 text-left sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-ink">{row.name}</p>
+                        {row.mismatchCount > 0 ? (
+                          <p className="mt-1 text-xs font-semibold text-danger">
+                            {"Audit warning: " + row.mismatchCount + " mismatch" + (row.mismatchCount === 1 ? "" : "es")}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="justify-self-start rounded-full bg-pine px-3 py-1 text-sm font-bold text-white sm:justify-self-center">
+                        {row.quota}
+                      </span>
+                      <div className="col-span-2 text-right sm:col-span-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Last updated</p>
+                        <p className="mt-1 text-xs text-ink/60">
+                          {row.lastRoundPlayed === "-" ? "Baseline only" : row.lastRoundPlayed}
+                        </p>
+                      </div>
+                    </button>
+
+                    {isOpen ? (
+                      <div className="border-t border-ink/10 bg-canvas px-4 py-3">
+                        <div className="space-y-3">
+                          <div className="rounded-2xl bg-white px-3 py-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">
+                              2026 baseline quota
+                            </p>
+                            <p className="mt-1 text-base font-semibold text-ink">{row.baselineQuota}</p>
+                            {row.mismatchCount > 0 ? (
+                              <p className="mt-2 text-sm text-danger">
+                                {"Persisted current quota " + row.persistedCurrentQuota + ", expected " + row.quota + "."}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          {row.auditIssues.length ? (
+                            <div className="space-y-2 rounded-2xl border border-danger/20 bg-[#FCE5E2] px-3 py-3">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-danger/80">
+                                Audit mismatches
+                              </p>
+                              {row.auditIssues.map((issue, index) => (
+                                <div key={row.id + "-issue-" + index} className="text-sm text-ink/80">
+                                  <p className="font-semibold text-ink">{issue.roundLabel}</p>
+                                  <p className="mt-1">{issue.fieldLabel}</p>
+                                  <p className="mt-1 text-danger">{"Expected " + issue.expected + ", found " + issue.actual + "."}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {row.history.length ? (
+                            <div className="space-y-2">
+                              {row.history.map((item) => (
+                                <div key={row.id + "-quota-history-" + item.roundId} className="rounded-2xl bg-white px-3 py-3 shadow-sm">
+                                  <p className="text-sm font-semibold text-ink">
+                                    {formatDisplayDate(
+                                      getRoundDisplayDate({
+                                        roundName: item.roundName,
+                                        roundDate: item.roundDate,
+                                        completedAt: item.completedAt,
+                                        createdAt: item.createdAt
+                                      })
+                                    )}
+                                  </p>
+                                  <p className="mt-2 text-sm text-ink/80">{"Starting quota: " + item.startQuota}</p>
+                                  <p className="mt-1 text-sm text-ink/80">{"Points: " + item.totalPoints}</p>
+                                  <p className="mt-1 text-sm text-ink/80">{"Result: " + formatQuotaResult(item.plusMinus)}</p>
+                                  <p className="mt-1 text-sm text-ink/80">{"Adjustment: " + formatMovement(item.quotaMovement)}</p>
+                                  <p className="mt-1 text-sm text-ink/80">{"New quota: " + item.nextQuota}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-ink/65">No completed 2026 rounds. Using baseline quota only.</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </ReferenceSection>
 
@@ -982,3 +1078,4 @@ export function PlayersManager({
     </div>
   );
 }
+

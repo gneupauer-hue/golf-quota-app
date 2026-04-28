@@ -225,37 +225,62 @@ export async function getCurrentQuotaRows() {
     }
   });
 
-  return players.map((player) => {
-    const rebuiltHistory = rebuildPlayerQuotaHistory({
-      baselineQuota: requireBaselineQuota2026(player.name),
-      currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
-      rounds: player.roundEntries.map((entry) => ({
-        roundId: entry.round.id,
-        roundName: entry.round.roundName,
-        roundDate: entry.round.roundDate,
-        completedAt: entry.round.completedAt,
-        createdAt: entry.round.createdAt,
-        totalPoints: entry.totalPoints,
-        startQuota: entry.startQuota,
-        plusMinus: entry.plusMinus,
-        nextQuota: entry.nextQuota
-      }))
+  return players
+    .map((player) => {
+      const baselineQuota = requireBaselineQuota2026(player.name);
+      const validation = validatePlayerQuotaHistory({
+        playerId: player.id,
+        playerName: player.name,
+        baselineQuota,
+        currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
+        rounds: player.roundEntries.map((entry) => ({
+          roundId: entry.round.id,
+          roundName: entry.round.roundName,
+          roundDate: entry.round.roundDate,
+          completedAt: entry.round.completedAt,
+          createdAt: entry.round.createdAt,
+          totalPoints: entry.totalPoints,
+          startQuota: entry.startQuota,
+          plusMinus: entry.plusMinus,
+          nextQuota: entry.nextQuota
+        }))
+      });
+      const rebuiltHistory = validation.rebuilt;
+      const latestRound = rebuiltHistory.latestRound;
+      const latestRoundDate = latestRound?.completedAt ?? latestRound?.roundDate ?? null;
+      const persistedCurrentQuota = player.currentQuota ?? player.quota ?? player.startingQuota;
+
+      return {
+        id: player.id,
+        name: player.name,
+        quota: rebuiltHistory.currentQuota,
+        group: player.isRegular ? "Regular" : "Other",
+        isActive: player.isActive,
+        baselineQuota,
+        persistedCurrentQuota,
+        mismatchCount: validation.issues.length,
+        auditIssues: validation.issues.map((issue) => ({
+          roundLabel: issue.roundLabel,
+          fieldLabel: issue.fieldLabel,
+          expected: issue.expected,
+          actual: issue.actual
+        })),
+        history: rebuiltHistory.roundsDescending,
+        lastRoundPlayed: latestRoundDate ? formatDisplayDate(latestRoundDate) : "-",
+        lastRoundDate: latestRoundDate,
+        lastScore: latestRound?.totalPoints ?? null
+      };
+    })
+    .sort((left, right) => {
+      const leftHasPlayed = Boolean(left.lastRoundDate);
+      const rightHasPlayed = Boolean(right.lastRoundDate);
+
+      if (leftHasPlayed !== rightHasPlayed) {
+        return leftHasPlayed ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name);
     });
-
-    const latestRound = rebuiltHistory.latestRound;
-    const latestRoundDate = latestRound?.completedAt ?? latestRound?.roundDate ?? null;
-
-    return {
-      id: player.id,
-      name: player.name,
-      quota: rebuiltHistory.currentQuota,
-      group: player.isRegular ? "Regular" : "Other",
-      isActive: player.isActive,
-      lastRoundPlayed: latestRoundDate ? formatDisplayDate(latestRoundDate) : "-",
-      lastRoundDate: null,
-      lastScore: latestRound?.totalPoints ?? null
-    };
-  });
 }
 
 export async function getSeasonStatsData(sortBy: SeasonStatsSort = "net") {
