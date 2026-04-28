@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+﻿import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   calculateSideGameResults,
   calculateRoundRows,
@@ -633,34 +633,7 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
         continue;
       }
 
-      const storedBefore = {
-        startQuota: matchingEntry.startQuota,
-        frontQuota: matchingEntry.frontQuota,
-        backQuota: matchingEntry.backQuota,
-        frontNine: matchingEntry.frontNine,
-        backNine: matchingEntry.backNine,
-        frontPlusMinus: matchingEntry.frontPlusMinus,
-        backPlusMinus: matchingEntry.backPlusMinus,
-        totalPoints: matchingEntry.totalPoints,
-        plusMinus: matchingEntry.plusMinus,
-        nextQuota: matchingEntry.nextQuota,
-        rank: matchingEntry.rank,
-        team: matchingEntry.team
-      };
 
-      const hasEntryChanges =
-        storedBefore.team !== row.team ||
-        storedBefore.startQuota !== row.startQuota ||
-        storedBefore.frontQuota !== row.frontQuota ||
-        storedBefore.backQuota !== row.backQuota ||
-        storedBefore.frontNine !== row.frontNine ||
-        storedBefore.backNine !== row.backNine ||
-        storedBefore.frontPlusMinus !== row.frontPlusMinus ||
-        storedBefore.backPlusMinus !== row.backPlusMinus ||
-        storedBefore.totalPoints !== row.totalPoints ||
-        storedBefore.plusMinus !== row.plusMinus ||
-        storedBefore.nextQuota !== row.nextQuota ||
-        storedBefore.rank !== row.rank;
 
       if (row.playerName === "John Thomas") {
         console.info("[quota-rebuild] Saving John Thomas round", {
@@ -726,16 +699,14 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
         });
       }
 
-      if (hasEntryChanges) {
-        roundEntriesUpdated += 1;
-      }
+      roundEntriesUpdated += 1;
 
       if (row.playerName === "Bob Lipski") {
         console.info("[quota-rebuild] Bob Lipski persisted repair", {
           roundName: round.roundName,
           completedAt: round.completedAt,
           baseline: requireBaselineQuota2026("Bob Lipski"),
-          storedBefore: storedBefore.startQuota,
+          storedBefore: matchingEntry.startQuota,
           storedAfter: row.startQuota,
           points: row.totalPoints,
           result: row.plusMinus,
@@ -819,9 +790,7 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
       });
     }
 
-    if (hasPlayerChanges) {
-      playersUpdated += 1;
-    }
+    playersUpdated += 1;
   }
 
   const persistedPlayers = await tx.player.findMany({
@@ -1090,6 +1059,8 @@ export async function createOrReplaceRoundEntries(
     await syncRoundComputedState(tx, input.roundId);
   }
 }
+
+
 
 
 
