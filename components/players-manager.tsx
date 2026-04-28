@@ -715,6 +715,16 @@ function handleRepairButtonPress() {
                 const isOpen = openCurrentQuotaPlayerId === row.id;
                 const latestChange = getLatestQuotaChange(row.history);
                 const hasRecentChange = latestChange != null && latestChange !== 0;
+                const latestChangeLabel =
+                  latestChange == null ? "Base" : formatMovement(latestChange);
+                const latestChangeBadgeClass =
+                  latestChange == null
+                    ? "bg-ink/10 text-ink/60"
+                    : latestChange > 0
+                      ? "bg-pine text-white"
+                      : latestChange < 0
+                        ? "bg-danger/85 text-white"
+                        : "bg-ink/10 text-ink/70";
 
                 return (
                   <div
@@ -732,9 +742,16 @@ function handleRepairButtonPress() {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-ink">{row.name}</p>
-                        <p className={classNames("mt-1 text-xs", hasRecentChange ? "font-semibold text-pine" : "text-ink/60")}>
-                          {"Last change: " + (latestChange == null ? "Baseline only" : formatMovement(latestChange))}
-                        </p>
+                        <div className="mt-1">
+                          <span
+                            className={classNames(
+                              "inline-flex min-w-9 items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none",
+                              latestChangeBadgeClass
+                            )}
+                          >
+                            {latestChangeLabel}
+                          </span>
+                        </div>
                         {row.mismatchCount > 0 ? (
                           <p className="mt-1 text-xs font-semibold text-danger">
                             {"Audit warning: " + row.mismatchCount + " mismatch" + (row.mismatchCount === 1 ? "" : "es")}
@@ -1107,6 +1124,8 @@ function handleRepairButtonPress() {
     </div>
   );
 }
+
+
 
 
 
