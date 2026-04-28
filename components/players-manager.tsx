@@ -266,7 +266,7 @@ export function PlayersManager({
   const [players, setPlayers] = useState(initialPlayers);
   const [quotaAudit, setQuotaAudit] = useState(initialQuotaAudit);
   const [baselineRows] = useState(initialBaselineRows);
-  const [currentQuotaRows] = useState(initialCurrentQuotaRows);
+  const [currentQuotaRows, setCurrentQuotaRows] = useState(initialCurrentQuotaRows);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
@@ -330,16 +330,20 @@ export function PlayersManager({
     [playerSections]
   );
   function applyPlayersResponse(result: {
-    players: PlayerItem[];
-    quotaAudit: QuotaValidationSummary;
-    message?: string;
-  }) {
-    setPlayers(result.players);
-    setQuotaAudit(result.quotaAudit);
-    if (result.message) {
-      setMessage(result.message);
-    }
+  players: PlayerItem[];
+  quotaAudit: QuotaValidationSummary;
+  currentQuotaRows?: CurrentQuotaRow[];
+  message?: string;
+}) {
+  setPlayers(result.players);
+  setQuotaAudit(result.quotaAudit);
+  if (result.currentQuotaRows) {
+    setCurrentQuotaRows(result.currentQuotaRows);
   }
+  if (result.message) {
+    setMessage(result.message);
+  }
+}
 
   function openCreateEditor() {
     setForm(emptyForm);

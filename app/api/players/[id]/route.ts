@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { getPlayersPageData } from "@/lib/data";
+import { getCurrentQuotaRows, getPlayersPageData } from "@/lib/data";
 import { hasValidPlayerEditSession, PLAYER_EDIT_COOKIE } from "@/lib/player-edit-auth";
 import { prisma } from "@/lib/prisma";
 

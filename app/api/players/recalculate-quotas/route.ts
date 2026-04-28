@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getPlayersPageData } from "@/lib/data";
+import { getCurrentQuotaRows, getPlayersPageData } from "@/lib/data";
 import { hasValidPlayerEditSession, PLAYER_EDIT_COOKIE } from "@/lib/player-edit-auth";
 import { prisma } from "@/lib/prisma";
 import { recomputeHistoricalState } from "@/lib/round-service";
@@ -25,11 +25,12 @@ export async function POST() {
       return recomputeHistoricalState(tx);
     });
 
-    const data = await getPlayersPageData();
+    const [data, currentQuotaRows] = await Promise.all([getPlayersPageData(), getCurrentQuotaRows()]);
     const updatedLabel = `${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundsProcessed} round${repair.roundsProcessed === 1 ? "" : "s"}`;
 
     return NextResponse.json({
       ...data,
+      currentQuotaRows,
       repair,
       message: data.quotaAudit.mismatchCount === 0
         ? `Rebuilt quotas for ${updatedLabel}. 0 quota mismatches found.`
