@@ -53,6 +53,10 @@ type CurrentQuotaRow = {
   lastRoundPlayed: string;
 };
 
+function getLatestQuotaChange(history: PlayerHistoryItem[]) {
+  return history[0]?.quotaMovement ?? null;
+}
+
 type FormState = {
   id?: string;
   name: string;
@@ -281,7 +285,6 @@ export function PlayersManager({
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
   const [openCurrentQuotaPlayerId, setOpenCurrentQuotaPlayerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [repairDebugLines, setRepairDebugLines] = useState<string[]>([]);
   const [isRepairPending, startRepairTransition] = useTransition();
   const hasPlayers = players.length > 0;
   const showAdminQuotaAudit = process.env.NODE_ENV !== "production" || isEditUnlocked;
@@ -462,41 +465,10 @@ export function PlayersManager({
     startRepairTransition(async () => {
       try {
         setMessage("");
-        setRepairDebugLines(["Button clicked", "POST sent to /api/players/recalculate-quotas"]);
         const response = await fetch("/api/players/recalculate-quotas", {
           method: "POST"
         });
         const result = await response.json();
-        const resultCurrentQuotaRows = Array.isArray(result?.currentQuotaRows) ? result.currentQuotaRows : [];
-        const formatPlayerDebug = (
-          label: string,
-          debug: {
-            beforeCurrentQuota?: number | null;
-            expectedCurrentQuota?: number | null;
-            afterCurrentQuota?: number | null;
-          } | null | undefined
-        ) => {
-          const badgeQuota =
-            resultCurrentQuotaRows.find((row: { name?: string; quota?: number }) => row?.name === label)?.quota ?? "n/a";
-          return (
-            label +
-            ": before " + String(debug?.beforeCurrentQuota ?? "n/a") +
-            " | expected " + String(debug?.expectedCurrentQuota ?? "n/a") +
-            " | after " + String(debug?.afterCurrentQuota ?? "n/a") +
-            " | badge " + String(badgeQuota)
-          );
-        };
-
-        setRepairDebugLines([
-          "Button clicked",
-          "POST sent to /api/players/recalculate-quotas",
-          "Response status: " + response.status,
-          "Updated players count: " + String(result?.repair?.playersUpdated ?? "n/a"),
-          "Updated round records count: " + String(result?.repair?.roundEntriesUpdated ?? "n/a"),
-          formatPlayerDebug("John Thomas", result?.debug?.johnThomas),
-          formatPlayerDebug("Bob Lipski", result?.debug?.bobLipski),
-          formatPlayerDebug("Gary Neupauer", result?.debug?.garyNeupauer)
-        ]);
 
         if (!response.ok) {
           setMessage(result.error ?? "Could not rebuild quotas from baseline.");
@@ -505,10 +477,6 @@ export function PlayersManager({
 
         applyPlayersResponse(result);
       } catch (error) {
-        setRepairDebugLines((current) => [
-          ...current,
-          "Request error: " + (error instanceof Error ? error.message : "Unknown error")
-        ]);
         setMessage(error instanceof Error ? error.message : "Could not rebuild quotas from baseline.");
       }
     });
@@ -1146,5 +1114,7 @@ function handleRepairButtonPress() {
     </div>
   );
 }
+
+
 
 
