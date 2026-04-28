@@ -276,6 +276,7 @@ export function PlayersManager({
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [pendingEditPlayer, setPendingEditPlayer] = useState<PlayerItem | null>(null);
+  const [pendingUnlockAction, setPendingUnlockAction] = useState<"repair" | null>(null);
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
   const [openCurrentQuotaPlayerId, setOpenCurrentQuotaPlayerId] = useState<string | null>(null);
@@ -470,6 +471,18 @@ export function PlayersManager({
         setMessage(error instanceof Error ? error.message : "Could not rebuild quotas from baseline.");
       }
     });
+  }
+  function handleRepairButtonPress() {
+    if (showAdminQuotaAudit) {
+      handleRepairQuotas();
+      return;
+    }
+
+    setPendingEditPlayer(null);
+    setPendingUnlockAction("repair");
+    setPasswordInput("");
+    setPasswordMessage("");
+    setIsUnlockOpen(true);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -689,6 +702,15 @@ export function PlayersManager({
             subtitle="Read-only quota snapshot from completed 2026 rounds."
           >
             <div className="space-y-2">
+              <button
+                type="button"
+                disabled={isRepairPending}
+                className="club-btn-primary min-h-12 w-full text-base disabled:opacity-60"
+                onClick={handleRepairButtonPress}
+              >
+                {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
+              </button>
+
               {currentQuotaRows.map((row) => {
                 const isOpen = openCurrentQuotaPlayerId === row.id;
 
@@ -812,16 +834,6 @@ export function PlayersManager({
             subtitle="Locked baseline before Apr 19, 2026"
           >
             <div className="space-y-2">
-              {showAdminQuotaAudit ? (
-                <button
-                  type="button"
-                  disabled={isRepairPending}
-                  className="club-btn-primary min-h-11 w-full text-sm disabled:opacity-60"
-                  onClick={handleRepairQuotas}
-                >
-                  {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
-                </button>
-              ) : null}
 
               {baselineRows.map((row) => (
                 <div
