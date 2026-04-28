@@ -231,15 +231,16 @@ export function PlayersManager({
     });
   }, [players]);
 
-  const filteredPlayers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const shouldShowPlayerResults = normalizedSearchQuery.length >= 2;
 
-    if (!normalizedQuery) {
-      return groupedPlayers;
+  const filteredPlayers = useMemo(() => {
+    if (!shouldShowPlayerResults) {
+      return [];
     }
 
-    return groupedPlayers.filter((player) => player.name.toLowerCase().includes(normalizedQuery));
-  }, [groupedPlayers, searchQuery]);
+    return groupedPlayers.filter((player) => player.name.toLowerCase().includes(normalizedSearchQuery));
+  }, [groupedPlayers, normalizedSearchQuery, shouldShowPlayerResults]);
 
   const playerSections = useMemo(() => {
     const sections = new Map<string, PlayerItem[]>();
@@ -497,7 +498,9 @@ export function PlayersManager({
                 />
               </label>
 
-              {availableLetters.length > 1 ? (
+              <p className="text-sm text-ink/65">Search for a player to view quota history.</p>
+
+              {shouldShowPlayerResults && availableLetters.length > 1 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {availableLetters.map((letter) => (
                     <a
@@ -524,9 +527,15 @@ export function PlayersManager({
           </SectionCard>
 
           <div className="space-y-3">
-            {playerSections.length === 0 ? (
+            {!shouldShowPlayerResults ? (
               <SectionCard className="p-4">
-                <p className="text-sm text-ink/70">No players match that search.</p>
+                <p className="text-sm text-ink/70">Type at least 2 characters to search players.</p>
+              </SectionCard>
+            ) : null}
+
+            {shouldShowPlayerResults && playerSections.length === 0 ? (
+              <SectionCard className="p-4">
+                <p className="text-sm text-ink/70">No players found.</p>
               </SectionCard>
             ) : null}
 
