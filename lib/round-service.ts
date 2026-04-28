@@ -706,22 +706,84 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
     await persistRoundSummaries(tx, round.id, recalculated);
   }
 
-  for (const player of players) {
-    const nextQuota =
-      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
+  const expectedQuotaByPlayerId = new Map<string, { name: string; baselineQuota: number; nextQuota: number }>();
 
-    const hasPlayerChanges = player.quota !== nextQuota || player.currentQuota !== nextQuota;
+  for (const player of players) {
+    const baselineQuota = baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
+    const nextQuota = quotaMap.get(player.id) ?? baselineQuota;
+
+    expectedQuotaByPlayerId.set(player.id, {
+      name: player.name,
+      baselineQuota,
+      nextQuota
+    });
+
+    const hasPlayerChanges =
+      player.quota !== nextQuota ||
+      player.currentQuota !== nextQuota ||
+      player.startingQuota !== baselineQuota;
 
     await tx.player.update({
       where: { id: player.id },
       data: {
         quota: nextQuota,
-        currentQuota: nextQuota
+        currentQuota: nextQuota,
+        startingQuota: baselineQuota
       }
     });
 
     if (hasPlayerChanges) {
       playersUpdated += 1;
+    }
+  }
+
+  const persistedPlayers = await tx.player.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      quota: true,
+      currentQuota: true,
+      startingQuota: true
+    }
+  });
+
+  for (const player of persistedPlayers) {
+    const expected = expectedQuotaByPlayerId.get(player.id);
+    if (!expected) {
+      continue;
+    }
+
+    if (player.name === "Bob Lipski") {
+      console.info("[quota-rebuild] Bob Lipski final persisted quota", {
+        baseline: expected.baselineQuota,
+        finalComputedQuota: expected.nextQuota,
+        storedCurrentQuotaAfterSave: player.currentQuota,
+        storedQuotaAfterSave: player.quota,
+        storedStartingQuotaAfterSave: player.startingQuota
+      });
+    }
+
+    if (
+      player.currentQuota !== expected.nextQuota ||
+      player.quota !== expected.nextQuota ||
+      player.startingQuota !== expected.baselineQuota
+    ) {
+      throw new Error(
+        "Quota rebuild persistence failed for " +
+          player.name +
+          ". Expected current quota " +
+          expected.nextQuota +
+          " and baseline " +
+          expected.baselineQuota +
+          ", found current quota " +
+          player.currentQuota +
+          ", quota " +
+          player.quota +
+          ", baseline " +
+          player.startingQuota +
+          "."
+      );
     }
   }
 

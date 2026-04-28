@@ -156,10 +156,10 @@ function main() {
 
     const updatePlayer = playerColumns.has("quota")
       ? db.prepare(
-          "update Player set quota = ?, currentQuota = ?, updatedAt = CURRENT_TIMESTAMP where id = ?"
+          "update Player set quota = ?, currentQuota = ?, startingQuota = ?, updatedAt = CURRENT_TIMESTAMP where id = ?"
         )
       : db.prepare(
-          "update Player set currentQuota = ?, updatedAt = CURRENT_TIMESTAMP where id = ?"
+          "update Player set currentQuota = ?, startingQuota = ?, updatedAt = CURRENT_TIMESTAMP where id = ?"
         );
 
     for (const round of rounds) {
@@ -232,11 +232,12 @@ function main() {
     }
 
     for (const player of players) {
-      const nextQuota = quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
+      const baselineQuota = baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
+      const nextQuota = quotaMap.get(player.id) ?? baselineQuota;
       if (playerColumns.has("quota")) {
-        updatePlayer.run(nextQuota, nextQuota, player.id);
+        updatePlayer.run(nextQuota, nextQuota, baselineQuota, player.id);
       } else {
-        updatePlayer.run(nextQuota, player.id);
+        updatePlayer.run(nextQuota, baselineQuota, player.id);
       }
     }
 

@@ -62,7 +62,6 @@ export async function PUT(
           name,
           quota,
           currentQuota: quota,
-          startingQuota: quota,
           isRegular,
           isActive
         }
