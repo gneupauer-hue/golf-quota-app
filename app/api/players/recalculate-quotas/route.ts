@@ -25,16 +25,46 @@ export async function POST() {
       return recomputeHistoricalState(tx);
     });
 
-    const [data, currentQuotaRows] = await Promise.all([getPlayersPageData(), getCurrentQuotaRows()]);
+    const [data, currentQuotaRows, verifyPlayers] = await Promise.all([
+      getPlayersPageData(),
+      getCurrentQuotaRows(),
+      prisma.player.findMany({
+        select: {
+          id: true,
+          name: true,
+          currentQuota: true,
+          quota: true,
+          startingQuota: true
+        }
+      })
+    ]);
     const updatedLabel = `${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundEntriesUpdated} round record${repair.roundEntriesUpdated === 1 ? "" : "s"}`;
+
+    const johnThomas = verifyPlayers.find((player) => player.name === "John Thomas");
+    console.info("[quota-rebuild] POST-REBUILD DB VALUE", {
+      playerName: "John Thomas",
+      currentQuota: johnThomas?.currentQuota ?? null,
+      quota: johnThomas?.quota ?? null,
+      startingQuota: johnThomas?.startingQuota ?? null
+    });
+
+    if (data.quotaAudit.mismatchCount > 0) {
+      return NextResponse.json(
+        {
+          ...data,
+          currentQuotaRows,
+          repair,
+          error: `Rebuild wrote data, but ${data.quotaAudit.mismatchCount} quota mismatch${data.quotaAudit.mismatchCount === 1 ? " remains" : "es remain"}.`
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ...data,
       currentQuotaRows,
       repair,
-      message: data.quotaAudit.mismatchCount === 0
-        ? `Rebuilt quotas for ${updatedLabel}. 0 quota mismatches found.`
-        : `Rebuilt quotas for ${updatedLabel}, but ${data.quotaAudit.mismatchCount} mismatch${data.quotaAudit.mismatchCount === 1 ? " remains" : "es remain"}.`
+      message: `Updated ${updatedLabel}. 0 quota mismatches found.`
     });
   } catch (error) {
     return NextResponse.json(
