@@ -862,13 +862,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       };
     }
 
-    if (rows.some((row) => row.groupNumber == null)) {
-      return {
-        valid: false,
-        reason: "Assign playing groups before starting round."
-      };
-    }
-
     for (const [index, team] of setupTeamCodes.entries()) {
       const requiredPlayers = selectedMatchFormat.capacities[index] ?? 0;
       const assignedPlayers = rows.filter((row) => row.team === team).length;
@@ -1998,12 +1991,36 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         throw new Error(setupValidation.reason || "Finish assigning teams before starting.");
       }
 
+      const playerNameById = new Map(calculatedRows.map((row) => [row.playerId, row.playerName]));
+      const scoringGroupsForStart = isSkinsOnly
+        ? []
+        : buildScoringGroups(rows, teamStandings, playerNameById, initialGroups);
+      const groupNumberByTeam = new Map<TeamCode, number | null>();
+      const teeTimeByTeam = new Map<TeamCode, string | null>();
+
+      if (!isSkinsOnly) {
+        if (!scoringGroupsForStart.length) {
+          throw new Error("Could not build playing groups for this round.");
+        }
+
+        for (const group of scoringGroupsForStart) {
+          for (const team of group.teams) {
+            groupNumberByTeam.set(team, group.groupNumber);
+            teeTimeByTeam.set(team, group.teeTime);
+          }
+        }
+      }
+
       nextRows = rows.map((row) => ({
         ...row,
         team: isSkinsOnly ? null : row.team,
-        groupNumber: isSkinsOnly ? null : row.groupNumber,
-        teeTime: isSkinsOnly ? null : row.teeTime
+        groupNumber: isSkinsOnly ? null : row.team ? groupNumberByTeam.get(row.team) ?? row.groupNumber : null,
+        teeTime: isSkinsOnly ? null : row.team ? teeTimeByTeam.get(row.team) ?? row.teeTime : null
       }));
+
+      if (!isSkinsOnly && nextRows.some((row) => row.team != null && row.groupNumber == null)) {
+        throw new Error("Could not build playing groups for this round.");
+      }
       now = new Date().toISOString();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not build teams for this round.");
@@ -2019,7 +2036,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         setLockedAt(now);
         setStartedAt(now);
         setSelectedTeam(null);
-        setMessage(isSkinsOnly ? "Skins game ready for live scoring." : "This round is now active on Current Round.");
+        setMessage(isSkinsOnly ? "Skins game ready for live scoring." : "This round is ready for scorecard entry in Current Round.");
         router.push("/current-round");
         router.refresh();
       } catch (error) {
@@ -2868,7 +2885,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 5</p>
                       <h3 className="mt-1 text-lg font-semibold">Start round</h3>
                       <p className="mt-1 text-sm text-ink/65">
-                        Lock setup and move this round into Current Round for live scoring.
+                        Lock setup and move this round into Current Round for scorecard entry.
                       </p>
                     </div>
                     {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
