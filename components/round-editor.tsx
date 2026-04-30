@@ -2737,7 +2737,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         </p>
                         {selectedMatchFormat ? (
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-pine">
-                            {`Selected format: ${selectedMatchFormat.label}${selectedMatchFormat.subtitle ? ` â€” ${selectedMatchFormat.subtitle}` : ""}`}
+                            {`Selected format: ${selectedMatchFormat.label}${selectedMatchFormat.subtitle ? ` (${selectedMatchFormat.subtitle})` : ""}`}
                           </p>
                         ) : null}
                       </div>
