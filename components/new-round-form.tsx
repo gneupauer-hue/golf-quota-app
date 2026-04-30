@@ -42,13 +42,6 @@ export function NewRoundForm() {
           </button>
         </div>
 
-        <div className="rounded-[24px] border border-sand/60 bg-canvas/65 px-4 py-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Scoring</p>
-          <h3 className="mt-1 text-base font-semibold text-ink">Scorecard Entry</h3>
-          <p className="mt-1 text-sm text-ink/65">
-            Enter front 9, back 9, and skin holes. Individual Quota + Skins has no team match or side matches.
-          </p>
-        </div>
 
         <button
           disabled={isPending}

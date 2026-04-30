@@ -705,7 +705,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [toast, setToast] = useState("");
   const [isPending, startTransition] = useTransition();
   const [gameMode, setGameMode] = useState<RoundMode>(round.roundMode ?? "MATCH_QUOTA");
-  const [scoringEntryMode, setScoringEntryMode] = useState<ScoringEntryMode>(round.scoringEntryMode ?? "DETAILED");
+  const [scoringEntryMode, setScoringEntryMode] = useState<ScoringEntryMode>("QUICK");
   const [setupTeamCount, setSetupTeamCount] = useState<number | null>(null);
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
   const [teamBuildVariant, setTeamBuildVariant] = useState(0);
@@ -1061,7 +1061,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setLockedAt(round.lockedAt);
     setStartedAt(round.startedAt);
     setGameMode(round.roundMode ?? "MATCH_QUOTA");
-    setScoringEntryMode(round.scoringEntryMode ?? "DETAILED");
+    setScoringEntryMode("QUICK");
     setActiveHoleByTeam((current) => {
       const nextState: Partial<Record<TeamCode, number>> = {};
 
@@ -3145,7 +3145,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           onFrontNineChange={updateQuickFrontNine}
           onBackNineChange={updateQuickBackNine}
           onBirdieHolesChange={updateQuickBirdieHoles}
-          onSaveRound={() => saveRound("Quick entry saved.")}
+          onSaveRound={() => saveRound("Scorecard saved.")}
           onArchiveRound={archiveRound}
           onRefresh={refreshRoundData}
         />
