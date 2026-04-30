@@ -26,13 +26,13 @@ export default async function CurrentRoundPage({
     <div className="space-y-4">
       <PageTitle
         title="Current Round"
-        subtitle="Live scoring and round progress appear here after a round has been started."
+        subtitle="Set up or open today's round from here."
       />
       {params?.deleted === "1" ? (
         <SectionCard className="space-y-2">
           <h3 className="text-base font-semibold text-pine">Round deleted</h3>
           <p className="text-sm text-ink/75">
-            The current round was removed. Go to Round Setup to build the next one.
+            The current round was removed. Set up a new round when the group is ready.
           </p>
         </SectionCard>
       ) : null}
@@ -40,16 +40,16 @@ export default async function CurrentRoundPage({
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine">No Active Round</p>
         <div className="space-y-2">
           <h3 className="text-2xl font-semibold text-ink">
-            {roundId ? "Round setup is still in progress" : "Start in Round Setup"}
+            {roundId ? "Round setup is still in progress" : "Set Up New Round"}
           </h3>
           <p className="text-sm text-ink/70">
             {roundId
-              ? "Finish building teams and tap Start Round in Round Setup. Current Round will open automatically once the round is live."
-              : "Current Round stays focused on live scoring only. Go to Round Setup to create the next round."}
+              ? "Finish setup, then Current Round will open automatically once the round is live."
+              : "Set up a new scorecard when the group is ready."}
           </p>
         </div>
         <Link href="/round-setup" className="club-btn-primary min-h-14">
-          {roundId ? "Continue Round Setup" : "Go To Round Setup"}
+          {roundId ? "Continue Setup" : "Set Up New Round"}
         </Link>
       </SectionCard>
     </div>

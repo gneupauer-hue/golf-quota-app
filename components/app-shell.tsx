@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -6,9 +6,7 @@ import { classNames } from "@/lib/utils";
 
 const links = [
   { href: "/", lines: ["Home"] },
-  { href: "/round-setup", lines: ["Round", "Setup"] },
   { href: "/current-round", lines: ["Current", "Round"] },
-  { href: "/side-matches", lines: ["Side", "Matches"] },
   { href: "/past-games", lines: ["Past", "Games"] },
   { href: "/players", lines: ["Players"] },
 ];
@@ -54,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           bottom: "max(8px, calc(env(safe-area-inset-bottom) + 4px))"
         }}
       >
-        <ul className="grid grid-cols-6 gap-1.5">
+        <ul className="grid grid-cols-4 gap-1.5">
           {links.map((link) => {
             const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
 

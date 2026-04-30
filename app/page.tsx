@@ -8,33 +8,58 @@ export const dynamic = "force-dynamic";
 
 const actions = [
   {
-    href: "/round-setup",
-    title: "Round Setup",
-    description: "Build the next round, validate team sizes, auto-build teams, and start live play."
-  },
-  {
     href: "/current-round",
     title: "Current Round",
-    description: "Live scoring only after a round has been started."
-  },
-  {
-    href: "/players",
-    title: "Players",
-    description: "Manage roster, conflicts, quotas, and active status."
+    description: "Open today's round for scorecard entry."
   },
   {
     href: "/past-games",
     title: "Past Games",
-    description: "Completed rounds archived for read-only review."
+    description: "Review completed rounds and results."
+  },
+  {
+    href: "/players",
+    title: "Players",
+    description: "Manage the roster, conflicts, quotas, and active status."
   }
 ];
 
 export default async function HomePage() {
   const home = await getHomePageData();
+  const currentRoundHref = home.currentRound?.startedAt
+    ? "/current-round"
+    : home.currentRound
+      ? "/round-setup"
+      : null;
 
   return (
     <div className="space-y-3">
-      <QuickRoundLauncher />
+      <SectionCard className="space-y-4 border border-pine/20 bg-[#E2F4E6]">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine">Current Round</p>
+        {home.currentRound && currentRoundHref ? (
+          <>
+            <div className="space-y-1.5">
+              <h3 className="text-2xl font-semibold text-ink">{home.currentRound.roundName}</h3>
+              <p className="text-sm text-ink/70">
+                {home.currentRound.startedAt
+                  ? "Scorecard entry is ready for the active round."
+                  : "Finish setup, then start scoring from Current Round."}
+              </p>
+            </div>
+            <Link href={currentRoundHref} className="club-btn-primary min-h-14">
+              {home.currentRound.startedAt ? "Open Current Round" : "Continue Setup"}
+            </Link>
+          </>
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              <h3 className="text-2xl font-semibold text-ink">No active round</h3>
+              <p className="text-sm text-ink/70">Start a new scorecard when the group is ready.</p>
+            </div>
+            <QuickRoundLauncher label="Set Up New Round" />
+          </>
+        )}
+      </SectionCard>
 
       <div className="flex flex-col gap-3">
         {actions.map((action) => (
