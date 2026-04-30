@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { SectionCard } from "@/components/section-card";
@@ -708,7 +708,7 @@ export function SkinsOnlyRoundView({
       <SectionCard className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Skins Only</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Individual Quota + Skins</p>
             <h3 className="mt-1 text-xl font-semibold">Score entry only</h3>
           </div>
           <button

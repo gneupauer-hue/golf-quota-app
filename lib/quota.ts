@@ -1,4 +1,4 @@
-﻿export type ScoringRule = {
+export type ScoringRule = {
   label: string;
   value: number;
 };
@@ -1183,7 +1183,7 @@ export function calculatePlayerBuyIns(
   const teamCount = teams.length;
   const teamSizeByCode = new Map(teams.map((team) => [team.team, team.players.length]));
   const includeTeamGame = mode === "MATCH_QUOTA" && teamCount > 0;
-  const includeIndy = mode === "MATCH_QUOTA";
+  const includeIndy = true;
   const skinsPerPlayer = rows.length ? roundCurrency(sideGames.overallPot.skinsPot / rows.length) : 0;
   const indyPerPlayer = rows.length ? roundCurrency(sideGames.overallPot.indyPot / rows.length) : 0;
   const frontPerTeam = includeTeamGame ? roundCurrency(sideGames.teamPots.frontPot / teamCount) : 0;
@@ -1680,7 +1680,7 @@ export function calculateFinalPayoutSummary(
   mode: RoundMode
 ): FinalPayoutSummary {
   const includeTeamPayouts = mode !== "SKINS_ONLY";
-  const includeIndividualPayouts = mode !== "SKINS_ONLY";
+  const includeIndividualPayouts = true;
   const includeSkinsPayouts = true;
   const teams = calculateTeamStandings(rows);
   const sideGames = calculateSideGameResults(rows);
@@ -1771,6 +1771,11 @@ export function calculatePayoutAudit(
   mode: RoundMode
 ): PayoutAudit {
   const sideGames = calculateSideGameResults(rows);
+  const includeTeamPayouts = mode !== "SKINS_ONLY";
+  const expectedFrontPot = includeTeamPayouts ? sideGames.teamPots.frontPot : 0;
+  const expectedBackPot = includeTeamPayouts ? sideGames.teamPots.backPot : 0;
+  const expectedTotalMatchPot = includeTeamPayouts ? sideGames.teamPots.totalPot : 0;
+  const expectedOverallPot = roundCurrency(expectedFrontPot + expectedBackPot + expectedTotalMatchPot + sideGames.overallPot.indyPot + sideGames.skins.totalPot);
   const payoutSummary = calculateFinalPayoutSummary(rows, mode);
   const frontPaid = roundCurrency(payoutSummary.players.reduce((sum, player) => sum + player.front, 0));
   const backPaid = roundCurrency(payoutSummary.players.reduce((sum, player) => sum + player.back, 0));
@@ -1782,12 +1787,12 @@ export function calculatePayoutAudit(
 
   if (
     !isCurrencyMatch(indyPaid, sideGames.overallPot.indyPot) ||
-    !isCurrencyMatch(overallPaidOut + leftover, sideGames.overallPot.totalPot)
+    !isCurrencyMatch(overallPaidOut + leftover, expectedOverallPot)
   ) {
     console.warn("Payout audit reconciliation mismatch", {
       indyPot: sideGames.overallPot.indyPot,
       indyPaid,
-      overallPot: sideGames.overallPot.totalPot,
+      overallPot: expectedOverallPot,
       overallPaidOut,
       leftover
     });
@@ -1796,18 +1801,18 @@ export function calculatePayoutAudit(
   const checks = [
     {
       label: "Front Paid = Front Pot",
-      passed: roundCurrency(frontPaid) === roundCurrency(sideGames.teamPots.frontPot),
-      difference: roundCurrency(frontPaid - sideGames.teamPots.frontPot)
+      passed: roundCurrency(frontPaid) === roundCurrency(expectedFrontPot),
+      difference: roundCurrency(frontPaid - expectedFrontPot)
     },
     {
       label: "Back Paid = Back Pot",
-      passed: roundCurrency(backPaid) === roundCurrency(sideGames.teamPots.backPot),
-      difference: roundCurrency(backPaid - sideGames.teamPots.backPot)
+      passed: roundCurrency(backPaid) === roundCurrency(expectedBackPot),
+      difference: roundCurrency(backPaid - expectedBackPot)
     },
     {
       label: "Total Paid = Total Pot",
-      passed: roundCurrency(totalMatchPaid) === roundCurrency(sideGames.teamPots.totalPot),
-      difference: roundCurrency(totalMatchPaid - sideGames.teamPots.totalPot)
+      passed: roundCurrency(totalMatchPaid) === roundCurrency(expectedTotalMatchPot),
+      difference: roundCurrency(totalMatchPaid - expectedTotalMatchPot)
     },
     {
       label: "Indy Paid = Indy Pot",
@@ -1822,18 +1827,18 @@ export function calculatePayoutAudit(
     {
       label: "Overall Paid + Leftover = Overall Pot",
       passed:
-        roundCurrency(overallPaidOut + leftover) === roundCurrency(sideGames.overallPot.totalPot),
-      difference: roundCurrency(overallPaidOut + leftover - sideGames.overallPot.totalPot)
+        roundCurrency(overallPaidOut + leftover) === roundCurrency(expectedOverallPot),
+      difference: roundCurrency(overallPaidOut + leftover - expectedOverallPot)
     }
   ];
 
   return {
-    frontPot: sideGames.teamPots.frontPot,
-    backPot: sideGames.teamPots.backPot,
-    totalPot: sideGames.teamPots.totalPot,
+    frontPot: expectedFrontPot,
+    backPot: expectedBackPot,
+    totalPot: expectedTotalMatchPot,
     indyPot: sideGames.overallPot.indyPot,
     skinsPot: sideGames.skins.totalPot,
-    overallPot: sideGames.overallPot.totalPot,
+    overallPot: expectedOverallPot,
     frontPaid,
     backPaid,
     totalMatchPaid,

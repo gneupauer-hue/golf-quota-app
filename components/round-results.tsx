@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useState } from "react";
@@ -240,7 +240,7 @@ function QuotaAuditWarning({ quotaAudit }: { quotaAudit?: QuotaValidationSummary
 }
 
 export function RoundResults({ data }: { data: ResultsData }) {
-  const isSkinsOnly = data.round.roundMode === "SKINS_ONLY";
+  const isIndividualQuotaSkins = data.round.roundMode === "SKINS_ONLY";
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
   const payoutAudit = calculatePayoutAudit(data.entries, data.round.roundMode);
   const displayRoundDate = getRoundDisplayDate({
@@ -275,6 +275,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
         ← See All Results
       </Link>
 
+      {!isIndividualQuotaSkins ? (
       <CollapsibleSection
         title="Team Results"
         subtitle="Final front, back, and total team performance."
@@ -354,6 +355,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
           <p className="text-sm text-ink/65">No team results available.</p>
         )}
       </CollapsibleSection>
+      ) : null}
 
       <CollapsibleSection
         title="Pot Summary"
@@ -361,11 +363,13 @@ export function RoundResults({ data }: { data: ResultsData }) {
         badge={`${payoutSummary.players.length} paid`}
       >
         <div className="grid grid-cols-2 gap-2.5">
-          <ResultStatCard
-            title="Team Pots"
-            value={formatCurrency(data.money.overallPot.teamPot)}
-            detail={`${formatCurrency(data.money.overallPot.frontPot)} / ${formatCurrency(data.money.overallPot.backPot)} / ${formatCurrency(data.money.overallPot.totalTeamPot)}`}
-          />
+          {!isIndividualQuotaSkins ? (
+            <ResultStatCard
+              title="Team Pots"
+              value={formatCurrency(data.money.overallPot.teamPot)}
+              detail={`${formatCurrency(data.money.overallPot.frontPot)} / ${formatCurrency(data.money.overallPot.backPot)} / ${formatCurrency(data.money.overallPot.totalTeamPot)}`}
+            />
+          ) : null}
           <ResultStatCard
             title="Indy Pot"
             value={formatCurrency(data.money.overallPot.indyPot)}
@@ -382,18 +386,18 @@ export function RoundResults({ data }: { data: ResultsData }) {
           />
           <ResultStatCard
             title="Total Pot"
-            value={formatCurrency(data.money.overallPot.totalPot)}
+            value={formatCurrency(isIndividualQuotaSkins ? payoutAudit.overallPot : data.money.overallPot.totalPot)}
             detail={`${data.money.overallPot.playerCount} players`}
           />
         </div>
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Indy Cashers"
+        title="Individual Quota Cashers"
         subtitle="Only players who cashed in the field payout."
-        badge={!isSkinsOnly ? `${indyCashers.length} paid` : undefined}
+        badge={`${indyCashers.length} paid`}
       >
-        {!isSkinsOnly && indyCashers.length ? (
+        {indyCashers.length ? (
           <div className="space-y-2">
             {indyCashers.map((player) => (
               <div
@@ -457,8 +461,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Indy Rankings" subtitle="Final standings versus quota.">
-        {!isSkinsOnly && indyRankings.length ? (
+      <CollapsibleSection title="Individual Quota Standings" subtitle="Final standings versus quota.">
+        {indyRankings.length ? (
           <div className="space-y-2">
             {indyRankings.map((player) => {
               const isIndyWinner = indyWinnerIds.has(player.playerId);

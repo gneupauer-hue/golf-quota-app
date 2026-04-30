@@ -625,6 +625,72 @@ function buildScoringGroups(
   return derivedGroups;
 }
 
+
+type IndividualScoringGroup = {
+  key: string;
+  label: string;
+  groupNumber: number;
+  playerIds: string[];
+  playerNames: string[];
+};
+
+function buildIndividualScoringGroups(
+  rows: RowState[],
+  playersById: Map<string, EditorProps["players"][number]>,
+  quotaSnapshot: Record<string, number>
+) {
+  const assignedGroups = new Map<number, IndividualScoringGroup>();
+  const hasExplicitGroups = rows.some((row) => row.groupNumber != null);
+
+  if (hasExplicitGroups) {
+    for (const row of rows) {
+      const player = playersById.get(row.playerId);
+      if (!player || row.groupNumber == null) continue;
+      const current = assignedGroups.get(row.groupNumber) ?? {
+        key: `individual-group-${row.groupNumber}`,
+        label: `Group ${row.groupNumber}`,
+        groupNumber: row.groupNumber,
+        playerIds: [],
+        playerNames: []
+      };
+      current.playerIds.push(row.playerId);
+      current.playerNames.push(player.name);
+      assignedGroups.set(row.groupNumber, current);
+    }
+
+    return Array.from(assignedGroups.values()).sort((left, right) => left.groupNumber - right.groupNumber);
+  }
+
+  const groupCount = Math.max(1, Math.ceil(rows.length / 4));
+  const groups: IndividualScoringGroup[] = Array.from({ length: groupCount }, (_, index) => ({
+    key: `individual-derived-${index + 1}`,
+    label: `Group ${index + 1}`,
+    groupNumber: index + 1,
+    playerIds: [],
+    playerNames: []
+  }));
+
+  const orderedRows = [...rows].sort((left, right) => {
+    const leftPlayer = playersById.get(left.playerId);
+    const rightPlayer = playersById.get(right.playerId);
+    const leftQuota = quotaSnapshot[left.playerId] ?? leftPlayer?.quota ?? 0;
+    const rightQuota = quotaSnapshot[right.playerId] ?? rightPlayer?.quota ?? 0;
+    if (rightQuota !== leftQuota) return rightQuota - leftQuota;
+    return (leftPlayer?.name ?? "").localeCompare(rightPlayer?.name ?? "");
+  });
+
+  orderedRows.forEach((row, index) => {
+    const player = playersById.get(row.playerId);
+    const cycle = Math.floor(index / groupCount);
+    const position = index % groupCount;
+    const groupIndex = cycle % 2 === 0 ? position : groupCount - 1 - position;
+    const group = groups[groupIndex];
+    group.playerIds.push(row.playerId);
+    group.playerNames.push(player?.name ?? "Unknown Player");
+  });
+
+  return groups.filter((group) => group.playerIds.length > 0);
+}
 export function RoundEditor({ round, players, quotaSnapshot, groups: initialGroups }: EditorProps) {
   const router = useRouter();
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
@@ -667,7 +733,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const derivedRoundName = useMemo(() => formatRoundNameFromDate(roundDate), [roundDate]);
   const displayRoundName = useMemo(() => getPreferredRoundName(round.roundName, roundDate), [round.roundName, roundDate]);
   const isSkinsOnly = gameMode === "SKINS_ONLY";
-  const isQuickEntryMode = !isSkinsOnly && scoringEntryMode === "QUICK";
+  const isQuickEntryMode = scoringEntryMode === "QUICK";
   const matchSetupPlayerCount = !isSkinsOnly && rows.length > 0 ? rows.length : null;
   const availableMatchFormats = useMemo(
     () => (matchSetupPlayerCount == null ? [] : getTeamFormats(matchSetupPlayerCount)),
@@ -766,7 +832,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     () =>
       calculatePayoutPredictions(calculatedRows, {
         includeTeamPayouts: gameMode !== "SKINS_ONLY",
-        includeIndividualPayouts: gameMode !== "SKINS_ONLY",
+        includeIndividualPayouts: true,
         includeSkinsPayouts: true
       }),
     [calculatedRows, gameMode]
@@ -822,9 +888,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
   const setupValidation = useMemo(() => {
     if (isSkinsOnly) {
-      return rows.length
-        ? { valid: true, reason: "" }
-        : { valid: false, reason: "Add players before starting the skins game." };
+      if (!rows.length) {
+        return { valid: false, reason: "Add players before starting Individual Quota + Skins." };
+      }
+
+      if (rows.some((row) => row.groupNumber == null)) {
+        return { valid: false, reason: "Build foursomes before starting round." };
+      }
+
+      return { valid: true, reason: "" };
     }
 
     if (matchSetupPlayerCount == null) {
@@ -902,10 +974,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }, [playersById, quotaSnapshot, rows, setupTeamCodes]);
 
   const canStartConfiguredRound = rows.length > 0 && setupValidation.valid;
+  const individualScoringGroupsPreview = useMemo(
+    () => buildIndividualScoringGroups(rows, playersById, quotaSnapshot),
+    [playersById, quotaSnapshot, rows]
+  );
   const hasAssignedScoringGroups =
-    !isSkinsOnly &&
     rows.length > 0 &&
-    rows.every((row) => row.team == null || row.groupNumber != null);
+    (isSkinsOnly
+      ? rows.every((row) => row.groupNumber != null)
+      : rows.every((row) => row.team == null || row.groupNumber != null));
   const setupScoringGroupsPreview = useMemo(
     () =>
       isSkinsOnly
@@ -1056,11 +1133,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
     if (isSkinsOnly) {
       setRows((current) =>
-        current.map((row) =>
-          row.team == null && row.groupNumber == null && row.teeTime == null
-            ? row
-            : { ...row, team: null, groupNumber: null, teeTime: null }
-        )
+        current.map((row) => (row.team == null ? row : { ...row, team: null }))
       );
       return;
     }
@@ -1341,6 +1414,48 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setMessage("Playing groups assigned. Live scoring will stay scoped to these foursomes.");
   }
 
+  function autoAssignIndividualScoringGroups() {
+    if (!isSkinsOnly) {
+      return;
+    }
+
+    if (!rows.length) {
+      setMessage("Add players before building foursomes.");
+      return;
+    }
+
+    const previewGroups = buildIndividualScoringGroups(
+      rows.map((row) => ({ ...row, groupNumber: null, teeTime: null })),
+      playersById,
+      quotaSnapshot
+    );
+
+    const groupNumberByPlayerId = new Map<string, number>();
+    for (const group of previewGroups) {
+      for (const playerId of group.playerIds) {
+        groupNumberByPlayerId.set(playerId, group.groupNumber);
+      }
+    }
+
+    const orderedRows = previewGroups.flatMap((group) =>
+      group.playerIds
+        .map((playerId) => rows.find((row) => row.playerId === playerId))
+        .filter(Boolean) as RowState[]
+    );
+    const remainingRows = rows.filter(
+      (row) => !orderedRows.some((orderedRow) => orderedRow.playerId === row.playerId)
+    );
+    const nextRows = [...orderedRows, ...remainingRows].map((row) => ({
+      ...row,
+      team: null,
+      groupNumber: groupNumberByPlayerId.get(row.playerId) ?? null,
+      teeTime: null
+    }));
+
+    setRows(nextRows);
+    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+    setMessage("Balanced foursomes built for Individual Quota + Skins.");
+  }
   function removePlayer(playerId: string) {
     if (isLocked) return;
     const targetPlayer = playersById.get(playerId);
@@ -1995,10 +2110,24 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       const scoringGroupsForStart = isSkinsOnly
         ? []
         : buildScoringGroups(rows, teamStandings, playerNameById, initialGroups);
+      const individualGroupsForStart = isSkinsOnly
+        ? buildIndividualScoringGroups(rows, playersById, quotaSnapshot)
+        : [];
       const groupNumberByTeam = new Map<TeamCode, number | null>();
       const teeTimeByTeam = new Map<TeamCode, string | null>();
+      const groupNumberByPlayerId = new Map<string, number | null>();
 
-      if (!isSkinsOnly) {
+      if (isSkinsOnly) {
+        if (!individualGroupsForStart.length) {
+          throw new Error("Could not build foursomes for this round.");
+        }
+
+        for (const group of individualGroupsForStart) {
+          for (const playerId of group.playerIds) {
+            groupNumberByPlayerId.set(playerId, group.groupNumber);
+          }
+        }
+      } else {
         if (!scoringGroupsForStart.length) {
           throw new Error("Could not build playing groups for this round.");
         }
@@ -2014,9 +2143,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       nextRows = rows.map((row) => ({
         ...row,
         team: isSkinsOnly ? null : row.team,
-        groupNumber: isSkinsOnly ? null : row.team ? groupNumberByTeam.get(row.team) ?? row.groupNumber : null,
+        groupNumber: isSkinsOnly
+          ? groupNumberByPlayerId.get(row.playerId) ?? row.groupNumber
+          : row.team ? groupNumberByTeam.get(row.team) ?? row.groupNumber : null,
         teeTime: isSkinsOnly ? null : row.team ? teeTimeByTeam.get(row.team) ?? row.teeTime : null
       }));
+
+      if (isSkinsOnly && nextRows.some((row) => row.groupNumber == null)) {
+        throw new Error("Could not build foursomes for this round.");
+      }
 
       if (!isSkinsOnly && nextRows.some((row) => row.team != null && row.groupNumber == null)) {
         throw new Error("Could not build playing groups for this round.");
@@ -2036,7 +2171,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         setLockedAt(now);
         setStartedAt(now);
         setSelectedTeam(null);
-        setMessage(isSkinsOnly ? "Skins game ready for live scoring." : "This round is ready for scorecard entry in Current Round.");
+        setMessage(isSkinsOnly ? "Individual Quota + Skins is ready for scorecard entry." : "This round is ready for scorecard entry in Current Round.");
         router.push("/current-round");
         router.refresh();
       } catch (error) {
@@ -2550,6 +2685,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   )}
                   onClick={() => {
                     setGameMode("MATCH_QUOTA");
+                    setScoringEntryMode("QUICK");
                     setRows([]);
                     setSavedRows([]);
                     setSearch("");
@@ -2569,6 +2705,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   )}
                   onClick={() => {
                     setGameMode("SKINS_ONLY");
+                    setScoringEntryMode("QUICK");
                     setRows([]);
                     setSavedRows([]);
                     setSearch("");
@@ -2578,7 +2715,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     setMessage("");
                   }}
                 >
-                  Skins Only
+                  Individual Quota + Skins
                 </button>
               </div>
             </div>
@@ -2905,29 +3042,83 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                   </SectionCard>
                 </>
               ) : (
-                <SectionCard className="space-y-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 2</p>
-                    <h3 className="mt-1 text-lg font-semibold">Start round</h3>
-                    <p className="mt-1 text-sm text-ink/65">
-                      Skins Only skips team setup. Once the field looks right, start the round.
-                    </p>
-                  </div>
-                  {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
-                  {!setupValidation.valid && rows.length > 0 ? (
-                    <p className="text-sm font-medium text-[#A53B2A]">
-                      {setupValidation.reason || "Finish setup before starting the round."}
-                    </p>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={isPending || !canStartConfiguredRound}
-                    className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white disabled:opacity-60"
-                    onClick={startGame}
-                  >
-                    {isPending ? "Starting round..." : "Start Round"}
-                  </button>
-                </SectionCard>
+                <>
+                  <SectionCard className="space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 2</p>
+                        <h3 className="mt-1 text-lg font-semibold">Build foursomes</h3>
+                        <p className="mt-1 text-sm text-ink/65">
+                          No team match. Build balanced foursomes for score entry using player quotas.
+                        </p>
+                      </div>
+                      {hasAssignedScoringGroups ? (
+                        <span className="rounded-full bg-[#E2F4E6] px-3 py-1.5 text-xs font-semibold text-pine">
+                          Ready
+                        </span>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!rows.length}
+                      className="min-h-12 w-full rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                      onClick={autoAssignIndividualScoringGroups}
+                    >
+                      {hasAssignedScoringGroups ? "Rebuild Foursomes" : "Build Foursomes"}
+                    </button>
+                    {individualScoringGroupsPreview.length ? (
+                      <div className="grid gap-3">
+                        {individualScoringGroupsPreview.map((group) => (
+                          <div key={group.key} className="rounded-2xl bg-canvas px-4 py-4">
+                            <p className="text-base font-semibold text-ink">{group.label}</p>
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/55">
+                              Individual quota players
+                            </p>
+                            <div className="mt-3 space-y-2">
+                              {group.playerIds.map((playerId) => {
+                                const player = playersById.get(playerId);
+                                return (
+                                  <div key={`individual-group-${group.key}-${playerId}`} className="rounded-2xl bg-white px-4 py-3">
+                                    <p className="text-sm font-semibold text-ink">{player?.name ?? "Unknown Player"}</p>
+                                    <p className="mt-1 text-xs text-ink/55">{`Quota ${player ? quotaSnapshot[playerId] ?? player.quota : 0}`}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/60">
+                        Add players, then build balanced foursomes.
+                      </div>
+                    )}
+                  </SectionCard>
+
+                  <SectionCard className="space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 3</p>
+                      <h3 className="mt-1 text-lg font-semibold">Start round</h3>
+                      <p className="mt-1 text-sm text-ink/65">
+                        Move this Individual Quota + Skins round into Current Round for scorecard entry.
+                      </p>
+                    </div>
+                    {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
+                    {!setupValidation.valid && rows.length > 0 ? (
+                      <p className="text-sm font-medium text-[#A53B2A]">
+                        {setupValidation.reason || "Finish setup before starting the round."}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={isPending || !canStartConfiguredRound}
+                      className="min-h-14 w-full rounded-[24px] bg-ink px-5 text-base font-semibold text-white disabled:opacity-60"
+                      onClick={startGame}
+                    >
+                      {isPending ? "Starting round..." : "Start Round"}
+                    </button>
+                  </SectionCard>
+                </>
               )}
 
               <SectionCard className="space-y-3">
@@ -3817,7 +4008,7 @@ function SkinsOnlyRoundTab({
       <SectionCard className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Skins Only</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Individual Quota + Skins</p>
             <h3 className="mt-1 text-xl font-semibold">Live skins game</h3>
             <p className="mt-1 text-sm text-ink/65">Enter hole scores, watch outright skins, and track carryovers.</p>
           </div>
@@ -3922,7 +4113,7 @@ function SkinsOnlyScoreEntry({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Live Scoring</p>
-              <h3 className="mt-1 text-xl font-semibold">Skins Only</h3>
+              <h3 className="mt-1 text-xl font-semibold">Individual Quota + Skins</h3>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white">
                   {`Hole ${activeHole} of 18`}
@@ -4046,7 +4237,7 @@ function SkinsOnlyLeadersTab({
       <SectionCard className="space-y-3 bg-ink text-white">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">Skins Only</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">Individual Quota + Skins</p>
             <h3 className="mt-1 text-2xl font-semibold tracking-tight">Live skins board</h3>
           </div>
           <button type="button" onClick={onOpenRound} className="rounded-2xl bg-white/12 px-4 py-3 text-sm font-semibold text-white">

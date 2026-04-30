@@ -421,7 +421,7 @@ export async function getSeasonStatsData(sortBy: SeasonStatsSort = "net") {
     const buyInMap = new Map(buyIns.players.map((player) => [player.playerId, player]));
     const payouts = calculatePayoutPredictions(entries, {
       includeTeamPayouts: roundMode !== "SKINS_ONLY",
-      includeIndividualPayouts: roundMode !== "SKINS_ONLY",
+      includeIndividualPayouts: true,
       includeSkinsPayouts: true
     });
     const payoutMap = new Map(payouts.players.map((player) => [player.playerId, player]));

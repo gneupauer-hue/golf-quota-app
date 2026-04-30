@@ -110,7 +110,7 @@ test("payout predictions produce a traceable per-player breakdown and reconcile 
   assert.deepEqual(payoutPredictions.mismatchedCategories, []);
 });
 
-test("skins-only payout predictions exclude team and indy money while keeping current good skins", () => {
+test("individual quota plus skins payout predictions exclude team money while keeping indy and skins", () => {
   const rows: CalculatedRoundRow[] = [
     buildRow({ id: "p1", name: "Gary", team: "A", frontNine: 20, backNine: 18, frontQuota: 15, backQuota: 15, birdieHole: 0 }),
     buildRow({ id: "p2", name: "Billy", team: "A", frontNine: 18, backNine: 16, frontQuota: 15, backQuota: 15 }),
@@ -120,19 +120,19 @@ test("skins-only payout predictions exclude team and indy money while keeping cu
 
   const payoutPredictions = calculatePayoutPredictions(rows, {
     includeTeamPayouts: false,
-    includeIndividualPayouts: false,
+    includeIndividualPayouts: true,
     includeSkinsPayouts: true
   });
 
   assert.equal(payoutPredictions.frontProjectedTotal, 0);
   assert.equal(payoutPredictions.backProjectedTotal, 0);
   assert.equal(payoutPredictions.totalProjectedTotal, 0);
-  assert.equal(payoutPredictions.indyProjectedTotal, 0);
+  assert.equal(payoutPredictions.indyProjectedTotal, 20);
   assert.equal(payoutPredictions.skinsProjectedTotal, 40);
   assert.equal(payoutPredictions.skinsPot, 40);
-  assert.equal(payoutPredictions.moneyCurrentlyInPlay, 40);
-  assert.equal(payoutPredictions.overallPot, 40);
-  assert.equal(payoutPredictions.projectedPayoutTotal, 40);
+  assert.equal(payoutPredictions.moneyCurrentlyInPlay, 60);
+  assert.equal(payoutPredictions.overallPot, 60);
+  assert.equal(payoutPredictions.projectedPayoutTotal, 60);
 });
 
 test("when no good skins are won yet, skins remain unsettled instead of mismatching reconciliation", () => {
@@ -145,10 +145,11 @@ test("when no good skins are won yet, skins remain unsettled instead of mismatch
 
   const payoutPredictions = calculatePayoutPredictions(rows, {
     includeTeamPayouts: false,
-    includeIndividualPayouts: false,
+    includeIndividualPayouts: true,
     includeSkinsPayouts: true
   });
 
+  assert.equal(payoutPredictions.indyProjectedTotal, 20);
   assert.equal(payoutPredictions.skinsProjectedTotal, 0);
   assert.equal(payoutPredictions.skinsPot, 0);
   assert.equal(payoutPredictions.unsettledSkinsValue, 40);

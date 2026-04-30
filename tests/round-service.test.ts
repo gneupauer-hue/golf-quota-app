@@ -9,10 +9,10 @@ test("test rounds never affect quota progression", () => {
   );
 });
 
-test("skins-only rounds never affect quota progression", () => {
+test("individual quota plus skins rounds affect quota progression", () => {
   assert.equal(
     shouldSkipQuotaProgression({ roundMode: "SKINS_ONLY", isTestRound: false }),
-    true
+    false
   );
 });
 

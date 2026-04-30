@@ -1,4 +1,4 @@
-﻿import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   calculateSideGameResults,
   calculateRoundRows,
@@ -173,7 +173,7 @@ export function shouldSkipQuotaProgression(round: {
   roundMode: string;
   isTestRound?: boolean | null;
 }) {
-  return round.roundMode === "SKINS_ONLY" || Boolean(round.isTestRound);
+  return Boolean(round.isTestRound);
 }
 
 function resolveHistoricalStartQuota(
