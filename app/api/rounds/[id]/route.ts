@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { holeScoreValues, teamOptions, type RoundMode } from "@/lib/quota";
+import { holeScoreValues, normalizeBirdieHoles, teamOptions, type RoundMode, type ScoringEntryMode } from "@/lib/quota";
 import {
   hasValidRoundScoreEditSession,
   ROUND_SCORE_EDIT_COOKIE
@@ -65,6 +65,8 @@ export async function PUT(
     const notes = String(body.notes ?? "");
     const roundMode =
       body.roundMode === "SKINS_ONLY" ? ("SKINS_ONLY" as RoundMode) : ("MATCH_QUOTA" as RoundMode);
+    const scoringEntryMode =
+      body.scoringEntryMode === "QUICK" ? ("QUICK" as ScoringEntryMode) : ("DETAILED" as ScoringEntryMode);
     const isTestRound = Boolean(body.isTestRound);
     const teamCount =
       body.teamCount == null || body.teamCount === "" ? null : Number(body.teamCount);
@@ -185,6 +187,13 @@ export async function PUT(
             value == null || value === "" ? null : Number(value)
           )
         : [];
+      const quickFrontNine =
+        entry.quickFrontNine == null || entry.quickFrontNine === "" ? null : Number(entry.quickFrontNine);
+      const quickBackNine =
+        entry.quickBackNine == null || entry.quickBackNine === "" ? null : Number(entry.quickBackNine);
+      const rawBirdieHoles = Array.isArray(entry.birdieHoles)
+        ? (entry.birdieHoles as unknown[]).map((value: unknown) => Number(value))
+        : [];
 
       if (
         !playerId ||
@@ -211,6 +220,25 @@ export async function PUT(
 
       if (team !== null && !teamOptions.includes(team as (typeof teamOptions)[number])) {
         return NextResponse.json({ error: "Team must be A, B, C, D, or E." }, { status: 400 });
+      }
+
+      if (scoringEntryMode === "QUICK") {
+        if (
+          (quickFrontNine !== null && (!Number.isInteger(quickFrontNine) || quickFrontNine < -9 || quickFrontNine > 54)) ||
+          (quickBackNine !== null && (!Number.isInteger(quickBackNine) || quickBackNine < -9 || quickBackNine > 54))
+        ) {
+          return NextResponse.json(
+            { error: "Quick Entry front and back totals must be whole-number point totals." },
+            { status: 400 }
+          );
+        }
+
+        if (rawBirdieHoles.some((value) => Number.isNaN(value) || !Number.isInteger(value) || value < 1 || value > 18)) {
+          return NextResponse.json(
+            { error: "Birdie holes must be hole numbers between 1 and 18." },
+            { status: 400 }
+          );
+        }
       }
 
       const existingEntry = existingEntryByPlayerId.get(playerId);
@@ -268,6 +296,7 @@ export async function PUT(
         roundName: resolvedRoundName,
         roundDate: new Date(roundDate),
         roundMode,
+        scoringEntryMode,
         isTestRound,
         notes,
         teamCount: roundMode === "SKINS_ONLY" ? null : teamCount,
@@ -293,6 +322,17 @@ export async function PUT(
             entry.backSubmittedAt == null || entry.backSubmittedAt === ""
               ? null
               : new Date(String(entry.backSubmittedAt)),
+          quickFrontNine:
+            entry.quickFrontNine == null || entry.quickFrontNine === ""
+              ? null
+              : Number(entry.quickFrontNine),
+          quickBackNine:
+            entry.quickBackNine == null || entry.quickBackNine === ""
+              ? null
+              : Number(entry.quickBackNine),
+          birdieHoles: Array.isArray(entry.birdieHoles)
+            ? normalizeBirdieHoles((entry.birdieHoles as unknown[]).map((value: unknown) => Number(value)))
+            : [],
           holes: Array.isArray(entry.holes)
             ? (entry.holes as unknown[]).map((value: unknown) =>
                 value == null || value === "" ? null : Number(value)
@@ -306,6 +346,7 @@ export async function PUT(
       roundId: id,
       roundDate,
       roundMode,
+      scoringEntryMode,
       teamCount,
       entryCount: entries.length,
       entries: entries.map((entry: Record<string, unknown>) => ({
@@ -314,6 +355,15 @@ export async function PUT(
         completedHoles: Array.isArray(entry.holes)
           ? (entry.holes as unknown[]).filter((value) => value != null && value !== "").length
           : 0,
+        quickFrontNine:
+          entry.quickFrontNine == null || entry.quickFrontNine === ""
+            ? null
+            : Number(entry.quickFrontNine),
+        quickBackNine:
+          entry.quickBackNine == null || entry.quickBackNine === ""
+            ? null
+            : Number(entry.quickBackNine),
+        birdieHoleCount: Array.isArray(entry.birdieHoles) ? entry.birdieHoles.length : 0,
         frontSubmittedAt:
           entry.frontSubmittedAt == null || entry.frontSubmittedAt === ""
             ? null

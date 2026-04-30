@@ -106,6 +106,7 @@ export async function resetDemoData(prisma: PrismaClient) {
     data: {
       roundName: "4.10",
       roundDate: new Date("2026-04-10"),
+      scoringEntryMode: "DETAILED",
       notes: "Fast sample round for mobile entry testing."
     }
   });
@@ -126,6 +127,7 @@ export async function resetDemoData(prisma: PrismaClient) {
     roundName: "4.10",
     roundDate: new Date("2026-04-10"),
     roundMode: "MATCH_QUOTA",
+    scoringEntryMode: "DETAILED",
     notes: "Fast sample round for mobile entry testing.",
     entries: round410Entries.map(([name, totalPoints, team]) => ({
       playerId: createdPlayers.get(name)!,
@@ -138,6 +140,7 @@ export async function resetDemoData(prisma: PrismaClient) {
     data: {
       roundName: "4.11",
       roundDate: new Date("2026-04-11"),
+      scoringEntryMode: "DETAILED",
       notes: "Sample weekend round."
     }
   });
@@ -158,6 +161,7 @@ export async function resetDemoData(prisma: PrismaClient) {
     roundName: "4.11",
     roundDate: new Date("2026-04-11"),
     roundMode: "MATCH_QUOTA",
+    scoringEntryMode: "DETAILED",
     notes: "Sample weekend round.",
     entries: round411Entries.map(([name, totalPoints, team]) => ({
       playerId: createdPlayers.get(name)!,

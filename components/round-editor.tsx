@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { MatchRoundView, SkinsOnlyRoundView } from "@/components/active-round-view";
+import { QuickEntryRoundView } from "@/components/quick-entry-round-view";
 import { PageTitle } from "@/components/page-title";
 import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
@@ -15,14 +16,17 @@ import {
   calculateRoundRows,
   calculateSideGameResults,
   calculateTeamStandings,
+  formatBirdieHolesInput,
   formatPlusMinus,
   getRankTone,
   hasSequentialHoleEntry,
   holeNumbers,
+  parseBirdieHolesInput,
   teamOptions,
   type CalculatedRoundRow,
   type PlayerBuyInSummary,
   type RoundMode,
+  type ScoringEntryMode,
   type SideGameResults,
   type TeamCode,
   type TeamStanding
@@ -52,6 +56,10 @@ type EditorEntry = {
   groupNumber: number | null;
   teeTime: string | null;
   holeScores: Array<number | null>;
+  scoringEntryMode: ScoringEntryMode;
+  quickFrontNine: number | null;
+  quickBackNine: number | null;
+  birdieHoles: number[];
   frontSubmittedAt: string | null;
   backSubmittedAt: string | null;
   frontNine: number;
@@ -69,6 +77,7 @@ type EditorProps = {
     roundName: string;
     roundDate: string;
     roundMode: RoundMode;
+    scoringEntryMode: ScoringEntryMode;
     isTestRound: boolean;
     buyInPaidPlayerIds: string[];
     notes: string;
@@ -93,6 +102,9 @@ type RowState = {
   groupNumber: number | null;
   teeTime: string | null;
   holeScores: Array<number | null>;
+  quickFrontNine: number | null;
+  quickBackNine: number | null;
+  birdieHolesText: string;
   frontSubmittedAt: string | null;
   backSubmittedAt: string | null;
 };
@@ -280,6 +292,9 @@ function mapEditorEntriesToRows(entries: EditorEntry[]): RowState[] {
     team: entry.team,
     groupNumber: entry.groupNumber,
     teeTime: entry.teeTime,
+    quickFrontNine: entry.quickFrontNine ?? null,
+    quickBackNine: entry.quickBackNine ?? null,
+    birdieHolesText: formatBirdieHolesInput(entry.birdieHoles),
     frontSubmittedAt: entry.frontSubmittedAt,
     backSubmittedAt: entry.backSubmittedAt,
     holeScores:
@@ -624,6 +639,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [toast, setToast] = useState("");
   const [isPending, startTransition] = useTransition();
   const [gameMode, setGameMode] = useState<RoundMode>(round.roundMode ?? "MATCH_QUOTA");
+  const [scoringEntryMode, setScoringEntryMode] = useState<ScoringEntryMode>(round.scoringEntryMode ?? "DETAILED");
   const [setupTeamCount, setSetupTeamCount] = useState<number | null>(null);
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
   const [teamBuildVariant, setTeamBuildVariant] = useState(0);
@@ -651,6 +667,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const derivedRoundName = useMemo(() => formatRoundNameFromDate(roundDate), [roundDate]);
   const displayRoundName = useMemo(() => getPreferredRoundName(round.roundName, roundDate), [round.roundName, roundDate]);
   const isSkinsOnly = gameMode === "SKINS_ONLY";
+  const isQuickEntryMode = !isSkinsOnly && scoringEntryMode === "QUICK";
   const matchSetupPlayerCount = !isSkinsOnly && rows.length > 0 ? rows.length : null;
   const availableMatchFormats = useMemo(
     () => (matchSetupPlayerCount == null ? [] : getTeamFormats(matchSetupPlayerCount)),
@@ -721,19 +738,27 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             playerId: row.playerId,
             playerName: player.name,
             team: row.team,
-      startQuota: quotaSnapshot[row.playerId] ?? player.quota,
-            holeScores: row.holeScores
+            startQuota: quotaSnapshot[row.playerId] ?? player.quota,
+            holeScores: row.holeScores,
+            scoringEntryMode,
+            quickFrontNine: row.quickFrontNine,
+            quickBackNine: row.quickBackNine,
+            birdieHoles: parseBirdieHolesInput(row.birdieHolesText)
           };
         })
         .filter(Boolean) as Array<{
-        playerId: string;
-        playerName: string;
-        team: TeamCode | null;
-        startQuota: number;
-        holeScores: Array<number | null>;
-      }>
+          playerId: string;
+          playerName: string;
+          team: TeamCode | null;
+          startQuota: number;
+          holeScores: Array<number | null>;
+          scoringEntryMode: ScoringEntryMode;
+          quickFrontNine: number | null;
+          quickBackNine: number | null;
+          birdieHoles: number[];
+        }>
     );
-  }, [playersById, quotaSnapshot, rows]);
+  }, [playersById, quotaSnapshot, rows, scoringEntryMode]);
 
   const teamStandings = useMemo(() => calculateTeamStandings(calculatedRows), [calculatedRows]);
   const sideGames = useMemo(() => calculateSideGameResults(calculatedRows), [calculatedRows]);
@@ -746,13 +771,54 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       }),
     [calculatedRows, gameMode]
   );
-  const invalidSequence = rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
+  const invalidSequence = isQuickEntryMode ? false : rows.some((row) => !hasSequentialHoleEntry(row.holeScores));
   const hasSavedScores = useMemo(
-    () => rows.some((row) => row.holeScores.some((score) => score != null)),
-    [rows]
+    () =>
+      rows.some((row) =>
+        isQuickEntryMode
+          ? row.quickFrontNine != null || row.quickBackNine != null || row.birdieHolesText.trim().length > 0
+          : row.holeScores.some((score) => score != null)
+      ),
+    [isQuickEntryMode, rows]
   );
   const allFrontSubmitted = rows.length > 0 && rows.every((row) => hasSubmittedFrontNine(row));
   const allBackSubmitted = rows.length > 0 && rows.every((row) => hasSubmittedBackNine(row));
+  const quickEntryRows = useMemo(() => {
+    const calculatedByPlayerId = new Map(calculatedRows.map((row) => [row.playerId, row]));
+    return rows
+      .map((row) => {
+        const player = playersById.get(row.playerId);
+        const calculated = calculatedByPlayerId.get(row.playerId);
+        if (!player || !calculated) {
+          return null;
+        }
+
+        return {
+          playerId: row.playerId,
+          playerName: player.name,
+          team: row.team,
+          startQuota: calculated.startQuota,
+          quickFrontNine: row.quickFrontNine,
+          quickBackNine: row.quickBackNine,
+          birdieHolesText: row.birdieHolesText,
+          totalPoints: calculated.totalPoints,
+          plusMinus: calculated.plusMinus,
+          nextQuota: calculated.nextQuota
+        };
+      })
+      .filter(Boolean) as Array<{
+        playerId: string;
+        playerName: string;
+        team: TeamCode | null;
+        startQuota: number;
+        quickFrontNine: number | null;
+        quickBackNine: number | null;
+        birdieHolesText: string;
+        totalPoints: number;
+        plusMinus: number;
+        nextQuota: number;
+      }>;
+  }, [calculatedRows, playersById, rows]);
 
   const setupValidation = useMemo(() => {
     if (isSkinsOnly) {
@@ -925,6 +991,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setLockedAt(round.lockedAt);
     setStartedAt(round.startedAt);
     setGameMode(round.roundMode ?? "MATCH_QUOTA");
+    setScoringEntryMode(round.scoringEntryMode ?? "DETAILED");
     setActiveHoleByTeam((current) => {
       const nextState: Partial<Record<TeamCode, number>> = {};
 
@@ -1042,6 +1109,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         roundName: nextRoundName,
         roundDate: nextRoundDate,
         roundMode: gameMode,
+        scoringEntryMode,
         isTestRound,
         notes: nextNotes,
         teamCount: resolvedTeamCount,
@@ -1049,15 +1117,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         startedAt: nextStartedAt,
         forceComplete,
         entries: nextRows.map((row) => ({
-        playerId: row.playerId,
-        team: row.team,
-        groupNumber: row.groupNumber,
-        teeTime: row.teeTime,
-        frontSubmittedAt: row.frontSubmittedAt,
-        backSubmittedAt: row.backSubmittedAt,
-        holes: row.holeScores
-      }))
-    };
+          playerId: row.playerId,
+          team: row.team,
+          groupNumber: row.groupNumber,
+          teeTime: row.teeTime,
+          frontSubmittedAt: row.frontSubmittedAt,
+          backSubmittedAt: row.backSubmittedAt,
+          quickFrontNine: row.quickFrontNine,
+          quickBackNine: row.quickBackNine,
+          birdieHoles: parseBirdieHolesInput(row.birdieHolesText),
+          holes: row.holeScores
+        }))
+      };
 
     const response = await fetch(`/api/rounds/${round.id}`, {
       method: "PUT",
@@ -1078,6 +1149,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         team: null,
         groupNumber: null,
         teeTime: null,
+        quickFrontNine: null,
+        quickBackNine: null,
+        birdieHolesText: "",
         frontSubmittedAt: null,
         backSubmittedAt: null,
         holeScores: Array.from({ length: 18 }, () => null)
@@ -1209,6 +1283,9 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           team: destinationTeam,
           groupNumber: null,
           teeTime: null,
+          quickFrontNine: null,
+          quickBackNine: null,
+          birdieHolesText: "",
           frontSubmittedAt: null,
           backSubmittedAt: null,
           holeScores: Array.from({ length: 18 }, () => null)
@@ -1302,6 +1379,74 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
               holeScores: row.holeScores.map((score, index) =>
                 index === holeIndex ? value : score
               )
+            }
+          : row
+      )
+    );
+  }
+
+  function parseQuickEntryNumber(value: string) {
+    if (value.trim() === "") {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+  }
+
+  function syncQuickEntrySubmissionState(row: RowState) {
+    if (row.quickFrontNine == null) {
+      return {
+        ...row,
+        frontSubmittedAt: null,
+        backSubmittedAt: null
+      };
+    }
+
+    const frontSubmittedAt = row.frontSubmittedAt ?? new Date().toISOString();
+    return {
+      ...row,
+      frontSubmittedAt,
+      backSubmittedAt: row.quickBackNine == null ? null : row.backSubmittedAt ?? frontSubmittedAt
+    };
+  }
+
+  function updateQuickFrontNine(playerId: string, value: string) {
+    setSaveState({ tone: "idle", message: "" });
+    setRows((current) =>
+      current.map((row) =>
+        row.playerId === playerId
+          ? syncQuickEntrySubmissionState({
+              ...row,
+              quickFrontNine: parseQuickEntryNumber(value)
+            })
+          : row
+      )
+    );
+  }
+
+  function updateQuickBackNine(playerId: string, value: string) {
+    setSaveState({ tone: "idle", message: "" });
+    setRows((current) =>
+      current.map((row) =>
+        row.playerId === playerId
+          ? syncQuickEntrySubmissionState({
+              ...row,
+              quickBackNine: parseQuickEntryNumber(value)
+            })
+          : row
+      )
+    );
+  }
+
+  function updateQuickBirdieHoles(playerId: string, value: string) {
+    setSaveState({ tone: "idle", message: "" });
+    setRows((current) =>
+      current.map((row) =>
+        row.playerId === playerId
+          ? {
+              ...row,
+              birdieHolesText: value
             }
           : row
       )
@@ -2780,6 +2925,22 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
               </SectionCard>
             </>
         </>
+      ) : isQuickEntryMode ? (
+        <QuickEntryRoundView
+          rows={quickEntryRows}
+          saveState={saveState}
+          lastSavedAt={lastSavedAt}
+          refreshState={refreshState}
+          lastRefreshedAt={lastRefreshedAt}
+          isArchiving={isPending}
+          allEntriesComplete={allBackSubmitted}
+          onFrontNineChange={updateQuickFrontNine}
+          onBackNineChange={updateQuickBackNine}
+          onBirdieHolesChange={updateQuickBirdieHoles}
+          onSaveRound={() => saveRound("Quick entry saved.")}
+          onArchiveRound={archiveRound}
+          onRefresh={refreshRoundData}
+        />
       ) : isSkinsOnly ? (
         <SkinsOnlyRoundView
           rows={calculatedRows}

@@ -28,6 +28,7 @@ export async function POST(
         roundName: round.roundName,
         roundDate: round.roundDate,
         roundMode: round.roundMode === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA",
+        scoringEntryMode: round.scoringEntryMode === "QUICK" ? "QUICK" : "DETAILED",
         notes: round.notes,
         teamCount: round.teamCount,
         lockedAt: round.lockedAt,

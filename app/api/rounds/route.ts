@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveActiveRound } from "@/lib/active-round";
 import { prisma } from "@/lib/prisma";
-import type { RoundMode } from "@/lib/quota";
+import type { RoundMode, ScoringEntryMode } from "@/lib/quota";
 import { formatRoundNameFromDate } from "@/lib/utils";
 
 export async function POST(request: Request) {
@@ -10,6 +10,8 @@ export async function POST(request: Request) {
     const now = new Date();
     const roundMode =
       body.roundMode === "SKINS_ONLY" ? ("SKINS_ONLY" as RoundMode) : ("MATCH_QUOTA" as RoundMode);
+    const scoringEntryMode =
+      body.scoringEntryMode === "QUICK" ? ("QUICK" as ScoringEntryMode) : ("DETAILED" as ScoringEntryMode);
     const isTestRound = Boolean(body.isTestRound);
     const activeRound = await resolveActiveRound(prisma);
 
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
         roundName: formatRoundNameFromDate(now),
         roundDate: now,
         roundMode,
+        scoringEntryMode,
         isTestRound,
         notes: null
       }

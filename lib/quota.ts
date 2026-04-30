@@ -4,6 +4,7 @@
 };
 
 export type RoundMode = "MATCH_QUOTA" | "SKINS_ONLY";
+export type ScoringEntryMode = "DETAILED" | "QUICK";
 
 export const holeScoreValues = [-1, 0, 1, 2, 4, 6] as const;
 export const teamOptions = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"] as const;
@@ -45,6 +46,10 @@ export type RoundRowInput = {
   team: TeamCode | null;
   holeScores: Array<number | null>;
   startQuota: number;
+  scoringEntryMode?: ScoringEntryMode;
+  quickFrontNine?: number | null;
+  quickBackNine?: number | null;
+  birdieHoles?: number[];
 };
 
 export type CalculatedRoundRow = RoundRowInput & {
@@ -342,6 +347,42 @@ const individualPayoutTable: Record<number, number[]> = {
   16: [80, 50, 25, 5]
 };
 
+export function normalizeBirdieHoles(birdieHoles: Array<number | null | undefined> | null | undefined) {
+  return [...new Set((birdieHoles ?? [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value >= 1 && value <= 18))].sort((left, right) => left - right);
+}
+
+export function parseBirdieHolesInput(value: string | null | undefined) {
+  if (!value) {
+    return [];
+  }
+
+  return normalizeBirdieHoles(
+    value
+      .split(',')
+      .flatMap((segment) => segment.split(/\s+/))
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .map((token) => Number(token))
+  );
+}
+
+export function formatBirdieHolesInput(birdieHoles: number[] | null | undefined) {
+  return normalizeBirdieHoles(birdieHoles).join(',');
+}
+
+export function getBirdieHolesForRow(row: Pick<RoundRowInput, "holeScores" | "birdieHoles">) {
+  const explicitBirdies = normalizeBirdieHoles(row.birdieHoles);
+  if (explicitBirdies.length > 0) {
+    return explicitBirdies;
+  }
+
+  return normalizeBirdieHoles(
+    row.holeScores.map((score, index) => (birdieOrBetterValues.has(score ?? 0) ? index + 1 : null))
+  );
+}
+
 export function sumHoleScores(holeScores: Array<number | null>): number {
   return holeScores.reduce<number>((total, value) => total + (value ?? 0), 0);
 }
@@ -413,9 +454,33 @@ export function calculateNextQuota(startQuota: number, totalPoints: number) {
   };
 }
 
+function calculateRowTotals(row: Pick<RoundRowInput, "holeScores" | "quickFrontNine" | "quickBackNine" | "scoringEntryMode">) {
+  if (row.scoringEntryMode === "QUICK") {
+    const frontNine = Math.max(0, row.quickFrontNine ?? 0);
+    const backNine = Math.max(0, row.quickBackNine ?? 0);
+    return {
+      frontNine,
+      backNine,
+      totalPoints: frontNine + backNine
+    };
+  }
+
+  return calculateTotals(row.holeScores);
+}
+
+function getSkinQualificationScore(row: Pick<RoundRowInput, "holeScores" | "birdieHoles">, holeIndex: number) {
+  const holeScore = row.holeScores[holeIndex];
+  if (birdieOrBetterValues.has(holeScore ?? 0)) {
+    return holeScore ?? null;
+  }
+
+  const holeNumber = holeIndex + 1;
+  return getBirdieHolesForRow(row).includes(holeNumber) ? 4 : null;
+}
+
 export function calculateRoundRows(rows: RoundRowInput[]): CalculatedRoundRow[] {
   const withScores = rows.map((row) => {
-    const { frontNine, backNine, totalPoints } = calculateTotals(row.holeScores);
+    const { frontNine, backNine, totalPoints } = calculateRowTotals(row);
     const { frontQuota, backQuota } = splitQuota(row.startQuota);
     const { plusMinus, nextQuota } = calculateNextQuota(row.startQuota, totalPoints);
     const frontPlusMinus = frontNine - frontQuota;
@@ -932,15 +997,19 @@ export function calculateGoodSkins(rows: CalculatedRoundRow[]): SkinsResult {
 
   for (let holeIndex = 0; holeIndex < holeNumbers.length; holeIndex += 1) {
     const holeNumber = holeIndex + 1;
-    const scoresForHole = rows.map((row) => row.holeScores[holeIndex]);
+    const holeIsReady = rows.every((row) =>
+      row.scoringEntryMode === "QUICK"
+        ? row.quickFrontNine != null && row.quickBackNine != null
+        : row.holeScores[holeIndex] != null
+    );
 
-    if (scoresForHole.some((score) => score == null)) {
+    if (!holeIsReady) {
       break;
     }
 
-    const eligiblePlayers = rows.filter((row) => birdieOrBetterValues.has(row.holeScores[holeIndex] ?? 0));
+    const eligiblePlayers = rows.filter((row) => getSkinQualificationScore(row, holeIndex) != null);
     const bestQualifyingScore = eligiblePlayers.reduce<number | null>((best, row) => {
-      const score = row.holeScores[holeIndex];
+      const score = getSkinQualificationScore(row, holeIndex);
       if (score == null) {
         return best;
       }
@@ -952,7 +1021,7 @@ export function calculateGoodSkins(rows: CalculatedRoundRow[]): SkinsResult {
     const outrightBestPlayers =
       bestQualifyingScore == null
         ? []
-        : eligiblePlayers.filter((row) => row.holeScores[holeIndex] === bestQualifyingScore);
+        : eligiblePlayers.filter((row) => getSkinQualificationScore(row, holeIndex) === bestQualifyingScore);
 
     if (outrightBestPlayers.length === 1) {
       const winner = outrightBestPlayers[0];

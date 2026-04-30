@@ -6,8 +6,10 @@ import {
   calculateTeamStandings,
   hasSequentialHoleEntry,
   holeFieldNames,
-  isRoundRowComplete,
+  normalizeBirdieHoles,
+  parseBirdieHolesInput,
   type RoundMode,
+  type ScoringEntryMode,
   type TeamCode
 } from "@/lib/quota";
 import { validateAllPlayerQuotas, type PlayerQuotaValidationInput } from "@/lib/quota-history";
@@ -32,6 +34,9 @@ type HoleEntryPayload = {
   teeTime?: string | null;
   frontSubmittedAt?: Date | null;
   backSubmittedAt?: Date | null;
+  quickFrontNine?: number | null;
+  quickBackNine?: number | null;
+  birdieHoles?: number[];
   holes: Array<number | null>;
 };
 
@@ -45,6 +50,39 @@ function buildHoleFields(holes: Array<number | null>) {
   return Object.fromEntries(
     holeFieldNames.map((fieldName, index) => [fieldName, holes[index] ?? null])
   ) as Record<HoleFieldName, number | null>;
+}
+
+function normalizeScoringEntryMode(value: string | null | undefined): ScoringEntryMode {
+  return value === "QUICK" ? "QUICK" : "DETAILED";
+}
+
+function getStoredBirdieHoles(entry: { birdieHolesCsv?: string | null }) {
+  return parseBirdieHolesInput(entry.birdieHolesCsv ?? "");
+}
+
+function buildRoundRowInput(
+  entry: {
+    playerId: string;
+    player: { name: string };
+    team: string | null;
+    quickFrontNine?: number | null;
+    quickBackNine?: number | null;
+    birdieHolesCsv?: string | null;
+  } & Record<HoleFieldName, number | null>,
+  startQuota: number,
+  scoringEntryMode: ScoringEntryMode
+) {
+  return {
+    playerId: entry.playerId,
+    playerName: entry.player.name,
+    team: (entry.team as TeamCode | null) ?? null,
+    holeScores: getHoleScores(entry),
+    startQuota,
+    scoringEntryMode,
+    quickFrontNine: entry.quickFrontNine ?? null,
+    quickBackNine: entry.quickBackNine ?? null,
+    birdieHoles: getStoredBirdieHoles(entry)
+  };
 }
 
 async function persistRoundSummaries(
@@ -179,14 +217,15 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
   }
 
   const quotaMap = await getQuotaSnapshotBeforeRound(tx, roundId);
+  const scoringEntryMode = normalizeScoringEntryMode((round as { scoringEntryMode?: string | null }).scoringEntryMode);
   const recalculated = calculateRoundRows(
-    round.entries.map((entry) => ({
-      playerId: entry.playerId,
-      playerName: entry.player.name,
-      team: (entry.team as TeamCode | null) ?? null,
-      holeScores: getHoleScores(entry),
-      startQuota: quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name)
-    }))
+    round.entries.map((entry) =>
+      buildRoundRowInput(
+        entry,
+        quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name),
+        scoringEntryMode
+      )
+    )
   );
 
   for (const row of recalculated) {
@@ -463,14 +502,15 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
   }
 
   const quotaMap = await getQuotaSnapshotBeforeRound(tx, roundId);
+  const scoringEntryMode = normalizeScoringEntryMode((round as { scoringEntryMode?: string | null }).scoringEntryMode);
   const recalculated = calculateRoundRows(
-    round.entries.map((entry) => ({
-      playerId: entry.playerId,
-      playerName: entry.player.name,
-      team: (entry.team as TeamCode | null) ?? null,
-      holeScores: getHoleScores(entry),
-      startQuota: quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name)
-    }))
+    round.entries.map((entry) =>
+      buildRoundRowInput(
+        entry,
+        quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name),
+        scoringEntryMode
+      )
+    )
   );
 
   const previewRows = recalculated
@@ -613,17 +653,15 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
       continue;
     }
 
+    const scoringEntryMode = normalizeScoringEntryMode((round as { scoringEntryMode?: string | null }).scoringEntryMode);
     const recalculated = calculateRoundRows(
-      round.entries.map((entry) => ({
-        playerId: entry.playerId,
-        playerName: entry.player.name,
-        team: (entry.team as TeamCode | null) ?? null,
-        holeScores: getHoleScores(entry),
-        startQuota: resolveHistoricalStartQuota(
-          quotaMap.get(entry.playerId),
-          baseQuotaMap.get(entry.playerId)
+      round.entries.map((entry) =>
+        buildRoundRowInput(
+          entry,
+          resolveHistoricalStartQuota(quotaMap.get(entry.playerId), baseQuotaMap.get(entry.playerId)),
+          scoringEntryMode
         )
-      }))
+      )
     );
 
     for (const row of recalculated) {
@@ -912,17 +950,15 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
       break;
     }
 
+    const scoringEntryMode = normalizeScoringEntryMode((round as { scoringEntryMode?: string | null }).scoringEntryMode);
     const recalculated = calculateRoundRows(
-      round.entries.map((entry) => ({
-        playerId: entry.playerId,
-        playerName: entry.player.name,
-        team: (entry.team as TeamCode | null) ?? null,
-        holeScores: getHoleScores(entry),
-        startQuota: resolveHistoricalStartQuota(
-          quotaMap.get(entry.playerId),
-          baseQuotaMap.get(entry.playerId)
+      round.entries.map((entry) =>
+        buildRoundRowInput(
+          entry,
+          resolveHistoricalStartQuota(quotaMap.get(entry.playerId), baseQuotaMap.get(entry.playerId)),
+          scoringEntryMode
         )
-      }))
+      )
     );
 
     for (const row of recalculated) {
@@ -959,6 +995,7 @@ export async function createOrReplaceRoundEntries(
     roundName: string;
     roundDate: Date;
     roundMode: RoundMode;
+    scoringEntryMode: ScoringEntryMode;
     isTestRound?: boolean;
     notes?: string | null;
     teamCount?: number | null;
@@ -968,7 +1005,8 @@ export async function createOrReplaceRoundEntries(
     entries: HoleEntryPayload[];
   }
 ) {
-  const sequencesAreValid = input.entries.every((entry) => hasSequentialHoleEntry(entry.holes));
+  const isQuickEntry = input.scoringEntryMode === "QUICK";
+  const sequencesAreValid = isQuickEntry ? true : input.entries.every((entry) => hasSequentialHoleEntry(entry.holes));
   if (!sequencesAreValid) {
     throw new Error("Hole scores must be entered in order without skipping.");
   }
@@ -989,6 +1027,7 @@ export async function createOrReplaceRoundEntries(
       roundName: input.roundName,
       roundDate: input.roundDate,
       roundMode: input.roundMode,
+      scoringEntryMode: input.scoringEntryMode,
       isTestRound: Boolean(input.isTestRound),
       notes: input.notes?.trim() ? input.notes.trim() : null,
       teamCount: input.roundMode === "SKINS_ONLY" ? null : input.teamCount ?? null,
@@ -1015,15 +1054,38 @@ export async function createOrReplaceRoundEntries(
   }
 
   for (const entry of input.entries) {
-    const { frontNine, backNine, totalPoints } = calculateTotals(entry.holes);
+    const quickFrontNine = isQuickEntry ? entry.quickFrontNine ?? null : null;
+    const quickBackNine = isQuickEntry ? entry.quickBackNine ?? null : null;
+    const birdieHoles = isQuickEntry ? normalizeBirdieHoles(entry.birdieHoles ?? []) : [];
+    const holeScores = isQuickEntry ? Array.from({ length: holeFieldNames.length }, () => null) : entry.holes;
+    const { frontNine, backNine, totalPoints } = isQuickEntry
+      ? {
+          frontNine: quickFrontNine ?? 0,
+          backNine: quickBackNine ?? 0,
+          totalPoints: (quickFrontNine ?? 0) + (quickBackNine ?? 0)
+        }
+      : calculateTotals(entry.holes);
     const existingEntry = existingByPlayerId.get(entry.playerId);
+    const resolvedFrontSubmittedAt = isQuickEntry
+      ? quickFrontNine != null
+        ? entry.frontSubmittedAt ?? new Date()
+        : null
+      : entry.frontSubmittedAt ?? null;
+    const resolvedBackSubmittedAt = isQuickEntry
+      ? quickFrontNine != null && quickBackNine != null
+        ? entry.backSubmittedAt ?? entry.frontSubmittedAt ?? new Date()
+        : null
+      : entry.backSubmittedAt ?? null;
     const baseData = {
       team: entry.team,
       groupNumber: entry.groupNumber ?? null,
       teeTime: entry.teeTime ?? null,
-      frontSubmittedAt: entry.frontSubmittedAt ?? null,
-      backSubmittedAt: entry.backSubmittedAt ?? null,
-      ...buildHoleFields(entry.holes),
+      frontSubmittedAt: resolvedFrontSubmittedAt,
+      backSubmittedAt: resolvedBackSubmittedAt,
+      quickFrontNine,
+      quickBackNine,
+      birdieHolesCsv: isQuickEntry ? birdieHoles.join(",") : null,
+      ...buildHoleFields(holeScores),
       frontNine,
       backNine,
       totalPoints

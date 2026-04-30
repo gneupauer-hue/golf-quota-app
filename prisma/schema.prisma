@@ -27,6 +27,7 @@ model Round {
   roundName      String
   roundDate      DateTime
   roundMode      String             @default("MATCH_QUOTA")
+  scoringEntryMode String            @default("DETAILED")
   isTestRound    Boolean            @default(false)
   isPayoutLocked Boolean            @default(false)
   paidPlayerIds  String[]           @default([])
@@ -63,6 +64,9 @@ model RoundEntry {
     teeTime        String?
     frontSubmittedAt DateTime?
     backSubmittedAt  DateTime?
+    quickFrontNine  Int?
+    quickBackNine   Int?
+    birdieHolesCsv  String?
     startQuota     Int
   hole1          Int?
   hole2          Int?

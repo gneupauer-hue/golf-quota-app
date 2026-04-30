@@ -9,7 +9,9 @@ import {
   calculateSideGameResults,
   calculateTeamStandings,
   holeFieldNames,
+  parseBirdieHolesInput,
   type RoundMode,
+  type ScoringEntryMode,
   type TeamCode
 } from "@/lib/quota";
 import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
@@ -21,6 +23,45 @@ import { rebuildPlayerQuotaHistory, validateAllPlayerQuotas, validatePlayerQuota
 
 function normalizeRoundMode(value: string): RoundMode {
   return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
+}
+
+function normalizeScoringEntryMode(value: string | null | undefined): ScoringEntryMode {
+  return value === "QUICK" ? "QUICK" : "DETAILED";
+}
+
+function mapStoredRoundEntry(entry: any, scoringEntryMode: ScoringEntryMode) {
+  return {
+    id: entry.id,
+    playerId: entry.playerId,
+    playerName: entry.player?.name ?? entry.playerName,
+    team: (entry.team as TeamCode | null) ?? null,
+    groupNumber: entry.groupNumber ?? null,
+    teeTime: entry.teeTime ?? null,
+    frontSubmittedAt:
+      entry.frontSubmittedAt instanceof Date
+        ? entry.frontSubmittedAt.toISOString()
+        : entry.frontSubmittedAt ?? null,
+    backSubmittedAt:
+      entry.backSubmittedAt instanceof Date
+        ? entry.backSubmittedAt.toISOString()
+        : entry.backSubmittedAt ?? null,
+    holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
+    scoringEntryMode,
+    quickFrontNine: entry.quickFrontNine ?? null,
+    quickBackNine: entry.quickBackNine ?? null,
+    birdieHoles: parseBirdieHolesInput(entry.birdieHolesCsv ?? ""),
+    frontQuota: entry.frontQuota,
+    backQuota: entry.backQuota,
+    frontNine: entry.frontNine,
+    backNine: entry.backNine,
+    frontPlusMinus: entry.frontPlusMinus,
+    backPlusMinus: entry.backPlusMinus,
+    totalPoints: entry.totalPoints,
+    startQuota: entry.startQuota,
+    plusMinus: entry.plusMinus,
+    nextQuota: entry.nextQuota,
+    rank: entry.rank
+  };
 }
 
 function getRoundSettlementState(round: unknown) {
@@ -373,24 +414,8 @@ export async function getSeasonStatsData(sortBy: SeasonStatsSort = "net") {
 
   for (const round of rounds as any[]) {
     const roundMode = normalizeRoundMode(round.roundMode);
-    const entries = (round.entries as any[]).map((entry: any) => ({
-      id: entry.id,
-      playerId: entry.playerId,
-      playerName: entry.player.name,
-      team: (entry.team as TeamCode | null) ?? null,
-      holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
-      startQuota: entry.startQuota,
-      frontQuota: entry.frontQuota,
-      backQuota: entry.backQuota,
-      frontNine: entry.frontNine,
-      backNine: entry.backNine,
-      frontPlusMinus: entry.frontPlusMinus,
-      backPlusMinus: entry.backPlusMinus,
-      totalPoints: entry.totalPoints,
-      plusMinus: entry.plusMinus,
-      nextQuota: entry.nextQuota,
-      rank: entry.rank
-    }));
+    const scoringEntryMode = normalizeScoringEntryMode(round.scoringEntryMode);
+    const entries = (round.entries as any[]).map((entry: any) => mapStoredRoundEntry(entry, scoringEntryMode));
 
     const buyIns = calculatePlayerBuyIns(entries, roundMode);
     const buyInMap = new Map(buyIns.players.map((player) => [player.playerId, player]));
@@ -563,12 +588,14 @@ export async function getRoundsList() {
 
   return (rounds as any[]).map((round: any) => {
     const settlement = getRoundSettlementState(round);
+    const scoringEntryMode = normalizeScoringEntryMode(round.scoringEntryMode);
 
     return {
       id: round.id,
       roundName: round.roundName,
       roundDate: round.roundDate,
       roundMode: normalizeRoundMode(round.roundMode),
+      scoringEntryMode,
       isTestRound: round.isTestRound,
       isPayoutLocked: settlement.isPayoutLocked,
       notes: round.notes,
@@ -614,12 +641,14 @@ export async function getPastGamesList() {
 
   return (rounds as any[]).map((round: any) => {
     const settlement = getRoundSettlementState(round);
+    const scoringEntryMode = normalizeScoringEntryMode(round.scoringEntryMode);
 
     return {
       id: round.id,
       roundName: round.roundName,
       roundDate: round.roundDate,
       roundMode: normalizeRoundMode(round.roundMode),
+      scoringEntryMode,
       isTestRound: round.isTestRound,
       isPayoutLocked: settlement.isPayoutLocked,
       notes: round.notes,
@@ -663,21 +692,8 @@ export async function getLeaderboardPageData() {
   }
 
   const calculatedEntries = data.round.entries.map((entry: any) => ({
-    playerId: entry.playerId,
-    playerName: entry.playerName,
-    team: entry.team,
-    holeScores: entry.holeScores,
-    startQuota: entry.startQuota,
-    frontQuota: entry.frontQuota,
-    backQuota: entry.backQuota,
-    frontNine: entry.frontNine,
-    backNine: entry.backNine,
-    frontPlusMinus: entry.frontPlusMinus,
-    backPlusMinus: entry.backPlusMinus,
-    totalPoints: entry.totalPoints,
-    plusMinus: entry.plusMinus,
-    nextQuota: entry.nextQuota,
-    rank: entry.rank
+    ...entry,
+    scoringEntryMode: normalizeScoringEntryMode(data.round.scoringEntryMode)
   }));
 
   const teamStandings = calculateTeamStandings(calculatedEntries);
@@ -745,28 +761,11 @@ export async function getRoundEditorData(roundId: string) {
 
   const quotaSnapshot = await getQuotaSnapshotBeforeRound(prisma, roundId);
 
-  const calculatedEntries = (round.entries as any[]).map((entry: any) => ({
-      id: entry.id,
-      playerId: entry.playerId,
-      playerName: entry.player.name,
-      team: (entry.team as TeamCode | null) ?? null,
-      groupNumber: entry.groupNumber,
-      teeTime: entry.teeTime,
-      frontSubmittedAt: entry.frontSubmittedAt?.toISOString() ?? null,
-      backSubmittedAt: entry.backSubmittedAt?.toISOString() ?? null,
-      holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
-    frontQuota: entry.frontQuota,
-    backQuota: entry.backQuota,
-    frontNine: entry.frontNine,
-    backNine: entry.backNine,
-    frontPlusMinus: entry.frontPlusMinus,
-    backPlusMinus: entry.backPlusMinus,
-    totalPoints: entry.totalPoints,
-    startQuota: entry.startQuota,
-    plusMinus: entry.plusMinus,
-    nextQuota: entry.nextQuota,
-    rank: entry.rank
-  }));
+  const scoringEntryMode = normalizeScoringEntryMode(round.scoringEntryMode);
+
+  const calculatedEntries = (round.entries as any[]).map((entry: any) =>
+    mapStoredRoundEntry(entry, scoringEntryMode)
+  );
 
   const teamStandings = calculateTeamStandings(calculatedEntries);
   const liveLeaders = calculateLiveLeaders(calculatedEntries);
@@ -798,6 +797,7 @@ export async function getRoundEditorData(roundId: string) {
       roundName: round.roundName,
       roundDate: round.roundDate.toISOString(),
       roundMode: normalizeRoundMode(round.roundMode),
+      scoringEntryMode,
       isTestRound: round.isTestRound,
       isPayoutLocked: settlement.isPayoutLocked,
       buyInPaidPlayerIds: settlement.buyInPaidPlayerIds,
@@ -925,24 +925,7 @@ export async function getArchivedSideMatchesData() {
       roundDate: round.roundDate.toISOString(),
       completedAt: round.completedAt?.toISOString() ?? null
     },
-    entries: round.entries.map((entry: any) => ({
-      id: entry.id,
-      playerId: entry.playerId,
-      playerName: entry.player.name,
-      team: (entry.team as TeamCode | null) ?? null,
-      holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
-      frontQuota: entry.frontQuota,
-      backQuota: entry.backQuota,
-      frontNine: entry.frontNine,
-      backNine: entry.backNine,
-      frontPlusMinus: entry.frontPlusMinus,
-      backPlusMinus: entry.backPlusMinus,
-      totalPoints: entry.totalPoints,
-      startQuota: entry.startQuota,
-      plusMinus: entry.plusMinus,
-      nextQuota: entry.nextQuota,
-      rank: entry.rank
-    })),
+    entries: round.entries.map((entry: any) => mapStoredRoundEntry(entry, normalizeScoringEntryMode(round.scoringEntryMode))),
     sideMatches: round.sideMatches.map(
       (match: any): SideMatchRecord => ({
         id: match.id,
@@ -982,26 +965,11 @@ export async function getRoundResultsData(roundId: string) {
     return null;
   }
 
-  const entries = (round.entries as any[]).map((entry: any) => ({
-    id: entry.id,
-    playerId: entry.playerId,
-    playerName: entry.player.name,
-    team: (entry.team as TeamCode | null) ?? null,
-    groupNumber: entry.groupNumber,
-    teeTime: entry.teeTime,
-    holeScores: holeFieldNames.map((fieldName) => entry[fieldName]),
-    frontQuota: entry.frontQuota,
-    backQuota: entry.backQuota,
-    frontNine: entry.frontNine,
-    backNine: entry.backNine,
-    frontPlusMinus: entry.frontPlusMinus,
-    backPlusMinus: entry.backPlusMinus,
-    totalPoints: entry.totalPoints,
-    startQuota: entry.startQuota,
-    plusMinus: entry.plusMinus,
-    nextQuota: entry.nextQuota,
-    rank: entry.rank
-  }));
+  const scoringEntryMode = normalizeScoringEntryMode(round.scoringEntryMode);
+
+  const entries = (round.entries as any[]).map((entry: any) =>
+    mapStoredRoundEntry(entry, scoringEntryMode)
+  );
 
   const quotaAuditPlayers = await prisma.player.findMany({
     orderBy: { name: "asc" },
@@ -1099,6 +1067,7 @@ export async function getRoundResultsData(roundId: string) {
       roundName: round.roundName,
       roundDate: round.roundDate,
       roundMode: normalizeRoundMode(round.roundMode),
+      scoringEntryMode,
       isTestRound: round.isTestRound,
       isPayoutLocked: settlement.isPayoutLocked,
       buyInPaidPlayerIds: settlement.buyInPaidPlayerIds,

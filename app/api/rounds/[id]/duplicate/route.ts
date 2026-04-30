@@ -28,6 +28,7 @@ export async function POST(
         roundName: copyName,
         roundDate: new Date(),
         roundMode: sourceRound.roundMode,
+        scoringEntryMode: sourceRound.scoringEntryMode,
         notes: sourceRound.notes
       }
     });
@@ -38,6 +39,7 @@ export async function POST(
         roundName: copyName,
         roundDate: newRound.roundDate,
         roundMode: sourceRound.roundMode === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA",
+        scoringEntryMode: sourceRound.scoringEntryMode === "QUICK" ? "QUICK" : "DETAILED",
         notes: sourceRound.notes,
         teamCount: sourceRound.teamCount,
         lockedAt: sourceRound.lockedAt,
