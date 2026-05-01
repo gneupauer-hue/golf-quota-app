@@ -6,8 +6,9 @@ import {
   calculateTeamStandings,
   hasSequentialHoleEntry,
   holeFieldNames,
-  normalizeBirdieHoles,
+  formatGoodSkinEntriesInput,
   parseBirdieHolesInput,
+  parseGoodSkinEntriesInput,
   type RoundMode,
   type ScoringEntryMode,
   type TeamCode
@@ -36,7 +37,7 @@ type HoleEntryPayload = {
   backSubmittedAt?: Date | null;
   quickFrontNine?: number | null;
   quickBackNine?: number | null;
-  birdieHoles?: number[];
+  birdieHoles?: Array<number | string>;
   holes: Array<number | null>;
 };
 
@@ -60,6 +61,10 @@ function getStoredBirdieHoles(entry: { birdieHolesCsv?: string | null }) {
   return parseBirdieHolesInput(entry.birdieHolesCsv ?? "");
 }
 
+function getStoredGoodSkinEntries(entry: { birdieHolesCsv?: string | null }) {
+  return parseGoodSkinEntriesInput(entry.birdieHolesCsv ?? "");
+}
+
 function buildRoundRowInput(
   entry: {
     playerId: string;
@@ -81,7 +86,8 @@ function buildRoundRowInput(
     scoringEntryMode,
     quickFrontNine: entry.quickFrontNine ?? null,
     quickBackNine: entry.quickBackNine ?? null,
-    birdieHoles: getStoredBirdieHoles(entry)
+    birdieHoles: getStoredBirdieHoles(entry),
+    goodSkinEntries: getStoredGoodSkinEntries(entry)
   };
 }
 
@@ -1056,7 +1062,7 @@ export async function createOrReplaceRoundEntries(
   for (const entry of input.entries) {
     const quickFrontNine = isQuickEntry ? entry.quickFrontNine ?? null : null;
     const quickBackNine = isQuickEntry ? entry.quickBackNine ?? null : null;
-    const birdieHoles = isQuickEntry ? normalizeBirdieHoles(entry.birdieHoles ?? []) : [];
+    const goodSkinEntries = isQuickEntry ? parseGoodSkinEntriesInput(entry.birdieHoles ?? []) : [];
     const holeScores = isQuickEntry ? Array.from({ length: holeFieldNames.length }, () => null) : entry.holes;
     const { frontNine, backNine, totalPoints } = isQuickEntry
       ? {
@@ -1084,7 +1090,7 @@ export async function createOrReplaceRoundEntries(
       backSubmittedAt: resolvedBackSubmittedAt,
       quickFrontNine,
       quickBackNine,
-      birdieHolesCsv: isQuickEntry ? birdieHoles.join(",") : null,
+      birdieHolesCsv: isQuickEntry ? formatGoodSkinEntriesInput(goodSkinEntries) : null,
       ...buildHoleFields(holeScores),
       frontNine,
       backNine,

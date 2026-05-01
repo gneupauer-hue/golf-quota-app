@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { SectionCard } from "@/components/section-card";
 import {
-  formatBirdieHolesInput,
+  formatGoodSkinEntriesInput,
   formatPlusMinus,
+  goodSkinTypeLabels,
   holeNumbers,
-  parseBirdieHolesInput,
+  parseGoodSkinEntriesInput,
+  type GoodSkinEntry,
+  type GoodSkinType,
   type TeamCode
 } from "@/lib/quota";
 import { classNames } from "@/lib/utils";
@@ -30,8 +33,10 @@ type QuickEntryRow = {
 };
 
 type SummaryRow = QuickEntryRow & {
-  birdieHoles: number[];
+  goodSkinEntries: GoodSkinEntry[];
 };
+
+const goodSkinTypes: GoodSkinType[] = ["birdie", "eagle", "ace"];
 
 function formatTimeLabel(value: string | null) {
   if (!value) return null;
@@ -45,27 +50,10 @@ function formatQuotaResult(value: number) {
   return value === 0 ? "Even" : formatPlusMinus(value);
 }
 
-type SkinCounts = {
-  birdies: number;
-  eagles: number;
-  aces: number;
-};
-
-function clampSkinCount(value: number) {
-  return Math.max(0, Math.min(18, Math.trunc(Number.isFinite(value) ? value : 0)));
-}
-
-function parseSkinCount(value: string) {
-  if (value.trim() === "") return 0;
-  return clampSkinCount(Number(value));
-}
-
-function buildSyntheticSkinHoles(counts: SkinCounts) {
-  return holeNumbers.slice(0, clampSkinCount(counts.aces + counts.eagles + counts.birdies));
-}
-
-function formatSkinCounts(counts: SkinCounts) {
-  return `Birdies ${counts.birdies} | Eagles ${counts.eagles} | Hole-in-Ones ${counts.aces}`;
+function formatGoodSkins(entries: GoodSkinEntry[]) {
+  return entries.length
+    ? entries.map((entry) => `Hole ${entry.holeNumber} - ${goodSkinTypeLabels[entry.type]}`).join(", ")
+    : "None";
 }
 
 function getStatusClasses(tone: SaveState["tone"]) {
@@ -79,6 +67,12 @@ function getChangeBadgeClasses(value: number) {
   if (value > 0) return "bg-[#1B6B3A] text-white";
   if (value < 0) return "bg-[#B54545] text-white";
   return "bg-canvas text-ink";
+}
+
+function getSkinHoleClasses(selected: boolean, pending: boolean) {
+  if (pending) return "border-[#1A263B] bg-ink text-white";
+  if (selected) return "border-[#1B6B3A] bg-[#1B6B3A] text-white";
+  return "border-sand/70 bg-white text-ink/70";
 }
 
 export function QuickEntryRoundView({
@@ -113,7 +107,8 @@ export function QuickEntryRoundView({
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [playerConfirmId, setPlayerConfirmId] = useState<string | null>(null);
   const [isFinalConfirmOpen, setIsFinalConfirmOpen] = useState(false);
-  const [skinCountsByPlayerId, setSkinCountsByPlayerId] = useState<Record<string, SkinCounts>>({});
+  const [skinAnswerByPlayerId, setSkinAnswerByPlayerId] = useState<Record<string, boolean | null>>({});
+  const [pendingSkinHoleByPlayerId, setPendingSkinHoleByPlayerId] = useState<Record<string, number | null>>({});
 
   const lastSavedLabel = formatTimeLabel(lastSavedAt);
   const lastRefreshedLabel = formatTimeLabel(lastRefreshedAt);
@@ -122,7 +117,7 @@ export function QuickEntryRoundView({
     () =>
       rows.map((row) => ({
         ...row,
-        birdieHoles: parseBirdieHolesInput(row.birdieHolesText)
+        goodSkinEntries: parseGoodSkinEntriesInput(row.birdieHolesText)
       })),
     [rows]
   );
@@ -138,23 +133,9 @@ export function QuickEntryRoundView({
 
   useEffect(() => {
     setCompletedPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
+    setSkinAnswerByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
+    setPendingSkinHoleByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
   }, [rowIds]);
-
-  useEffect(() => {
-    setSkinCountsByPlayerId((current) => {
-      const next: Record<string, SkinCounts> = {};
-
-      for (const row of summaryRows) {
-        next[row.playerId] = current[row.playerId] ?? {
-          birdies: row.birdieHoles.length,
-          eagles: 0,
-          aces: 0
-        };
-      }
-
-      return next;
-    });
-  }, [summaryRows]);
 
   useEffect(() => {
     if (!rows.length) {
@@ -169,26 +150,58 @@ export function QuickEntryRoundView({
     setActivePlayerId(incompleteRows[0]?.playerId ?? null);
   }, [activePlayerId, completedSet, incompleteRows, rowIds, rows.length]);
 
-  function getSkinCounts(row: SummaryRow) {
-    return skinCountsByPlayerId[row.playerId] ?? {
-      birdies: row.birdieHoles.length,
-      eagles: 0,
-      aces: 0
-    };
+  function getSkinAnswer(row: SummaryRow) {
+    return skinAnswerByPlayerId[row.playerId] ?? (row.goodSkinEntries.length ? true : null);
   }
 
-  function updateSkinCount(row: SummaryRow, field: keyof SkinCounts, value: string) {
-    const currentCounts = getSkinCounts(row);
-    const nextCounts = {
-      ...currentCounts,
-      [field]: parseSkinCount(value)
-    };
-
-    setSkinCountsByPlayerId((current) => ({
+  function setSkinAnswer(row: SummaryRow, value: boolean) {
+    setSkinAnswerByPlayerId((current) => ({
       ...current,
-      [row.playerId]: nextCounts
+      [row.playerId]: value
     }));
-    onBirdieHolesChange(row.playerId, formatBirdieHolesInput(buildSyntheticSkinHoles(nextCounts)));
+    setPendingSkinHoleByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: null
+    }));
+    if (!value) {
+      onBirdieHolesChange(row.playerId, "");
+    }
+  }
+
+  function selectSkinHole(row: SummaryRow, holeNumber: number) {
+    setSkinAnswerByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: true
+    }));
+    setPendingSkinHoleByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: holeNumber
+    }));
+  }
+
+  function saveSkinEntry(row: SummaryRow, type: GoodSkinType) {
+    const holeNumber = pendingSkinHoleByPlayerId[row.playerId];
+    if (!holeNumber) return;
+
+    const nextEntries = [
+      ...row.goodSkinEntries.filter((entry) => entry.holeNumber !== holeNumber),
+      { holeNumber, type, score: type === "ace" ? 8 : type === "eagle" ? 6 : 4 }
+    ];
+
+    onBirdieHolesChange(row.playerId, formatGoodSkinEntriesInput(nextEntries));
+    setPendingSkinHoleByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: null
+    }));
+  }
+
+  function removeSkinEntry(row: SummaryRow, holeNumber: number) {
+    const nextEntries = row.goodSkinEntries.filter((entry) => entry.holeNumber !== holeNumber);
+    onBirdieHolesChange(row.playerId, formatGoodSkinEntriesInput(nextEntries));
+    setPendingSkinHoleByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: null
+    }));
   }
 
   function editCompletedPlayer(playerId: string) {
@@ -323,32 +336,75 @@ export function QuickEntryRoundView({
             </div>
 
             <div className="space-y-3 rounded-[22px] bg-canvas/70 px-3.5 py-3.5">
-              <p className="text-sm font-semibold text-ink">Birdies / Eagles / Hole-in-Ones</p>
-              <div className="grid grid-cols-3 gap-2.5">
-                {([
-                  ["birdies", "Birdies"],
-                  ["eagles", "Eagles"],
-                  ["aces", "Hole-in-Ones"]
-                ] as Array<[keyof SkinCounts, string]>).map(([field, label]) => {
-                  const counts = getSkinCounts(activeRow);
-                  return (
-                    <label key={`${activeRow.playerId}-${field}`} className="space-y-1.5">
-                      <span className="block min-h-8 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink/55">
-                        {label}
-                      </span>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        step={1}
-                        className="h-12 w-full rounded-2xl border border-sand/70 bg-white px-3 text-center text-lg font-semibold text-ink outline-none transition focus:border-pine/50"
-                        value={counts[field]}
-                        onChange={(event) => updateSkinCount(activeRow, field, event.target.value)}
-                      />
-                    </label>
-                  );
-                })}
+              <p className="text-sm font-semibold text-ink">Did this player have any good skins?</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  className={classNames("min-h-12 rounded-2xl border px-4 text-sm font-semibold", getSkinAnswer(activeRow) === false ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-white text-ink")}
+                  onClick={() => setSkinAnswer(activeRow, false)}
+                >
+                  No
+                </button>
+                <button
+                  type="button"
+                  className={classNames("min-h-12 rounded-2xl border px-4 text-sm font-semibold", getSkinAnswer(activeRow) === true ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-white text-ink")}
+                  onClick={() => setSkinAnswer(activeRow, true)}
+                >
+                  Yes
+                </button>
               </div>
+
+              {getSkinAnswer(activeRow) === true ? (
+                <div className="space-y-3">
+                  {activeRow.goodSkinEntries.length ? (
+                    <div className="space-y-2">
+                      {activeRow.goodSkinEntries.map((entry) => (
+                        <div key={`${activeRow.playerId}-skin-${entry.holeNumber}`} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2.5 text-sm">
+                          <span className="font-semibold text-ink">Hole {entry.holeNumber} - {goodSkinTypeLabels[entry.type]}</span>
+                          <button type="button" className="rounded-full bg-canvas px-3 py-1 text-xs font-semibold text-ink" onClick={() => removeSkinEntry(activeRow, entry.holeNumber)}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="grid grid-cols-6 gap-2">
+                    {holeNumbers.map((holeNumber) => {
+                      const selected = activeRow.goodSkinEntries.some((entry) => entry.holeNumber === holeNumber);
+                      const pending = pendingSkinHoleByPlayerId[activeRow.playerId] === holeNumber;
+                      return (
+                        <button
+                          key={`${activeRow.playerId}-${holeNumber}`}
+                          type="button"
+                          className={classNames("min-h-11 rounded-2xl border text-sm font-semibold transition", getSkinHoleClasses(selected, pending))}
+                          onClick={() => selectSkinHole(activeRow, holeNumber)}
+                        >
+                          {holeNumber}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {pendingSkinHoleByPlayerId[activeRow.playerId] ? (
+                    <div className="space-y-2 rounded-2xl bg-white px-3 py-3">
+                      <p className="text-sm font-semibold text-ink">What was it?</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {goodSkinTypes.map((type) => (
+                          <button
+                            key={`${activeRow.playerId}-${type}`}
+                            type="button"
+                            className="min-h-11 rounded-2xl bg-canvas px-2 text-xs font-semibold text-ink"
+                            onClick={() => saveSkinEntry(activeRow, type)}
+                          >
+                            {goodSkinTypeLabels[type]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <button
@@ -380,7 +436,7 @@ export function QuickEntryRoundView({
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-ink">{row.playerName}</p>
                       <p className="mt-1 text-xs text-ink/60">
-                        {row.totalPoints} pts | {formatQuotaResult(row.plusMinus)} | {formatSkinCounts(getSkinCounts(row))}
+                        {row.totalPoints} pts | {formatQuotaResult(row.plusMinus)} | {formatGoodSkins(row.goodSkinEntries)}
                       </p>
                     </div>
                     <button
@@ -424,7 +480,7 @@ export function QuickEntryRoundView({
                 <p>Back 9: {playerConfirmRow.quickBackNine ?? 0}</p>
                 <p>Total: {playerConfirmRow.totalPoints}</p>
                 <p>Quota result: {formatQuotaResult(playerConfirmRow.plusMinus)}</p>
-                <p className="col-span-2">{formatSkinCounts(getSkinCounts(playerConfirmRow))}</p>
+                <p className="col-span-2">Good skins: {formatGoodSkins(playerConfirmRow.goodSkinEntries)}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -462,7 +518,7 @@ export function QuickEntryRoundView({
                       <p>Front 9: {row.quickFrontNine ?? 0}</p>
                       <p>Back 9: {row.quickBackNine ?? 0}</p>
                       <p>Result: {formatQuotaResult(row.plusMinus)}</p>
-                      <p>{formatSkinCounts(getSkinCounts(row))}</p>
+                      <p>Good skins: {formatGoodSkins(row.goodSkinEntries)}</p>
                     </div>
                   </div>
                 ))}

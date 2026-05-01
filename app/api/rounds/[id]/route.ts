@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { holeScoreValues, normalizeBirdieHoles, teamOptions, type RoundMode, type ScoringEntryMode } from "@/lib/quota";
+import { holeScoreValues, parseGoodSkinEntriesInput, teamOptions, type RoundMode, type ScoringEntryMode } from "@/lib/quota";
 import {
   hasValidRoundScoreEditSession,
   ROUND_SCORE_EDIT_COOKIE
@@ -192,7 +192,7 @@ export async function PUT(
       const quickBackNine =
         entry.quickBackNine == null || entry.quickBackNine === "" ? null : Number(entry.quickBackNine);
       const rawBirdieHoles = Array.isArray(entry.birdieHoles)
-        ? (entry.birdieHoles as unknown[]).map((value: unknown) => Number(value))
+        ? (entry.birdieHoles as unknown[]).map((value: unknown) => String(value))
         : [];
 
       if (
@@ -233,9 +233,9 @@ export async function PUT(
           );
         }
 
-        if (rawBirdieHoles.some((value) => Number.isNaN(value) || !Number.isInteger(value) || value < 1 || value > 18)) {
+        if (rawBirdieHoles.length !== parseGoodSkinEntriesInput(rawBirdieHoles).length) {
           return NextResponse.json(
-            { error: "Birdie holes must be hole numbers between 1 and 18." },
+            { error: "Good skin entries must be hole numbers between 1 and 18." },
             { status: 400 }
           );
         }
@@ -331,7 +331,7 @@ export async function PUT(
               ? null
               : Number(entry.quickBackNine),
           birdieHoles: Array.isArray(entry.birdieHoles)
-            ? normalizeBirdieHoles((entry.birdieHoles as unknown[]).map((value: unknown) => Number(value)))
+            ? (entry.birdieHoles as unknown[]).map((value: unknown) => String(value))
             : [],
           holes: Array.isArray(entry.holes)
             ? (entry.holes as unknown[]).map((value: unknown) =>

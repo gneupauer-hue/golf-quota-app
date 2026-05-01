@@ -50,6 +50,7 @@ export type RoundRowInput = {
   quickFrontNine?: number | null;
   quickBackNine?: number | null;
   birdieHoles?: number[];
+  goodSkinEntries?: GoodSkinEntry[];
 };
 
 export type CalculatedRoundRow = RoundRowInput & {
@@ -331,7 +332,33 @@ export type PlayerBuyInSummary = {
   teamContributionVaries: boolean;
 };
 
-const birdieOrBetterValues = new Set<number>([4, 6]);
+export type GoodSkinType = "birdie" | "eagle" | "ace";
+
+export type GoodSkinEntry = {
+  holeNumber: number;
+  type: GoodSkinType;
+  score: number;
+};
+
+export const goodSkinTypeLabels: Record<GoodSkinType, string> = {
+  birdie: "Birdie",
+  eagle: "Eagle",
+  ace: "Hole-in-One"
+};
+
+const goodSkinTypeScores: Record<GoodSkinType, number> = {
+  birdie: 4,
+  eagle: 6,
+  ace: 8
+};
+
+const goodSkinScoreTypes: Record<number, GoodSkinType> = {
+  4: "birdie",
+  6: "eagle",
+  8: "ace"
+};
+
+const birdieOrBetterValues = new Set<number>([4, 6, 8]);
 const individualPayoutTable: Record<number, number[]> = {
   4: [20],
   6: [40, 20],
@@ -353,19 +380,85 @@ export function normalizeBirdieHoles(birdieHoles: Array<number | null | undefine
     .filter((value) => Number.isInteger(value) && value >= 1 && value <= 18))].sort((left, right) => left - right);
 }
 
-export function parseBirdieHolesInput(value: string | null | undefined) {
+function parseGoodSkinToken(token: string): GoodSkinEntry | null {
+  const [holeText, rawTypeText] = token.split(":");
+  const holeNumber = Number(holeText);
+  if (!Number.isInteger(holeNumber) || holeNumber < 1 || holeNumber > 18) {
+    return null;
+  }
+
+  const typeText = rawTypeText?.trim().toLowerCase();
+  const type: GoodSkinType =
+    typeText === "eagle" || typeText === "6"
+      ? "eagle"
+      : typeText === "ace" || typeText === "hole-in-one" || typeText === "holeinone" || typeText === "8"
+        ? "ace"
+        : "birdie";
+
+  return {
+    holeNumber,
+    type,
+    score: goodSkinTypeScores[type]
+  };
+}
+
+export function normalizeGoodSkinEntries(entries: Array<GoodSkinEntry | number | string | null | undefined> | null | undefined) {
+  const byHole = new Map<number, GoodSkinEntry>();
+
+  for (const entry of entries ?? []) {
+    const parsed = typeof entry === "object" && entry !== null && "holeNumber" in entry
+      ? {
+          holeNumber: Number(entry.holeNumber),
+          type: entry.type,
+          score: Number(entry.score)
+        }
+      : parseGoodSkinToken(String(entry));
+
+    if (!parsed || !Number.isInteger(parsed.holeNumber) || parsed.holeNumber < 1 || parsed.holeNumber > 18) {
+      continue;
+    }
+
+    const type = goodSkinScoreTypes[parsed.score] ?? parsed.type;
+    const normalized: GoodSkinEntry = {
+      holeNumber: parsed.holeNumber,
+      type,
+      score: goodSkinTypeScores[type]
+    };
+    const current = byHole.get(normalized.holeNumber);
+    if (!current || normalized.score > current.score) {
+      byHole.set(normalized.holeNumber, normalized);
+    }
+  }
+
+  return Array.from(byHole.values()).sort((left, right) => left.holeNumber - right.holeNumber);
+}
+
+export function parseGoodSkinEntriesInput(value: string | Array<number | string | GoodSkinEntry> | null | undefined) {
+  if (Array.isArray(value)) {
+    return normalizeGoodSkinEntries(value);
+  }
+
   if (!value) {
     return [];
   }
 
-  return normalizeBirdieHoles(
+  return normalizeGoodSkinEntries(
     value
-      .split(',')
+      .split(",")
       .flatMap((segment) => segment.split(/\s+/))
       .map((token) => token.trim())
       .filter(Boolean)
-      .map((token) => Number(token))
   );
+}
+
+export function formatGoodSkinEntriesInput(entries: Array<GoodSkinEntry | number | string | null | undefined> | null | undefined) {
+  return normalizeGoodSkinEntries(entries)
+    .map((entry) => `${entry.holeNumber}:${entry.type}`)
+    .join(",");
+}
+
+export function parseBirdieHolesInput(value: string | null | undefined) {
+  return parseGoodSkinEntriesInput(value).map((entry) => entry.holeNumber);
 }
 
 export function formatBirdieHolesInput(birdieHoles: number[] | null | undefined) {
@@ -468,13 +561,18 @@ function calculateRowTotals(row: Pick<RoundRowInput, "holeScores" | "quickFrontN
   return calculateTotals(row.holeScores);
 }
 
-function getSkinQualificationScore(row: Pick<RoundRowInput, "holeScores" | "birdieHoles">, holeIndex: number) {
+function getSkinQualificationScore(row: Pick<RoundRowInput, "holeScores" | "birdieHoles" | "goodSkinEntries">, holeIndex: number) {
+  const holeNumber = holeIndex + 1;
+  const explicitGoodSkin = normalizeGoodSkinEntries(row.goodSkinEntries).find((entry) => entry.holeNumber === holeNumber);
+  if (explicitGoodSkin) {
+    return explicitGoodSkin.score;
+  }
+
   const holeScore = row.holeScores[holeIndex];
   if (birdieOrBetterValues.has(holeScore ?? 0)) {
     return holeScore ?? null;
   }
 
-  const holeNumber = holeIndex + 1;
   return getBirdieHolesForRow(row).includes(holeNumber) ? 4 : null;
 }
 
