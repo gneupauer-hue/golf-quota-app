@@ -336,7 +336,7 @@ export function QuickEntryRoundView({
             </div>
 
             <div className="space-y-3 rounded-[22px] bg-canvas/70 px-3.5 py-3.5">
-              <p className="text-sm font-semibold text-ink">Did this player have any good skins?</p>
+              <p className="text-sm font-semibold text-ink">Did this player have any skins?</p>
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
