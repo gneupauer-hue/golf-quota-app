@@ -502,6 +502,15 @@ function sortTeamsAlphabetically<T extends { team: TeamCode }>(teams: T[]) {
   return [...teams].sort((left, right) => left.team.localeCompare(right.team));
 }
 
+function rotateItems<T>(items: T[], offset: number) {
+  if (items.length <= 1) {
+    return items;
+  }
+
+  const normalizedOffset = ((offset % items.length) + items.length) % items.length;
+  return [...items.slice(normalizedOffset), ...items.slice(0, normalizedOffset)];
+}
+
 type ScoringGroup = {
   key: string;
   label: string;
@@ -515,16 +524,21 @@ function buildScoringGroups(
   rows: RowState[],
   teamStandings: TeamStanding[],
   playerNamesById: Map<string, string>,
-  initialGroups: EditorProps["groups"]
+  initialGroups: EditorProps["groups"],
+  options: { ignoreExistingGroups?: boolean; variant?: number } = {}
 ) {
-  const orderedTeams = sortTeamsAlphabetically(teamStandings);
+  const baseTeams = sortTeamsAlphabetically(teamStandings);
+  const variant = options.variant ?? 0;
+  const orderedTeams = options.ignoreExistingGroups && baseTeams.length > 1
+    ? rotateItems(variant % 2 === 0 ? baseTeams : [...baseTeams].reverse(), variant)
+    : baseTeams;
 
   if (!orderedTeams.length) {
     return [] as ScoringGroup[];
   }
 
   const explicitGroups = new Map<string, ScoringGroup>();
-  const hasExplicitGroups = orderedTeams.some((team) =>
+  const hasExplicitGroups = !options.ignoreExistingGroups && orderedTeams.some((team) =>
     rows.some((row) => row.team === team.team && row.groupNumber != null)
   );
 
@@ -552,7 +566,7 @@ function buildScoringGroups(
     return Array.from(explicitGroups.values());
   }
 
-  if (initialGroups.length > 0) {
+  if (!options.ignoreExistingGroups && initialGroups.length > 0) {
     const groupsFromSetup = initialGroups
       .map((group) => {
         const groupTeamSet = new Set<TeamCode>();
@@ -637,10 +651,11 @@ type IndividualScoringGroup = {
 function buildIndividualScoringGroups(
   rows: RowState[],
   playersById: Map<string, EditorProps["players"][number]>,
-  quotaSnapshot: Record<string, number>
+  quotaSnapshot: Record<string, number>,
+  options: { ignoreExistingGroups?: boolean; variant?: number } = {}
 ) {
   const assignedGroups = new Map<number, IndividualScoringGroup>();
-  const hasExplicitGroups = rows.some((row) => row.groupNumber != null);
+  const hasExplicitGroups = !options.ignoreExistingGroups && rows.some((row) => row.groupNumber != null);
 
   if (hasExplicitGroups) {
     for (const row of rows) {
@@ -679,11 +694,14 @@ function buildIndividualScoringGroups(
     return (leftPlayer?.name ?? "").localeCompare(rightPlayer?.name ?? "");
   });
 
+  const variant = options.variant ?? 0;
+
   orderedRows.forEach((row, index) => {
     const player = playersById.get(row.playerId);
     const cycle = Math.floor(index / groupCount);
     const position = index % groupCount;
-    const groupIndex = cycle % 2 === 0 ? position : groupCount - 1 - position;
+    const baseGroupIndex = cycle % 2 === 0 ? position : groupCount - 1 - position;
+    const groupIndex = (baseGroupIndex + variant + cycle) % groupCount;
     const group = groups[groupIndex];
     group.playerIds.push(row.playerId);
     group.playerNames.push(player?.name ?? "Unknown Player");
@@ -709,6 +727,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [setupTeamCount, setSetupTeamCount] = useState<number | null>(null);
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
   const [teamBuildVariant, setTeamBuildVariant] = useState(0);
+  const [scoringGroupBuildVariant, setScoringGroupBuildVariant] = useState(0);
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
@@ -1364,6 +1383,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setMessage(`${player?.name ?? "Player"} added to ${getSetupTeamLabel(destinationTeam)}.`);
   }
 
+  function getScoringGroupSignature(sourceRows: RowState[]) {
+    return sourceRows
+      .map((row) => `${row.playerId}:${row.team ?? "-"}:${row.groupNumber ?? "-"}:${row.teeTime ?? "-"}`)
+      .sort()
+      .join("|");
+  }
+
   function autoAssignScoringGroups() {
     if (isSkinsOnly) {
       return;
@@ -1374,44 +1400,78 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
-    const previewGroups = buildScoringGroups(
-      rows,
-      teamStandings,
-      new Map(calculatedRows.map((row) => [row.playerId, row.playerName])),
-      []
-    );
+    const rebuilding = hasAssignedScoringGroups;
+    const currentSignature = getScoringGroupSignature(rows);
+    let selectedRows: RowState[] | null = null;
+    let selectedGroups: ScoringGroup[] = [];
+    let selectedVariant = scoringGroupBuildVariant;
+    const maxVariants = Math.max(8, setupTeamCodes.length * 4);
 
-    if (!previewGroups.length) {
+    for (let attempt = 0; attempt < maxVariants; attempt += 1) {
+      const variant = rebuilding ? scoringGroupBuildVariant + attempt + 1 : scoringGroupBuildVariant + attempt;
+      const sourceRows = rebuilding
+        ? rows.map((row) => ({ ...row, groupNumber: null, teeTime: null }))
+        : rows;
+      const previewGroups = buildScoringGroups(
+        sourceRows,
+        teamStandings,
+        new Map(calculatedRows.map((row) => [row.playerId, row.playerName])),
+        rebuilding ? [] : initialGroups,
+        { ignoreExistingGroups: rebuilding, variant }
+      );
+
+      if (!previewGroups.length) {
+        continue;
+      }
+
+      const groupNumberByTeam = new Map<TeamCode, number | null>();
+      const teeTimeByTeam = new Map<TeamCode, string | null>();
+
+      for (const group of previewGroups) {
+        for (const team of group.teams) {
+          groupNumberByTeam.set(team, group.groupNumber);
+          teeTimeByTeam.set(team, group.teeTime);
+        }
+      }
+
+      const orderedRows = previewGroups.flatMap((group) =>
+        rows.filter((row) => row.team != null && group.teams.includes(row.team))
+      );
+      const remainingRows = rows.filter(
+        (row) => !orderedRows.some((orderedRow) => orderedRow.playerId === row.playerId)
+      );
+      const nextRows = [...orderedRows, ...remainingRows].map((row) => ({
+        ...row,
+        groupNumber: row.team ? groupNumberByTeam.get(row.team) ?? null : null,
+        teeTime: row.team ? teeTimeByTeam.get(row.team) ?? null : null
+      }));
+
+      selectedRows = nextRows;
+      selectedGroups = previewGroups;
+      selectedVariant = variant;
+
+      if (!rebuilding || getScoringGroupSignature(nextRows) !== currentSignature) {
+        break;
+      }
+    }
+
+    if (!selectedRows || !selectedGroups.length) {
       setMessage("Could not build playing groups for this round.");
       return;
     }
 
-    const groupNumberByTeam = new Map<TeamCode, number | null>();
-    const teeTimeByTeam = new Map<TeamCode, string | null>();
-
-    for (const group of previewGroups) {
-      for (const team of group.teams) {
-        groupNumberByTeam.set(team, group.groupNumber);
-        teeTimeByTeam.set(team, group.teeTime);
-      }
-    }
-
-    const orderedRows = previewGroups.flatMap((group) =>
-      rows.filter((row) => row.team != null && group.teams.includes(row.team))
+    const changed = getScoringGroupSignature(selectedRows) !== currentSignature;
+    setRows(selectedRows);
+    setSavedRows(selectedRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+    setSelectedScoringGroupKey(selectedGroups[0]?.key ?? null);
+    setScoringGroupBuildVariant(selectedVariant);
+    setMessage(
+      rebuilding
+        ? changed
+          ? "Foursomes rebuilt."
+          : "Groups are already balanced."
+        : "Playing groups assigned. Live scoring will stay scoped to these foursomes."
     );
-    const remainingRows = rows.filter(
-      (row) => !orderedRows.some((orderedRow) => orderedRow.playerId === row.playerId)
-    );
-    const nextRows = [...orderedRows, ...remainingRows].map((row) => ({
-      ...row,
-      groupNumber: row.team ? groupNumberByTeam.get(row.team) ?? null : null,
-      teeTime: row.team ? teeTimeByTeam.get(row.team) ?? null : null
-    }));
-
-    setRows(nextRows);
-    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-    setSelectedScoringGroupKey(previewGroups[0]?.key ?? null);
-    setMessage("Playing groups assigned. Live scoring will stay scoped to these foursomes.");
   }
 
   function autoAssignIndividualScoringGroups() {
@@ -1424,37 +1484,69 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
-    const previewGroups = buildIndividualScoringGroups(
-      rows.map((row) => ({ ...row, groupNumber: null, teeTime: null })),
-      playersById,
-      quotaSnapshot
-    );
+    const rebuilding = hasAssignedScoringGroups;
+    const currentSignature = getScoringGroupSignature(rows);
+    let selectedRows: RowState[] | null = null;
+    let selectedGroups: IndividualScoringGroup[] = [];
+    let selectedVariant = scoringGroupBuildVariant;
+    const maxVariants = Math.max(8, Math.ceil(rows.length / 4) * 6);
 
-    const groupNumberByPlayerId = new Map<string, number>();
-    for (const group of previewGroups) {
-      for (const playerId of group.playerIds) {
-        groupNumberByPlayerId.set(playerId, group.groupNumber);
+    for (let attempt = 0; attempt < maxVariants; attempt += 1) {
+      const variant = rebuilding ? scoringGroupBuildVariant + attempt + 1 : scoringGroupBuildVariant + attempt;
+      const previewGroups = buildIndividualScoringGroups(
+        rows.map((row) => ({ ...row, groupNumber: null, teeTime: null })),
+        playersById,
+        quotaSnapshot,
+        { ignoreExistingGroups: true, variant }
+      );
+
+      const groupNumberByPlayerId = new Map<string, number>();
+      for (const group of previewGroups) {
+        for (const playerId of group.playerIds) {
+          groupNumberByPlayerId.set(playerId, group.groupNumber);
+        }
+      }
+
+      const orderedRows = previewGroups.flatMap((group) =>
+        group.playerIds
+          .map((playerId) => rows.find((row) => row.playerId === playerId))
+          .filter(Boolean) as RowState[]
+      );
+      const remainingRows = rows.filter(
+        (row) => !orderedRows.some((orderedRow) => orderedRow.playerId === row.playerId)
+      );
+      const nextRows = [...orderedRows, ...remainingRows].map((row) => ({
+        ...row,
+        team: null,
+        groupNumber: groupNumberByPlayerId.get(row.playerId) ?? null,
+        teeTime: null
+      }));
+
+      selectedRows = nextRows;
+      selectedGroups = previewGroups;
+      selectedVariant = variant;
+
+      if (!rebuilding || getScoringGroupSignature(nextRows) !== currentSignature) {
+        break;
       }
     }
 
-    const orderedRows = previewGroups.flatMap((group) =>
-      group.playerIds
-        .map((playerId) => rows.find((row) => row.playerId === playerId))
-        .filter(Boolean) as RowState[]
-    );
-    const remainingRows = rows.filter(
-      (row) => !orderedRows.some((orderedRow) => orderedRow.playerId === row.playerId)
-    );
-    const nextRows = [...orderedRows, ...remainingRows].map((row) => ({
-      ...row,
-      team: null,
-      groupNumber: groupNumberByPlayerId.get(row.playerId) ?? null,
-      teeTime: null
-    }));
+    if (!selectedRows || !selectedGroups.length) {
+      setMessage("Could not build foursomes for this round.");
+      return;
+    }
 
-    setRows(nextRows);
-    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
-    setMessage("Balanced foursomes built for Individual Quota + Skins.");
+    const changed = getScoringGroupSignature(selectedRows) !== currentSignature;
+    setRows(selectedRows);
+    setSavedRows(selectedRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+    setScoringGroupBuildVariant(selectedVariant);
+    setMessage(
+      rebuilding
+        ? changed
+          ? "Foursomes rebuilt."
+          : "Groups are already balanced."
+        : "Balanced foursomes built for Individual Quota + Skins."
+    );
   }
   function removePlayer(playerId: string) {
     if (isLocked) return;
