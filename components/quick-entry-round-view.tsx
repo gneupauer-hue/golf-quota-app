@@ -82,6 +82,7 @@ export function QuickEntryRoundView({
   refreshState,
   lastRefreshedAt,
   isArchiving,
+  isIndividualQuotaSkins = false,
   onFrontNineChange,
   onBackNineChange,
   onBirdieHolesChange,
@@ -96,6 +97,7 @@ export function QuickEntryRoundView({
   lastRefreshedAt: string | null;
   isArchiving: boolean;
   allEntriesComplete: boolean;
+  isIndividualQuotaSkins?: boolean;
   onFrontNineChange: (playerId: string, value: string) => void;
   onBackNineChange: (playerId: string, value: string) => void;
   onBirdieHolesChange: (playerId: string, value: string) => void;
@@ -211,10 +213,15 @@ export function QuickEntryRoundView({
     setIsFinalConfirmOpen(false);
   }
 
+  function handleTotalPointsChange(playerId: string, value: string) {
+    onFrontNineChange(playerId, value);
+    onBackNineChange(playerId, "0");
+  }
+
   function handleSavePlayerScore() {
     if (!activeRow || isArchiving) return;
 
-    if (activeRow.quickFrontNine == null || activeRow.quickBackNine == null) {
+    if (isIndividualQuotaSkins ? activeRow.quickFrontNine == null : activeRow.quickFrontNine == null || activeRow.quickBackNine == null) {
       return;
     }
 
@@ -297,30 +304,44 @@ export function QuickEntryRoundView({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            {isIndividualQuotaSkins ? (
               <label className="space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Front 9</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Total quota points</span>
                 <input
                   type="number"
                   inputMode="numeric"
                   className="h-14 w-full rounded-2xl border border-sand/70 bg-white px-3 text-lg text-ink outline-none transition focus:border-pine/50"
                   value={activeRow.quickFrontNine ?? ""}
-                  onChange={(event) => onFrontNineChange(activeRow.playerId, event.target.value)}
+                  onChange={(event) => handleTotalPointsChange(activeRow.playerId, event.target.value)}
                   placeholder="0"
                 />
               </label>
-              <label className="space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Back 9</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="h-14 w-full rounded-2xl border border-sand/70 bg-white px-3 text-lg text-ink outline-none transition focus:border-pine/50"
-                  value={activeRow.quickBackNine ?? ""}
-                  onChange={(event) => onBackNineChange(activeRow.playerId, event.target.value)}
-                  placeholder="0"
-                />
-              </label>
-            </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                <label className="space-y-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Front 9</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="h-14 w-full rounded-2xl border border-sand/70 bg-white px-3 text-lg text-ink outline-none transition focus:border-pine/50"
+                    value={activeRow.quickFrontNine ?? ""}
+                    onChange={(event) => onFrontNineChange(activeRow.playerId, event.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Back 9</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="h-14 w-full rounded-2xl border border-sand/70 bg-white px-3 text-lg text-ink outline-none transition focus:border-pine/50"
+                    value={activeRow.quickBackNine ?? ""}
+                    onChange={(event) => onBackNineChange(activeRow.playerId, event.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2.5">
               <div className="rounded-2xl bg-white px-3 py-3">
@@ -410,7 +431,7 @@ export function QuickEntryRoundView({
             <button
               type="button"
               className="club-btn-primary min-h-14 w-full text-base disabled:opacity-60"
-              disabled={isArchiving || activeRow.quickFrontNine == null || activeRow.quickBackNine == null}
+              disabled={isArchiving || (isIndividualQuotaSkins ? activeRow.quickFrontNine == null : activeRow.quickFrontNine == null || activeRow.quickBackNine == null)}
               onClick={handleSavePlayerScore}
             >
               Save Player Score
@@ -476,8 +497,8 @@ export function QuickEntryRoundView({
                 <h3 className="mt-1 text-xl font-semibold text-ink">{playerConfirmRow.playerName}</h3>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm text-ink/75">
-                <p>Front 9: {playerConfirmRow.quickFrontNine ?? 0}</p>
-                <p>Back 9: {playerConfirmRow.quickBackNine ?? 0}</p>
+                {isIndividualQuotaSkins ? null : <p>Front 9: {playerConfirmRow.quickFrontNine ?? 0}</p>}
+                {isIndividualQuotaSkins ? null : <p>Back 9: {playerConfirmRow.quickBackNine ?? 0}</p>}
                 <p>Total: {playerConfirmRow.totalPoints}</p>
                 <p>Quota result: {formatQuotaResult(playerConfirmRow.plusMinus)}</p>
                 <p className="col-span-2">Good skins: {formatGoodSkins(playerConfirmRow.goodSkinEntries)}</p>
@@ -515,8 +536,8 @@ export function QuickEntryRoundView({
                       <p className="text-sm font-semibold text-ink">{row.totalPoints} pts</p>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-ink/70">
-                      <p>Front 9: {row.quickFrontNine ?? 0}</p>
-                      <p>Back 9: {row.quickBackNine ?? 0}</p>
+                      {isIndividualQuotaSkins ? null : <p>Front 9: {row.quickFrontNine ?? 0}</p>}
+                      {isIndividualQuotaSkins ? null : <p>Back 9: {row.quickBackNine ?? 0}</p>}
                       <p>Result: {formatQuotaResult(row.plusMinus)}</p>
                       <p>Good skins: {formatGoodSkins(row.goodSkinEntries)}</p>
                     </div>

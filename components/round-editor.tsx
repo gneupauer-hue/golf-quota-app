@@ -17,11 +17,13 @@ import {
   calculateSideGameResults,
   calculateTeamStandings,
   formatBirdieHolesInput,
+  formatGoodSkinEntriesInput,
   formatPlusMinus,
   getRankTone,
   hasSequentialHoleEntry,
   holeNumbers,
   parseBirdieHolesInput,
+  parseGoodSkinEntriesInput,
   teamOptions,
   type CalculatedRoundRow,
   type PlayerBuyInSummary,
@@ -648,6 +650,21 @@ type IndividualScoringGroup = {
   playerNames: string[];
 };
 
+function normalizeIndividualGroupOrder(groups: IndividualScoringGroup[]) {
+  return [...groups]
+    .sort((left, right) => {
+      if (left.playerIds.length !== right.playerIds.length) {
+        return left.playerIds.length - right.playerIds.length;
+      }
+      return left.groupNumber - right.groupNumber;
+    })
+    .map((group, index) => ({
+      ...group,
+      key: `individual-group-${index + 1}`,
+      label: `Group ${index + 1}`,
+      groupNumber: index + 1
+    }));
+}
 function buildIndividualScoringGroups(
   rows: RowState[],
   playersById: Map<string, EditorProps["players"][number]>,
@@ -673,7 +690,7 @@ function buildIndividualScoringGroups(
       assignedGroups.set(row.groupNumber, current);
     }
 
-    return Array.from(assignedGroups.values()).sort((left, right) => left.groupNumber - right.groupNumber);
+    return normalizeIndividualGroupOrder(Array.from(assignedGroups.values()));
   }
 
   const groupCount = Math.max(1, Math.ceil(rows.length / 4));
@@ -695,8 +712,12 @@ function buildIndividualScoringGroups(
   });
 
   const variant = options.variant ?? 0;
+  const variedRows = rotateItems(
+    variant % 2 === 0 ? orderedRows : [...orderedRows].reverse(),
+    variant
+  );
 
-  orderedRows.forEach((row, index) => {
+  variedRows.forEach((row, index) => {
     const player = playersById.get(row.playerId);
     const cycle = Math.floor(index / groupCount);
     const position = index % groupCount;
@@ -707,7 +728,7 @@ function buildIndividualScoringGroups(
     group.playerNames.push(player?.name ?? "Unknown Player");
   });
 
-  return groups.filter((group) => group.playerIds.length > 0);
+  return normalizeIndividualGroupOrder(groups.filter((group) => group.playerIds.length > 0));
 }
 export function RoundEditor({ round, players, quotaSnapshot, groups: initialGroups }: EditorProps) {
   const router = useRouter();
@@ -1210,7 +1231,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           backSubmittedAt: row.backSubmittedAt,
           quickFrontNine: row.quickFrontNine,
           quickBackNine: row.quickBackNine,
-          birdieHoles: parseBirdieHolesInput(row.birdieHolesText),
+          birdieHoles: parseGoodSkinEntriesInput(row.birdieHolesText).map((entry) => formatGoodSkinEntriesInput([entry])),
           holes: row.holeScores
         }))
       };
@@ -3236,6 +3257,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           allEntriesComplete={allBackSubmitted}
           onFrontNineChange={updateQuickFrontNine}
           onBackNineChange={updateQuickBackNine}
+          isIndividualQuotaSkins={isSkinsOnly}
           onBirdieHolesChange={updateQuickBirdieHoles}
           onSaveRound={() => saveRound("Scorecard saved.")}
           onArchiveRound={archiveRound}
