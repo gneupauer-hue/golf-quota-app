@@ -844,6 +844,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
             playerId: row.playerId,
             playerName: player.name,
             team: row.team,
+          groupNumber: row.groupNumber,
+          teeTime: row.teeTime,
             startQuota: quotaSnapshot[row.playerId] ?? player.quota,
             holeScores: row.holeScores,
             scoringEntryMode,
@@ -903,6 +905,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           playerId: row.playerId,
           playerName: player.name,
           team: row.team,
+          groupNumber: row.groupNumber,
+          teeTime: row.teeTime,
           startQuota: calculated.startQuota,
           quickFrontNine: row.quickFrontNine,
           quickBackNine: row.quickBackNine,
@@ -916,6 +920,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         playerId: string;
         playerName: string;
         team: TeamCode | null;
+        groupNumber: number | null;
+        teeTime: string | null;
         startQuota: number;
         quickFrontNine: number | null;
         quickBackNine: number | null;

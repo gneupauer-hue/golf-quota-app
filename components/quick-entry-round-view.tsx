@@ -23,6 +23,8 @@ type QuickEntryRow = {
   playerId: string;
   playerName: string;
   team: TeamCode | null;
+  groupNumber: number | null;
+  teeTime: string | null;
   startQuota: number;
   quickFrontNine: number | null;
   quickBackNine: number | null;
@@ -34,6 +36,16 @@ type QuickEntryRow = {
 
 type SummaryRow = QuickEntryRow & {
   goodSkinEntries: GoodSkinEntry[];
+};
+
+type EntryGroup = {
+  key: string;
+  label: string;
+  groupNumber: number | null;
+  teeTime: string | null;
+  rows: SummaryRow[];
+  completedCount: number;
+  isComplete: boolean;
 };
 
 const goodSkinTypes: GoodSkinType[] = ["birdie", "eagle", "ace"];
@@ -67,6 +79,16 @@ function getChangeBadgeClasses(value: number) {
   if (value > 0) return "bg-[#1B6B3A] text-white";
   if (value < 0) return "bg-[#B54545] text-white";
   return "bg-canvas text-ink";
+}
+
+function hasSavedScore(row: SummaryRow, isIndividualQuotaSkins: boolean) {
+  return isIndividualQuotaSkins
+    ? row.quickFrontNine != null
+    : row.quickFrontNine != null && row.quickBackNine != null;
+}
+
+function getGroupKey(row: Pick<SummaryRow, "groupNumber">) {
+  return row.groupNumber != null ? `group-${row.groupNumber}` : "group-unassigned";
 }
 
 function getSkinHoleClasses(selected: boolean, pending: boolean) {
@@ -106,7 +128,9 @@ export function QuickEntryRoundView({
   onRefresh: () => void;
 }) {
   const [completedPlayerIds, setCompletedPlayerIds] = useState<string[]>([]);
+  const [editingPlayerIds, setEditingPlayerIds] = useState<string[]>([]);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [playerConfirmId, setPlayerConfirmId] = useState<string | null>(null);
   const [isFinalConfirmOpen, setIsFinalConfirmOpen] = useState(false);
   const [skinAnswerByPlayerId, setSkinAnswerByPlayerId] = useState<Record<string, boolean | null>>({});
@@ -126,31 +150,81 @@ export function QuickEntryRoundView({
 
   const rowIds = useMemo(() => rows.map((row) => row.playerId), [rows]);
   const completedSet = useMemo(() => new Set(completedPlayerIds), [completedPlayerIds]);
-  const completedRows = summaryRows.filter((row) => completedSet.has(row.playerId));
-  const incompleteRows = summaryRows.filter((row) => !completedSet.has(row.playerId));
-  const activeRow = summaryRows.find((row) => row.playerId === activePlayerId) ?? incompleteRows[0] ?? null;
-  const activePlayerNumber = activeRow ? rowIds.indexOf(activeRow.playerId) + 1 : rows.length;
+  const editingSet = useMemo(() => new Set(editingPlayerIds), [editingPlayerIds]);
+  const isPlayerComplete = (row: SummaryRow) =>
+    !editingSet.has(row.playerId) && (completedSet.has(row.playerId) || hasSavedScore(row, isIndividualQuotaSkins));
+
+  const entryGroups = useMemo<EntryGroup[]>(() => {
+    const groups = new Map<string, Omit<EntryGroup, "completedCount" | "isComplete">>();
+
+    for (const row of summaryRows) {
+      const key = getGroupKey(row);
+      const label = row.groupNumber != null ? `Group ${row.groupNumber}` : "Unassigned Group";
+      const current = groups.get(key) ?? {
+        key,
+        label,
+        groupNumber: row.groupNumber,
+        teeTime: row.teeTime,
+        rows: []
+      };
+      current.rows.push(row);
+      groups.set(key, current);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => {
+        const completedCount = group.rows.filter((row) => isPlayerComplete(row)).length;
+        return {
+          ...group,
+          completedCount,
+          isComplete: group.rows.length > 0 && completedCount === group.rows.length
+        };
+      })
+      .sort((left, right) => {
+        if (left.groupNumber == null && right.groupNumber != null) return 1;
+        if (left.groupNumber != null && right.groupNumber == null) return -1;
+        return (left.groupNumber ?? 999) - (right.groupNumber ?? 999);
+      });
+  }, [completedSet, editingSet, isIndividualQuotaSkins, summaryRows]);
+
+  const selectedGroup = entryGroups.find((group) => group.key === selectedGroupKey) ?? null;
+  const visibleRows = selectedGroup?.rows ?? [];
+  const visibleRowIds = useMemo(() => visibleRows.map((row) => row.playerId), [visibleRows]);
+  const completedRows = visibleRows.filter((row) => isPlayerComplete(row));
+  const incompleteRows = visibleRows.filter((row) => !isPlayerComplete(row));
+  const activeRow = selectedGroup
+    ? visibleRows.find((row) => row.playerId === activePlayerId) ?? incompleteRows[0] ?? null
+    : null;
+  const activePlayerNumber = activeRow ? visibleRowIds.indexOf(activeRow.playerId) + 1 : visibleRows.length;
   const playerConfirmRow = summaryRows.find((row) => row.playerId === playerConfirmId) ?? null;
-  const allPlayersComplete = rows.length > 0 && completedRows.length === rows.length;
+  const allPlayersComplete = summaryRows.length > 0 && summaryRows.every((row) => isPlayerComplete(row));
+  const totalCompletedCount = summaryRows.filter((row) => isPlayerComplete(row)).length;
 
   useEffect(() => {
     setCompletedPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
+    setEditingPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
     setSkinAnswerByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
     setPendingSkinHoleByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
   }, [rowIds]);
 
   useEffect(() => {
-    if (!rows.length) {
+    if (selectedGroupKey && !entryGroups.some((group) => group.key === selectedGroupKey)) {
+      setSelectedGroupKey(null);
+    }
+  }, [entryGroups, selectedGroupKey]);
+
+  useEffect(() => {
+    if (!selectedGroup || !visibleRows.length) {
       setActivePlayerId(null);
       return;
     }
 
-    if (activePlayerId && rowIds.includes(activePlayerId) && !completedSet.has(activePlayerId)) {
+    if (activePlayerId && visibleRowIds.includes(activePlayerId) && !isPlayerComplete(visibleRows.find((row) => row.playerId === activePlayerId)!)) {
       return;
     }
 
     setActivePlayerId(incompleteRows[0]?.playerId ?? null);
-  }, [activePlayerId, completedSet, incompleteRows, rowIds, rows.length]);
+  }, [activePlayerId, incompleteRows, selectedGroup, visibleRowIds, visibleRows]);
 
   function getSkinAnswer(row: SummaryRow) {
     return skinAnswerByPlayerId[row.playerId] ?? (row.goodSkinEntries.length ? true : null);
@@ -207,7 +281,10 @@ export function QuickEntryRoundView({
   }
 
   function editCompletedPlayer(playerId: string) {
+    const targetRow = summaryRows.find((row) => row.playerId === playerId);
     setCompletedPlayerIds((current) => current.filter((candidate) => candidate !== playerId));
+    setEditingPlayerIds((current) => (current.includes(playerId) ? current : [...current, playerId]));
+    setSelectedGroupKey(targetRow ? getGroupKey(targetRow) : selectedGroupKey);
     setActivePlayerId(playerId);
     setPlayerConfirmId(null);
     setIsFinalConfirmOpen(false);
@@ -232,16 +309,25 @@ export function QuickEntryRoundView({
     if (!playerConfirmRow) return;
 
     const confirmedId = playerConfirmRow.playerId;
+    const nextCompletedSet = new Set([...completedPlayerIds, confirmedId]);
+    const nextEditingSet = new Set(editingPlayerIds.filter((playerId) => playerId !== confirmedId));
+    const nextIsComplete = (row: SummaryRow) =>
+      !nextEditingSet.has(row.playerId) && (nextCompletedSet.has(row.playerId) || hasSavedScore(row, isIndividualQuotaSkins));
+
     setCompletedPlayerIds((current) =>
       current.includes(confirmedId) ? current : [...current, confirmedId]
     );
+    setEditingPlayerIds((current) => current.filter((playerId) => playerId !== confirmedId));
     setPlayerConfirmId(null);
     onSaveRound();
 
-    const nextIncomplete = summaryRows.find(
-      (row) => row.playerId !== confirmedId && !completedSet.has(row.playerId)
+    const nextIncomplete = visibleRows.find(
+      (row) => row.playerId !== confirmedId && !nextIsComplete(row)
     );
     setActivePlayerId(nextIncomplete?.playerId ?? null);
+    if (!nextIncomplete) {
+      setSelectedGroupKey(null);
+    }
   }
 
   function handleFinalSubmit() {
@@ -263,16 +349,16 @@ export function QuickEntryRoundView({
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Scorecard Entry</p>
               <h3 className="mt-1 text-lg font-semibold text-ink">Enter one player at a time</h3>
               <p className="mt-1 text-sm text-ink/70">
-                Completed {completedRows.length} of {rows.length}
+                {selectedGroup ? `Completed ${completedRows.length} of ${visibleRows.length} in ${selectedGroup.label}` : `Completed ${totalCompletedCount} of ${rows.length}`}
               </p>
             </div>
             <button type="button" className="club-btn-secondary min-h-10 px-4 text-sm" onClick={onRefresh}>
-              Refresh
+              Refresh Round
             </button>
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs font-medium text-ink/70">
-            {activeRow ? <span>Player {activePlayerNumber} of {rows.length}</span> : null}
+            {activeRow ? <span>Player {activePlayerNumber} of {visibleRows.length}</span> : null}
             {saveState.message ? (
               <span className={classNames("rounded-full px-3 py-1.5", getStatusClasses(saveState.tone))}>
                 {saveState.message}
@@ -288,8 +374,45 @@ export function QuickEntryRoundView({
           </div>
         </SectionCard>
 
-        {activeRow ? (
+        {!selectedGroup ? (
+          <SectionCard className="space-y-3 p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Score Entry</p>
+              <h3 className="mt-1 text-xl font-semibold text-ink">Which group are you entering scores for?</h3>
+            </div>
+            {entryGroups.length ? (
+              <div className="space-y-2.5">
+                {entryGroups.map((group) => (
+                  <button
+                    key={group.key}
+                    type="button"
+                    className="w-full rounded-[22px] border border-sand/70 bg-white px-4 py-3 text-left transition hover:border-pine/40"
+                    onClick={() => {
+                      setSelectedGroupKey(group.key);
+                      setActivePlayerId(group.rows.find((row) => !isPlayerComplete(row))?.playerId ?? group.rows[0]?.playerId ?? null);
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-base font-semibold text-ink">{group.label}</p>
+                        <p className="mt-1 text-sm text-ink/65">{group.rows.map((row) => row.playerName).join(", ")}</p>
+                      </div>
+                      <span className={classNames("shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold", group.isComplete ? "bg-[#EAF6EC] text-pine" : "bg-canvas text-ink/70")}>
+                        {group.isComplete ? "Completed" : `${group.completedCount}/${group.rows.length}`}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink/60">No groups are available for score entry.</p>
+            )}
+          </SectionCard>
+        ) : activeRow ? (
           <SectionCard className="space-y-4 p-4">
+            <button type="button" className="w-fit rounded-full bg-canvas px-3 py-2 text-xs font-semibold text-ink" onClick={() => setSelectedGroupKey(null)}>
+              Back to groups
+            </button>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="text-xl font-semibold text-ink">{activeRow.playerName}</h3>
@@ -438,18 +561,22 @@ export function QuickEntryRoundView({
             </button>
           </SectionCard>
         ) : (
-          <SectionCard className="space-y-2 border border-pine/20 bg-[#E2F4E6]">
+          <SectionCard className="space-y-3 border border-pine/20 bg-[#E2F4E6]">
+            <button type="button" className="w-fit rounded-full bg-white px-3 py-2 text-xs font-semibold text-ink" onClick={() => setSelectedGroupKey(null)}>
+              Back to groups
+            </button>
             <h3 className="text-lg font-semibold text-ink">All players completed</h3>
             <p className="text-sm text-ink/70">Review the completed list, then submit all scores.</p>
           </SectionCard>
         )}
 
-        <SectionCard className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+        {selectedGroup ? (
+          <SectionCard className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-semibold text-ink">Completed Players</h3>
-            <span className="text-sm font-semibold text-ink/60">{completedRows.length}/{rows.length}</span>
-          </div>
-          {completedRows.length ? (
+            <span className="text-sm font-semibold text-ink/60">{completedRows.length}/{visibleRows.length}</span>
+            </div>
+            {completedRows.length ? (
             <div className="space-y-2">
               {completedRows.map((row) => (
                 <div key={`completed-${row.playerId}`} className="rounded-2xl bg-white px-3 py-3">
@@ -471,10 +598,11 @@ export function QuickEntryRoundView({
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink/60">No completed players yet.</p>
-          )}
-        </SectionCard>
+            ) : (
+              <p className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink/60">No completed players yet.</p>
+            )}
+          </SectionCard>
+        ) : null}
 
         {allPlayersComplete ? (
           <button
