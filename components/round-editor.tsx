@@ -749,6 +749,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
   const [teamBuildVariant, setTeamBuildVariant] = useState(0);
   const [scoringGroupBuildVariant, setScoringGroupBuildVariant] = useState(0);
+  const [isSetupTeamEditMode, setIsSetupTeamEditMode] = useState(false);
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
@@ -3004,7 +3005,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         </div>
                       ) : null}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         disabled={!selectedMatchFormat || rows.length === 0}
@@ -3021,35 +3022,42 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                       >
                         Rebuild Teams
                       </button>
+                      <button
+                        type="button"
+                        disabled={!hasAutoBuiltTeams}
+                        className="min-h-12 flex-1 rounded-full bg-white px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                        onClick={() => setIsSetupTeamEditMode((current) => !current)}
+                      >
+                        {isSetupTeamEditMode ? "Done Editing" : "Edit Teams"}
+                      </button>
                     </div>
                     {hasAutoBuiltTeams ? (
                       <div className="grid gap-3">
                         {setupTeams.map((team, index) => (
-                          <div key={`review-${team.team}`} className="rounded-2xl bg-canvas px-4 py-4">
-                            <div className="flex items-center justify-between gap-3">
+                          <div key={`review-${team.team}`} className="rounded-2xl border border-ink/10 bg-canvas px-4 py-4">
+                            <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="text-base font-semibold">{getSetupTeamLabel(team.team)}</p>
-                                <p className="mt-1 text-sm text-ink/60">
+                                <p className="text-lg font-semibold text-ink">{getSetupTeamLabel(team.team)}</p>
+                                <p className="mt-1 text-sm font-medium text-ink/60">
                                   {`${team.players.length} of ${selectedMatchFormat.capacities[index] ?? 0} players`}
                                 </p>
                               </div>
-                              <div className="rounded-2xl bg-white px-4 py-3 text-center">
-                                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total Quota</p>
-                                <p className="mt-1 text-xl font-semibold">{team.totalQuota}</p>
-                              </div>
+                              <p className="shrink-0 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink">
+                                {`Total Quota: ${team.totalQuota}`}
+                              </p>
                             </div>
-                            <div className="mt-3 space-y-2">
+                            <div className="mt-4 divide-y divide-ink/10 overflow-hidden rounded-2xl bg-white">
                               {team.players.map((player) => (
                                 <div
                                   key={`review-player-${player.playerId}`}
-                                  className="rounded-2xl bg-white px-4 py-3"
+                                  className="px-4 py-3"
                                 >
                                   <div className="flex items-center justify-between gap-3">
-                                    <div>
-                                      <p className="text-base font-semibold text-ink">{player.playerName}</p>
-                                      <p className="mt-1 text-xs text-ink/55">{`Quota ${player.quota}`}</p>
-                                    </div>
-                                    <div className="flex flex-wrap justify-end gap-2">
+                                    <p className="min-w-0 truncate text-base font-semibold text-ink">{player.playerName}</p>
+                                    <p className="shrink-0 text-base font-bold text-ink">{player.quota}</p>
+                                  </div>
+                                  {isSetupTeamEditMode ? (
+                                    <div className="mt-3 flex flex-wrap gap-2">
                                       {setupTeamCodes.map((destinationTeam) => (
                                         <button
                                           key={`move-${player.playerId}-${destinationTeam}`}
@@ -3066,7 +3074,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                         </button>
                                       ))}
                                     </div>
-                                  </div>
+                                  ) : null}
                                 </div>
                               ))}
                             </div>
