@@ -263,15 +263,9 @@ function PlayerRosterCard({
       <button
         type="button"
         onClick={onToggleHistory}
-        className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1 px-3 py-2 text-left"
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 px-3 py-1.5 text-left"
       >
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ink/55">
-            <span>{`${getRoundsThisYear(player)} round${getRoundsThisYear(player) === 1 ? "" : "s"}`}</span>
-            <span>{getLatestRound(player) ? getLastRoundLabel(player) : "Baseline only"}</span>
-          </div>
-        </div>
+        <p className="min-w-0 truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
         <span className="rounded-full bg-pine px-2.5 py-1 text-sm font-bold leading-none text-white">
           {player.quota}
         </span>
@@ -283,6 +277,9 @@ function PlayerRosterCard({
         >
           {latestChangeLabel}
         </span>
+        <p className="col-span-3 truncate text-[11px] leading-4 text-ink/55">
+          {`${getRoundsThisYear(player)} round${getRoundsThisYear(player) === 1 ? "" : "s"} \u2022 ${getLatestRound(player) ? getLastRoundLabel(player) : "Baseline only"}`}
+        </p>
       </button>
 
       {isHistoryOpen ? (
@@ -651,7 +648,7 @@ function handleRepairButtonPress() {
                   </span>
                 </div>
               </div>
-              <div className="space-y-1.5 px-3 py-2">
+              <div className="space-y-1 px-2.5 py-1.5">
                 {currentPlayers.length ? (
                   currentPlayers.map((player) => (
                     <PlayerRosterCard
@@ -694,7 +691,7 @@ function handleRepairButtonPress() {
                 )}
               >
                 <div className="overflow-hidden">
-                  <div className="space-y-1.5 border-t border-ink/10 px-3 py-2">
+                  <div className="space-y-1 border-t border-ink/10 px-2.5 py-1.5">
                     {dormantPlayers.length ? (
                       dormantPlayers.map((player) => (
                         <PlayerRosterCard
