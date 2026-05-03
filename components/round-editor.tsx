@@ -3119,17 +3119,22 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                             <div key={group.key} className="rounded-2xl bg-canvas px-4 py-4">
                               <p className="text-base font-semibold text-ink">{group.label}</p>
                               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/55">
-                                {group.teams.map((team) => `Team ${team}`).join(" • ")}
+                                {group.teams.map((team) => `Team ${team}`).join(" \u2022 ")}
                               </p>
-                              <div className="mt-3 space-y-2">
+                              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3">
                                 {rows
                                   .filter((row) => row.team != null && group.teams.includes(row.team))
-                                  .map((row) => {
+                                  .map((row, playerIndex) => {
                                     const player = playersById.get(row.playerId);
                                     return (
-                                      <div key={`group-${group.key}-${row.playerId}`} className="rounded-2xl bg-white px-4 py-3">
-                                        <p className="text-sm font-semibold text-ink">{player?.name ?? "Unknown Player"}</p>
-                                        <p className="mt-1 text-xs text-ink/55">{row.team ? `Team ${row.team}` : "Unassigned team"}</p>
+                                      <div
+                                        key={`group-${group.key}-${row.playerId}`}
+                                        className={classNames("min-w-0", playerIndex % 2 === 1 ? "text-right" : "text-left")}
+                                      >
+                                        <p className="truncate text-sm font-semibold text-ink">
+                                          {player?.name ?? "Unknown Player"}
+                                          {row.team ? <span className="ml-1 text-xs font-semibold text-ink/45">{`(${row.team})`}</span> : null}
+                                        </p>
                                       </div>
                                     );
                                   })}
