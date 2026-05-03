@@ -265,55 +265,66 @@ function PlayerRosterCard({
   isHistoryOpen: boolean;
   onToggleHistory: () => void;
 }) {
+  const latestChange = getLatestQuotaChange(player.history);
+  const latestChangeLabel = latestChange == null ? "Base" : formatMovement(latestChange);
+  const latestChangeBadgeClass =
+    latestChange == null
+      ? "bg-ink/10 text-ink/60"
+      : latestChange > 0
+        ? "bg-pine text-white"
+        : latestChange < 0
+          ? "bg-danger/85 text-white"
+          : "bg-ink/10 text-ink/70";
+
   return (
-    <SectionCard className="p-2">
-      <div className="space-y-1.5">
+    <SectionCard className="overflow-hidden px-0 py-0">
+      <button
+        type="button"
+        onClick={onToggleHistory}
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 px-4 py-3 text-left sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+      >
         <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold leading-5 text-ink">{player.name}</h3>
-          <div className="mt-1 grid gap-x-3 gap-y-0 text-[12px] leading-5 text-ink/72 sm:grid-cols-2">
-            <p>
-              Current quota: <span className="font-semibold text-ink">{player.quota}</span>
-            </p>
-            <p>
-              Previous quota: <span className="font-semibold text-ink">{getStartingQuotaLastRound(player) ?? "-"}</span>
-            </p>
-            <p>
-              Last adjustment: <span className="font-semibold text-ink">{getLastAdjustmentLabel(player)}</span>
-            </p>
-            <p>
-              Rounds this year: <span className="font-semibold text-ink">{getRoundsThisYear(player)}</span>
-            </p>
+          <p className="truncate text-sm font-semibold text-ink">{player.name}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span
+              className={classNames(
+                "inline-flex min-w-9 items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none",
+                latestChangeBadgeClass
+              )}
+            >
+              {latestChangeLabel}
+            </span>
+            <span className="text-xs text-ink/55">
+              {`${getRoundsThisYear(player)} round${getRoundsThisYear(player) === 1 ? "" : "s"} this year`}
+            </span>
           </div>
         </div>
-
-        <div className="flex items-center justify-between gap-2 pt-0.5">
-          <p className="text-[12px] text-ink/55">
-            Last played: <span className="font-medium text-ink/75">{getLastRoundLabel(player)}</span>
-          </p>
-          <button
-            className="club-btn-primary min-h-9 px-3.5 text-sm"
-            type="button"
-            onClick={onToggleHistory}
-          >
-            {isHistoryOpen ? "Hide History" : "See History"}
-          </button>
+        <span className="justify-self-start rounded-full bg-pine px-3 py-1 text-sm font-bold text-white sm:justify-self-center">
+          {player.quota}
+        </span>
+        <div className="col-span-2 text-right sm:col-span-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Last updated</p>
+          <p className="mt-1 text-xs text-ink/60">{getLatestRound(player) ? getLastRoundLabel(player) : "Baseline only"}</p>
         </div>
+      </button>
 
-        {isHistoryOpen ? (
-          <div className="rounded-[20px] border border-ink/10 bg-canvas px-3 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
-                Round History
+      {isHistoryOpen ? (
+        <div className="border-t border-ink/10 bg-canvas px-4 py-3">
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-white px-3 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">
+                Player snapshot
               </p>
-              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-ink/70">
-                {player.history.length} {player.history.length === 1 ? "round" : "rounds"}
-              </span>
+              <div className="mt-2 grid gap-2 text-sm text-ink/80 sm:grid-cols-2">
+                <p>{`Previous quota: ${getStartingQuotaLastRound(player) ?? "-"}`}</p>
+                <p>{`Last adjustment: ${getLastAdjustmentLabel(player)}`}</p>
+              </div>
             </div>
 
             {player.history.length ? (
-              <div className="mt-2 space-y-2">
+              <div className="space-y-2">
                 {player.history.map((item) => (
-                  <div key={player.id + "-" + item.roundId} className="rounded-2xl bg-white px-3 py-2.5 shadow-sm">
+                  <div key={player.id + "-" + item.roundId} className="rounded-2xl bg-white px-3 py-3 shadow-sm">
                     <p className="text-sm font-semibold text-ink">
                       {formatDisplayDate(
                         getRoundDisplayDate({
@@ -324,19 +335,20 @@ function PlayerRosterCard({
                         })
                       )}
                     </p>
-                    <p className="mt-1.5 text-sm text-ink/80">{`Points scored: ${item.totalPoints}`}</p>
-                    <p className="mt-1 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
-                    <p className="mt-1 text-sm text-ink/80">{`Result vs quota: ${formatQuotaResult(item.plusMinus)}`}</p>
-                    <p className="mt-1 text-sm text-ink/65">{`Quota moved: ${formatMovement(item.quotaMovement)}`}</p>
+                    <p className="mt-2 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
+                    <p className="mt-1 text-sm text-ink/80">{`Points: ${item.totalPoints}`}</p>
+                    <p className="mt-1 text-sm text-ink/80">{`Result: ${formatQuotaResult(item.plusMinus)}`}</p>
+                    <p className="mt-1 text-sm text-ink/80">{`Adjustment: ${formatMovement(item.quotaMovement)}`}</p>
+                    <p className="mt-1 text-sm text-ink/80">{`New quota: ${item.nextQuota}`}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-2.5 text-sm text-ink/65">No rounds yet.</p>
+              <p className="text-sm text-ink/65">No completed rounds this year. Using baseline quota only.</p>
             )}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </SectionCard>
   );
 }
