@@ -133,6 +133,7 @@ export function QuickEntryRoundView({
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [playerConfirmId, setPlayerConfirmId] = useState<string | null>(null);
   const [isFinalConfirmOpen, setIsFinalConfirmOpen] = useState(false);
+  const [hasFinalSubmitStarted, setHasFinalSubmitStarted] = useState(false);
   const [skinAnswerByPlayerId, setSkinAnswerByPlayerId] = useState<Record<string, boolean | null>>({});
   const [pendingSkinHoleByPlayerId, setPendingSkinHoleByPlayerId] = useState<Record<string, number | null>>({});
 
@@ -331,12 +332,13 @@ export function QuickEntryRoundView({
   }
 
   function handleFinalSubmit() {
-    if (!allPlayersComplete || isArchiving) return;
+    if (!allPlayersComplete || isArchiving || hasFinalSubmitStarted) return;
     setIsFinalConfirmOpen(true);
   }
 
   function confirmFinalRound() {
-    setIsFinalConfirmOpen(false);
+    if (isArchiving || hasFinalSubmitStarted) return;
+    setHasFinalSubmitStarted(true);
     onArchiveRound();
   }
 
@@ -608,10 +610,10 @@ export function QuickEntryRoundView({
           <button
             type="button"
             className="club-btn-primary min-h-14 w-full text-base disabled:opacity-60"
-            disabled={isArchiving}
+            disabled={isArchiving || hasFinalSubmitStarted}
             onClick={handleFinalSubmit}
           >
-            Submit All Scores
+            Finalize Round
           </button>
         ) : null}
       </div>
@@ -653,10 +655,20 @@ export function QuickEntryRoundView({
           <div className="max-h-[90vh] w-full max-w-md overflow-hidden rounded-[28px] bg-hero shadow-[0_24px_80px_rgba(26,38,59,0.22)]">
             <div className="space-y-4 px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Finalize round?</p>
-                <h3 className="mt-1 text-xl font-semibold text-ink">Review all player scores</h3>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">FINALIZE ROUND</p>
+                <h3 className="mt-1 text-xl font-semibold text-ink">Please double-check all scores</h3>
+                <div className="mt-3 rounded-[22px] border border-danger/15 bg-white/90 px-4 py-3 text-sm text-ink/75">
+                  <p className="font-semibold text-ink">This will:</p>
+                  <ul className="mt-2 space-y-1">
+                    <li>• Calculate final results</li>
+                    <li>• Calculate payouts</li>
+                    <li>• Update player quotas</li>
+                    <li>• Save the round to Past Games</li>
+                  </ul>
+                  <p className="mt-3 font-semibold text-danger">Please double-check all scores and skins before finalizing.</p>
+                </div>
               </div>
-              <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+              <div className="max-h-[42vh] space-y-2 overflow-y-auto pr-1">
                 {summaryRows.map((row) => (
                   <div key={`final-${row.playerId}`} className="rounded-[22px] bg-white/90 px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
@@ -676,12 +688,18 @@ export function QuickEntryRoundView({
                 <button
                   type="button"
                   className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink"
+                  disabled={isArchiving || hasFinalSubmitStarted}
                   onClick={() => setIsFinalConfirmOpen(false)}
                 >
-                  Go Back
+                  Cancel
                 </button>
-                <button type="button" className="club-btn-primary min-h-12 text-sm" onClick={confirmFinalRound}>
-                  Confirm and Finish Round
+                <button
+                  type="button"
+                  className="club-btn-primary min-h-12 text-sm disabled:opacity-60"
+                  disabled={isArchiving || hasFinalSubmitStarted}
+                  onClick={confirmFinalRound}
+                >
+                  {isArchiving || hasFinalSubmitStarted ? "Finalizing..." : "Yes, Finalize Round"}
                 </button>
               </div>
             </div>
