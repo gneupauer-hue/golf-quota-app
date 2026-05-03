@@ -320,7 +320,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
         featured
       >
         {payoutSummary.players.length ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {payoutSummary.players.map((player) => {
               const categories = [
                 { label: "Front", value: player.front },
@@ -329,29 +329,35 @@ export function RoundResults({ data }: { data: ResultsData }) {
                 { label: "Indy", value: player.indy },
                 { label: "Skins", value: player.skins }
               ].filter((category) => category.value > 0);
+              const categorySummary = categories
+                .map((category) => `${category.label} ${formatCurrency(category.value)}`)
+                .join(" • ");
 
               return (
-                <div key={player.playerId} className="rounded-[24px] border border-[#1B6B3A]/20 bg-white px-4 py-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-lg font-extrabold text-ink">{player.playerName}</p>
-                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
-                        Paid Player
+                <details
+                  key={player.playerId}
+                  className="group rounded-[18px] border border-[#1B6B3A]/20 bg-white px-3 py-2 shadow-sm [&>summary::-webkit-details-marker]:hidden"
+                >
+                  <summary className="cursor-pointer list-none">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="min-w-0 truncate text-sm font-extrabold text-ink">{player.playerName}</p>
+                      <p className="shrink-0 text-base font-extrabold tracking-tight text-[#1B6B3A]">
+                        {formatCurrency(player.totalWon)}
                       </p>
                     </div>
-                    <p className="text-3xl font-extrabold tracking-tight text-[#1B6B3A]">{formatCurrency(player.totalWon)}</p>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                    <p className="mt-1 truncate text-xs font-semibold text-ink/65">{categorySummary}</p>
+                  </summary>
+                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-ink/10 pt-2">
                     {categories.map((category) => (
                       <span
                         key={`${player.playerId}-${category.label}`}
-                        className="rounded-full bg-[#EAF6EC] px-3 py-1.5 text-xs font-bold text-[#123D2A]"
+                        className="rounded-full bg-[#EAF6EC] px-2.5 py-1 text-[11px] font-bold text-[#123D2A]"
                       >
                         {`${category.label}: ${formatCurrency(category.value)}`}
                       </span>
                     ))}
                   </div>
-                </div>
+                </details>
               );
             })}
           </div>
@@ -375,73 +381,58 @@ export function RoundResults({ data }: { data: ResultsData }) {
         subtitle="Final front, back, and total team performance."
       >
         {data.teamStandings.length ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {data.teamStandings.map((team) => {
               const winningFront = data.leaders.frontTeam?.team === team.team;
               const winningBack = data.leaders.backTeam?.team === team.team;
               const winningTotal = data.leaders.totalTeam?.team === team.team;
+              const winners = [
+                winningFront ? "Front" : null,
+                winningBack ? "Back" : null,
+                winningTotal ? "Total" : null
+              ].filter(Boolean);
 
               return (
-                <div
+                <details
                   key={team.team}
                   className={classNames(
-                    "rounded-[24px] border px-4 py-4 shadow-sm",
-                    winningTotal ? "border-[#5A9764] bg-[#E2F4E6]" : "border-ink/10 bg-canvas"
+                    "group rounded-[18px] border px-3 py-2 shadow-sm [&>summary::-webkit-details-marker]:hidden",
+                    winningTotal ? "border-[#5A9764]/30 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
                   )}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xl font-extrabold text-ink">{`Team ${team.team}`}</p>
-                      <p className="mt-1 text-sm font-semibold text-ink/70">{team.players.join(", ")}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-3xl font-extrabold tracking-tight text-pine">
-                        {formatPlusMinus(team.totalPlusMinus)}
-                      </p>
-                      <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-                        {winningFront ? (
-                          <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-pine">
-                            Front winner
-                          </span>
-                        ) : null}
-                        {winningBack ? (
-                          <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-pine">
-                            Back winner
-                          </span>
-                        ) : null}
-                        {winningTotal ? (
-                          <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-pine">
-                            Total winner
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <div className={classNames("rounded-2xl px-3 py-2.5", teamCardTone(winningFront))}>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Front</p>
-                      <p className="mt-1 text-lg font-bold">{`${team.frontPoints} of ${team.frontQuota}`}</p>
-                      <p className="mt-1 text-xs font-semibold text-ink/60">
-                        {formatPlusMinus(team.frontPlusMinus)}
-                      </p>
-                    </div>
-                    <div className={classNames("rounded-2xl px-3 py-2.5", teamCardTone(winningBack))}>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Back</p>
-                      <p className="mt-1 text-lg font-bold">{`${team.backPoints} of ${team.backQuota}`}</p>
-                      <p className="mt-1 text-xs font-semibold text-ink/60">
-                        {formatPlusMinus(team.backPlusMinus)}
-                      </p>
-                    </div>
-                    <div className={classNames("rounded-2xl px-3 py-2.5", teamCardTone(winningTotal))}>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Total</p>
-                      <p className="mt-1 text-lg font-bold">{`${team.totalPoints} of ${team.totalQuota}`}</p>
-                      <p className="mt-1 text-xs font-semibold text-ink/60">
+                  <summary className="cursor-pointer list-none">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-extrabold text-ink">{`Team ${team.team}`}</p>
+                      <p className="shrink-0 text-base font-extrabold tracking-tight text-pine">
                         {formatPlusMinus(team.totalPlusMinus)}
                       </p>
                     </div>
+                    <p className="mt-1 truncate text-xs font-semibold text-ink/70">{team.players.join(", ")}</p>
+                    <p className="mt-1 truncate text-xs font-semibold text-ink/65">
+                      {`Front: ${team.frontPoints}/${team.frontQuota} • Back: ${team.backPoints}/${team.backQuota} • Total: ${team.totalPoints}/${team.totalQuota}`}
+                    </p>
+                    {winners.length ? (
+                      <p className="mt-1 text-xs font-bold text-pine">{`Winners: ${winners.join(", ")}`}</p>
+                    ) : null}
+                  </summary>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-ink/10 pt-2">
+                    <div className={classNames("rounded-xl px-2 py-1.5", teamCardTone(winningFront))}>
+                      <p className="text-[9px] uppercase tracking-[0.14em] text-ink/45">Front</p>
+                      <p className="mt-0.5 text-xs font-bold">{`${team.frontPoints}/${team.frontQuota}`}</p>
+                      <p className="text-[11px] font-semibold text-ink/60">{formatPlusMinus(team.frontPlusMinus)}</p>
+                    </div>
+                    <div className={classNames("rounded-xl px-2 py-1.5", teamCardTone(winningBack))}>
+                      <p className="text-[9px] uppercase tracking-[0.14em] text-ink/45">Back</p>
+                      <p className="mt-0.5 text-xs font-bold">{`${team.backPoints}/${team.backQuota}`}</p>
+                      <p className="text-[11px] font-semibold text-ink/60">{formatPlusMinus(team.backPlusMinus)}</p>
+                    </div>
+                    <div className={classNames("rounded-xl px-2 py-1.5", teamCardTone(winningTotal))}>
+                      <p className="text-[9px] uppercase tracking-[0.14em] text-ink/45">Total</p>
+                      <p className="mt-0.5 text-xs font-bold">{`${team.totalPoints}/${team.totalQuota}`}</p>
+                      <p className="text-[11px] font-semibold text-ink/60">{formatPlusMinus(team.totalPlusMinus)}</p>
+                    </div>
                   </div>
-                </div>
+                </details>
               );
             })}
           </div>
