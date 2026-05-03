@@ -166,6 +166,18 @@ function getRoundsThisYear(player: PlayerItem) {
   }).length;
 }
 
+function getResultTextClass(value: number) {
+  if (value > 0) {
+    return "text-pine";
+  }
+
+  if (value < 0) {
+    return "text-[#991B1B]";
+  }
+
+  return "text-ink/65";
+}
+
 function getAdjustmentBadgeClass(value: number | null) {
   if (value == null) {
     return "bg-ink/10 text-ink/60";
@@ -341,36 +353,44 @@ function PlayerRosterCard({
       {isHistoryOpen ? (
         <div className="border-t border-ink/10 bg-canvas px-3 py-2">
           {player.history.length ? (
-            <div className="overflow-hidden rounded-xl border border-ink/10 bg-white">
-              <div className="grid grid-cols-[2.6rem_2.4rem_2.6rem_2.6rem_2.8rem] items-center gap-x-2 border-b border-ink/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink/45">
-                <span>Date</span>
-                <span className="text-right">Total</span>
-                <span className="text-center">+/-</span>
-                <span className="text-center">Adj</span>
-                <span className="text-right">Quota</span>
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-ink/65">
+                <span>{`Previous quota: ${getStartingQuotaLastRound(player) ?? "-"}`}</span>
+                <span>{`Last adjustment: ${formatMovement(player.history[0]?.quotaMovement ?? null)} (${getShortHistoryDateLabel(player.history[0])})`}</span>
               </div>
-              <div className="divide-y divide-ink/10">
-                {player.history.map((item) => (
-                  <div
-                    key={player.id + "-" + item.roundId}
-                    className="grid grid-cols-[2.6rem_2.4rem_2.6rem_2.6rem_2.8rem] items-center gap-x-2 px-2 py-1 text-xs text-ink/75"
-                  >
-                    <span className="font-semibold text-ink/70">{getShortHistoryDateLabel(item)}</span>
-                    <span className="text-right font-semibold text-ink">{item.totalPoints}</span>
-                    <span className="text-center font-semibold text-ink/70">{formatQuotaResult(item.plusMinus)}</span>
-                    <span
-                      className={classNames(
-                        "inline-flex min-w-8 justify-self-center items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none",
-                        getAdjustmentBadgeClass(item.quotaMovement)
-                      )}
+              <div className="overflow-hidden border-y border-ink/10 bg-white">
+                <div className="grid grid-cols-[2.4rem_2.3rem_2.1rem_2.4rem_2.4rem_2.3rem] items-center gap-x-1.5 border-b border-ink/10 px-1.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink/45">
+                  <span>Date</span>
+                  <span className="text-right">Start</span>
+                  <span className="text-right">Pts</span>
+                  <span className="text-center">Res</span>
+                  <span className="text-center">Adj</span>
+                  <span className="text-right">New</span>
+                </div>
+                <div className="divide-y divide-ink/10">
+                  {player.history.map((item) => (
+                    <div
+                      key={player.id + "-" + item.roundId}
+                      className="grid grid-cols-[2.4rem_2.3rem_2.1rem_2.4rem_2.4rem_2.3rem] items-center gap-x-1.5 px-1.5 py-0.5 text-[11px] text-ink/75"
                     >
-                      {formatMovement(item.quotaMovement)}
-                    </span>
-                    <span className="justify-self-end rounded-full border border-[#E5E7EB] bg-[#F3F4F6] px-2 py-0.5 text-[11px] font-bold leading-none text-[#111827]">
-                      {item.nextQuota}
-                    </span>
-                  </div>
-                ))}
+                      <span className="font-semibold text-ink/70">{getShortHistoryDateLabel(item)}</span>
+                      <span className="text-right font-semibold text-ink/70">{item.startQuota}</span>
+                      <span className="text-right font-semibold text-ink">{item.totalPoints}</span>
+                      <span className={classNames("text-center font-semibold", getResultTextClass(item.plusMinus))}>
+                        {formatQuotaResult(item.plusMinus)}
+                      </span>
+                      <span
+                        className={classNames(
+                          "inline-flex min-w-7 justify-self-center items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                          getAdjustmentBadgeClass(item.quotaMovement)
+                        )}
+                      >
+                        {formatMovement(item.quotaMovement)}
+                      </span>
+                      <span className="text-right font-bold text-ink">{item.nextQuota}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
