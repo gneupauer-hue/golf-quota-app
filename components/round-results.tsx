@@ -114,6 +114,8 @@ type CollapsibleSectionProps = {
   title: string;
   subtitle?: string;
   badge?: string;
+  defaultOpen?: boolean;
+  featured?: boolean;
   children: React.ReactNode;
 };
 
@@ -131,6 +133,21 @@ function teamCardTone(isWinner: boolean) {
 
 function formatQuotaResult(value: number) {
   return value === 0 ? "Even" : formatPlusMinus(value);
+}
+
+function formatOrdinal(value: number) {
+  const mod100 = value % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+  switch (value % 10) {
+    case 1:
+      return `${value}st`;
+    case 2:
+      return `${value}nd`;
+    case 3:
+      return `${value}rd`;
+    default:
+      return `${value}th`;
+  }
 }
 
 function buildIndyRankings<T extends { playerId: string; playerName: string; startQuota: number; totalPoints: number; plusMinus: number }>(rows: T[]) {
@@ -173,37 +190,38 @@ function ResultStatCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-[20px] border border-ink/10 bg-canvas px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">{title}</p>
-      <p className="mt-1.5 text-xl font-bold tracking-tight text-ink">{value}</p>
-      {detail ? <p className="mt-1.5 text-sm text-ink/60">{detail}</p> : null}
+    <div className="rounded-[18px] border border-ink/10 bg-white px-4 py-3 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink/45">{title}</p>
+      <p className="mt-1.5 text-2xl font-extrabold tracking-tight text-pine">{value}</p>
+      {detail ? <p className="mt-1.5 text-sm font-medium text-ink/65">{detail}</p> : null}
     </div>
   );
 }
 
-function CollapsibleSection({ title, subtitle, badge, children }: CollapsibleSectionProps) {
-  const [open, setOpen] = useState(false);
+function CollapsibleSection({ title, subtitle, badge, defaultOpen = false, featured = false, children }: CollapsibleSectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <SectionCard className="overflow-hidden px-0 py-0">
+    <SectionCard className={classNames("overflow-hidden px-0 py-0 shadow-sm", featured ? "border border-[#1B6B3A]/25 bg-[#F7FBF4]" : "border border-ink/10 bg-white")}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left"
       >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-ink/50">{title}</p>
+            <p className={classNames("font-extrabold uppercase tracking-[0.12em]", featured ? "text-xl text-[#123D2A]" : "text-lg text-[#1A263B]")}>{title}</p>
             {badge ? (
-              <span className="rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold text-ink/70">
+              <span className={classNames("rounded-full px-3 py-1 text-xs font-bold", featured ? "bg-[#1B6B3A] text-white" : "bg-canvas text-ink/70")}>
                 {badge}
               </span>
             ) : null}
           </div>
-          {subtitle ? <p className="mt-1 text-sm text-ink/65">{subtitle}</p> : null}
+          <div className={classNames("mt-2 h-1 w-16 rounded-full", featured ? "bg-[#1B6B3A]" : "bg-[#1A263B]/25")} />
+          {subtitle ? <p className="mt-2 text-sm font-medium text-ink/65">{subtitle}</p> : null}
         </div>
-        <span className="shrink-0 pt-0.5 text-xs font-semibold text-ink/55">
-          {open ? "Tap to collapse" : "Click to expand"}
+        <span className="shrink-0 rounded-full bg-canvas px-3 py-1.5 text-xs font-bold text-ink/60">
+          {open ? "Collapse" : "Expand"}
         </span>
       </button>
       <div
@@ -213,7 +231,7 @@ function CollapsibleSection({ title, subtitle, badge, children }: CollapsibleSec
         )}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-ink/10 px-4 py-3">{children}</div>
+          <div className="border-t border-ink/10 px-4 py-4">{children}</div>
         </div>
       </div>
     </SectionCard>
@@ -266,7 +284,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
   const goodSkins = data.money.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
 
   return (
-    <div className="space-y-3 pb-8">
+    <div className="space-y-4 pb-8">
       <PageTitle title="Results" subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`} />
       <Link
         href="/past-games"
@@ -275,13 +293,73 @@ export function RoundResults({ data }: { data: ResultsData }) {
         ← See All Results
       </Link>
 
+
+
+      <CollapsibleSection
+        title="Payout Summary"
+        subtitle="Paid players and winning categories."
+        badge={formatCurrency(payoutAudit.overallPaidOut)}
+        defaultOpen
+        featured
+      >
+        {payoutSummary.players.length ? (
+          <div className="space-y-3">
+            {payoutSummary.players.map((player) => {
+              const categories = [
+                { label: "Front", value: player.front },
+                { label: "Back", value: player.back },
+                { label: "Total", value: player.total },
+                { label: "Indy", value: player.indy },
+                { label: "Skins", value: player.skins }
+              ].filter((category) => category.value > 0);
+
+              return (
+                <div key={player.playerId} className="rounded-[24px] border border-[#1B6B3A]/20 bg-white px-4 py-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-extrabold text-ink">{player.playerName}</p>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
+                        Paid Player
+                      </p>
+                    </div>
+                    <p className="text-3xl font-extrabold tracking-tight text-[#1B6B3A]">{formatCurrency(player.totalWon)}</p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {categories.map((category) => (
+                      <span
+                        key={`${player.playerId}-${category.label}`}
+                        className="rounded-full bg-[#EAF6EC] px-3 py-1.5 text-xs font-bold text-[#123D2A]"
+                      >
+                        {`${category.label}: ${formatCurrency(category.value)}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-ink/65">No payouts were earned in this round.</p>
+        )}
+
+        {payoutSummary.skinsLeftover > 0 ? (
+          <div className="mt-2 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Leftover</p>
+            <p className="mt-1 text-base font-semibold text-ink">
+              {`${formatCurrency(payoutSummary.skinsLeftover)} discretionary / possible bartender tip`}
+            </p>
+          </div>
+        ) : null}
+      </CollapsibleSection>
+
       {!isIndividualQuotaSkins ? (
       <CollapsibleSection
         title="Team Results"
         subtitle="Final front, back, and total team performance."
+        defaultOpen
       >
         {data.teamStandings.length ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {data.teamStandings.map((team) => {
               const winningFront = data.leaders.frontTeam?.team === team.team;
               const winningBack = data.leaders.backTeam?.team === team.team;
@@ -291,17 +369,17 @@ export function RoundResults({ data }: { data: ResultsData }) {
                 <div
                   key={team.team}
                   className={classNames(
-                    "rounded-[22px] border px-4 py-4",
+                    "rounded-[24px] border px-4 py-4 shadow-sm",
                     winningTotal ? "border-[#5A9764] bg-[#E2F4E6]" : "border-ink/10 bg-canvas"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-lg font-bold text-ink">{`Team ${team.team}`}</p>
-                      <p className="mt-1 text-sm text-ink/60">{team.players.join(", ")}</p>
+                      <p className="text-xl font-extrabold text-ink">{`Team ${team.team}`}</p>
+                      <p className="mt-1 text-sm font-semibold text-ink/70">{team.players.join(", ")}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold tracking-tight text-pine">
+                      <p className="text-3xl font-extrabold tracking-tight text-pine">
                         {formatPlusMinus(team.totalPlusMinus)}
                       </p>
                       <div className="mt-2 flex flex-wrap justify-end gap-1.5">
@@ -357,6 +435,74 @@ export function RoundResults({ data }: { data: ResultsData }) {
       </CollapsibleSection>
       ) : null}
 
+      <CollapsibleSection title="Individual Quota Standings" subtitle="Ranked final standings versus quota." badge={`${indyRankings.length} players`} defaultOpen>
+        {indyRankings.length ? (
+          <div className="space-y-2">
+            {indyRankings.map((player) => {
+              const isIndyWinner = indyWinnerIds.has(player.playerId);
+              const indyPayout = indyPayoutsByPlayerId.get(player.playerId) ?? 0;
+
+              return (
+                <div
+                  key={player.playerId}
+                  className={classNames(
+                    "rounded-[22px] border px-4 py-3",
+                    isIndyWinner ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="flex h-10 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1A263B] text-sm font-extrabold text-white">
+                        {formatOrdinal(player.rank)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-extrabold text-ink">{player.playerName}</p>
+                        <p className="mt-1 text-sm font-semibold text-ink/65">{`${player.totalPoints} pts - ${formatQuotaResult(player.plusMinus)}`}</p>
+                      </div>
+                    </div>
+                    {indyPayout > 0 ? (
+                      <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-pine shadow-sm">
+                        {formatCurrency(indyPayout)}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-ink/65">No Indy results.</p>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Good Skins"
+        subtitle="Awarded winners only after tie and carryover resolution."
+        defaultOpen
+      >
+        {goodSkins.length ? (
+          <div className="space-y-2">
+            {goodSkins.map((hole) => (
+              <div
+                key={hole.holeNumber}
+                className="flex items-center justify-between gap-3 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5 shadow-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-base font-extrabold text-ink">{hole.winnerName}</p>
+                  <p className="mt-1 text-sm font-semibold text-ink/60">Skin awarded</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="rounded-full bg-[#1A263B] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">{`Hole ${hole.holeNumber}`}</span>
+                  <span className="rounded-full bg-[#EAF6EC] px-3 py-1.5 text-xs font-extrabold text-pine">Skin</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink/65">No good skins awarded.</p>
+        )}
+      </CollapsibleSection>
+
       <CollapsibleSection
         title="Pot Summary"
         subtitle="Round pots and paid-player summary."
@@ -392,61 +538,9 @@ export function RoundResults({ data }: { data: ResultsData }) {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection
-        title="Individual Quota Cashers"
-        subtitle="Only players who cashed in the field payout."
-        badge={`${indyCashers.length} paid`}
-      >
-        {indyCashers.length ? (
-          <div className="space-y-2">
-            {indyCashers.map((player) => (
-              <div
-                key={player.playerId}
-                className="flex items-center justify-between rounded-[22px] border border-ink/10 bg-canvas px-4 py-4"
-              >
-                <div>
-                  <p className="text-lg font-bold text-ink">{player.playerName}</p>
-                  <p className="mt-1 text-sm text-ink/60">
-                    {`Place ${player.placeLabel}`}
-                    {player.tied ? " - Tie split" : ""}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-pine">{formatCurrency(player.payout)}</p>
-                  <p className="mt-1 text-xs font-semibold text-ink/55">
-                    {formatPlusMinus(player.plusMinus)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-ink/65">No Indy cashers.</p>
-        )}
-      </CollapsibleSection>
 
-      <CollapsibleSection
-        title="Good Skins"
-        subtitle="Awarded winners only after tie and carryover resolution."
-      >
-        {goodSkins.length ? (
-          <div className="space-y-2">
-            {goodSkins.map((hole) => (
-              <div
-                key={hole.holeNumber}
-                className="flex items-center justify-between gap-3 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5"
-              >
-                <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-ink/65">
-                  {`Hole ${hole.holeNumber}`}
-                </span>
-                <p className="text-base font-semibold text-ink">{hole.winnerName}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-ink/65">No good skins awarded.</p>
-        )}
-      </CollapsibleSection>
+
+
 
       <CollapsibleSection
         title="Skins Pot"
@@ -461,115 +555,9 @@ export function RoundResults({ data }: { data: ResultsData }) {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Individual Quota Standings" subtitle="Final standings versus quota.">
-        {indyRankings.length ? (
-          <div className="space-y-2">
-            {indyRankings.map((player) => {
-              const isIndyWinner = indyWinnerIds.has(player.playerId);
-              const indyPayout = indyPayoutsByPlayerId.get(player.playerId) ?? 0;
 
-              return (
-                <div
-                  key={player.playerId}
-                  className={classNames(
-                    "rounded-[22px] border px-4 py-3",
-                    isIndyWinner ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <span className="w-6 shrink-0 pt-0.5 text-sm font-semibold text-ink/55">
-                        {`${player.rank}.`}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-ink">{player.playerName}</p>
-                      </div>
-                    </div>
-                    {indyPayout > 0 ? (
-                      <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-pine shadow-sm">
-                        {formatCurrency(indyPayout)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                    <div className="rounded-2xl bg-white px-3 py-2.5">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Starting quota</p>
-                      <p className="mt-1 font-semibold text-ink">{player.startQuota}</p>
-                    </div>
-                    <div className="rounded-2xl bg-white px-3 py-2.5">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points scored</p>
-                      <p className="mt-1 font-semibold text-ink">{player.totalPoints}</p>
-                    </div>
-                    <div className="rounded-2xl bg-white px-3 py-2.5">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Result</p>
-                      <p className={classNames("mt-1 font-semibold", isIndyWinner ? "text-pine" : "text-ink")}>
-                        {formatQuotaResult(player.plusMinus)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-ink/65">No Indy results.</p>
-        )}
-      </CollapsibleSection>
 
-      <CollapsibleSection
-        title="Payout Summary"
-        subtitle="Only paid players and winning categories."
-        badge={formatCurrency(payoutAudit.overallPaidOut)}
-      >
-        {payoutSummary.players.length ? (
-          <div className="space-y-2">
-            {payoutSummary.players.map((player) => {
-              const categories = [
-                { label: "Front", value: player.front },
-                { label: "Back", value: player.back },
-                { label: "Total", value: player.total },
-                { label: "Indy", value: player.indy },
-                { label: "Skins", value: player.skins }
-              ].filter((category) => category.value > 0);
 
-              return (
-                <div key={player.playerId} className="rounded-[24px] border border-ink/10 bg-canvas px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-bold text-ink">{player.playerName}</p>
-                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
-                        Paid Player
-                      </p>
-                    </div>
-                    <p className="text-2xl font-bold text-pine">{formatCurrency(player.totalWon)}</p>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {categories.map((category) => (
-                      <span
-                        key={`${player.playerId}-${category.label}`}
-                        className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-sm"
-                      >
-                        {`${category.label}: ${formatCurrency(category.value)}`}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-ink/65">No payouts were earned in this round.</p>
-        )}
-
-        {payoutSummary.skinsLeftover > 0 ? (
-          <div className="mt-2 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Leftover</p>
-            <p className="mt-1 text-base font-semibold text-ink">
-              {`${formatCurrency(payoutSummary.skinsLeftover)} discretionary / possible bartender tip`}
-            </p>
-          </div>
-        ) : null}
-      </CollapsibleSection>
 
       <CollapsibleSection
         title="Pot Check"
