@@ -193,10 +193,7 @@ export function QuickEntryRoundView({
   const visibleRowIds = useMemo(() => visibleRows.map((row) => row.playerId), [visibleRows]);
   const completedRows = visibleRows.filter((row) => isPlayerComplete(row));
   const incompleteRows = visibleRows.filter((row) => !isPlayerComplete(row));
-  const activeRow = selectedGroup
-    ? visibleRows.find((row) => row.playerId === activePlayerId) ?? incompleteRows[0] ?? null
-    : null;
-  const activePlayerNumber = activeRow ? visibleRowIds.indexOf(activeRow.playerId) + 1 : visibleRows.length;
+
   const playerConfirmRow = summaryRows.find((row) => row.playerId === playerConfirmId) ?? null;
   const allPlayersComplete = summaryRows.length > 0 && summaryRows.every((row) => isPlayerComplete(row));
   const totalCompletedCount = summaryRows.filter((row) => isPlayerComplete(row)).length;
@@ -296,14 +293,15 @@ export function QuickEntryRoundView({
     onBackNineChange(playerId, "0");
   }
 
-  function handleSavePlayerScore() {
-    if (!activeRow || isArchiving) return;
+  function handleSavePlayerScore(row: SummaryRow) {
+    if (isArchiving) return;
 
-    if (isIndividualQuotaSkins ? activeRow.quickFrontNine == null : activeRow.quickFrontNine == null || activeRow.quickBackNine == null) {
+    if (isIndividualQuotaSkins ? row.quickFrontNine == null : row.quickFrontNine == null || row.quickBackNine == null) {
       return;
     }
 
-    setPlayerConfirmId(activeRow.playerId);
+    setActivePlayerId(row.playerId);
+    setPlayerConfirmId(row.playerId);
   }
 
   function confirmPlayerScore() {
@@ -349,7 +347,7 @@ export function QuickEntryRoundView({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Scorecard Entry</p>
-              <h3 className="mt-1 text-lg font-semibold text-ink">Enter one player at a time</h3>
+              <h3 className="mt-1 text-lg font-semibold text-ink">Enter the group score sheet</h3>
               <p className="mt-1 text-sm text-ink/70">
                 {selectedGroup ? `Completed ${completedRows.length} of ${visibleRows.length} in ${selectedGroup.label}` : `Completed ${totalCompletedCount} of ${rows.length}`}
               </p>
@@ -360,7 +358,6 @@ export function QuickEntryRoundView({
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs font-medium text-ink/70">
-            {activeRow ? <span>Player {activePlayerNumber} of {visibleRows.length}</span> : null}
             {saveState.message ? (
               <span className={classNames("rounded-full px-3 py-1.5", getStatusClasses(saveState.tone))}>
                 {saveState.message}
@@ -410,157 +407,165 @@ export function QuickEntryRoundView({
               <p className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink/60">No groups are available for score entry.</p>
             )}
           </SectionCard>
-        ) : activeRow ? (
-          <SectionCard className="space-y-4 p-4">
-            <button type="button" className="w-fit rounded-full bg-canvas px-3 py-2 text-xs font-semibold text-ink" onClick={() => setSelectedGroupKey(null)}>
-              Back to groups
-            </button>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="text-xl font-semibold text-ink">{activeRow.playerName}</h3>
-                <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/60">
-                  <span className="rounded-full bg-canvas px-2.5 py-1">Quota {activeRow.startQuota}</span>
-                  {activeRow.team ? <span className="rounded-full bg-canvas px-2.5 py-1">Team {activeRow.team}</span> : null}
-                </div>
-              </div>
-              <div className="rounded-[20px] bg-canvas px-3 py-2.5 text-right">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Total</p>
-                <p className="mt-1 text-lg font-semibold text-ink">{activeRow.totalPoints}</p>
-              </div>
+        ) : selectedGroup ? (
+          <SectionCard className="space-y-3 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <button type="button" className="w-fit rounded-full bg-canvas px-3 py-2 text-xs font-semibold text-ink" onClick={() => setSelectedGroupKey(null)}>
+                Back to groups
+              </button>
+              <span className="text-xs font-semibold text-ink/60">{selectedGroup.label}</span>
             </div>
 
-            {isIndividualQuotaSkins ? (
-              <label className="space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Total quota points</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="h-14 w-full rounded-2xl border border-sand/70 bg-white px-3 text-lg text-ink outline-none transition focus:border-pine/50"
-                  value={activeRow.quickFrontNine ?? ""}
-                  onChange={(event) => handleTotalPointsChange(activeRow.playerId, event.target.value)}
-                  placeholder="0"
-                />
-              </label>
-            ) : (
-              <div className="grid grid-cols-2 gap-2.5">
-                <label className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Front 9</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className="h-14 w-full rounded-2xl border border-sand/70 bg-white px-3 text-lg text-ink outline-none transition focus:border-pine/50"
-                    value={activeRow.quickFrontNine ?? ""}
-                    onChange={(event) => onFrontNineChange(activeRow.playerId, event.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Back 9</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className="h-14 w-full rounded-2xl border border-sand/70 bg-white px-3 text-lg text-ink outline-none transition focus:border-pine/50"
-                    value={activeRow.quickBackNine ?? ""}
-                    onChange={(event) => onBackNineChange(activeRow.playerId, event.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-              </div>
-            )}
+            <div className="space-y-2">
+              {visibleRows.map((row) => {
+                const completed = isPlayerComplete(row);
+                const missingScore = isIndividualQuotaSkins ? row.quickFrontNine == null : row.quickFrontNine == null || row.quickBackNine == null;
+                const skinAnswer = getSkinAnswer(row);
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-2xl bg-white px-3 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Quota result</p>
-                <p className="mt-2 text-base font-semibold text-ink">{formatQuotaResult(activeRow.plusMinus)}</p>
-              </div>
-              <div className="rounded-2xl bg-white px-3 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Next quota</p>
-                <p className={classNames("mt-2 inline-flex rounded-full px-2.5 py-1 text-sm font-semibold", getChangeBadgeClasses(activeRow.nextQuota - activeRow.startQuota))}>
-                  {activeRow.nextQuota}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-[22px] bg-canvas/70 px-3.5 py-3.5">
-              <p className="text-sm font-semibold text-ink">Did this player have any skins?</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  className={classNames("min-h-12 rounded-2xl border px-4 text-sm font-semibold", getSkinAnswer(activeRow) === false ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-white text-ink")}
-                  onClick={() => setSkinAnswer(activeRow, false)}
-                >
-                  No
-                </button>
-                <button
-                  type="button"
-                  className={classNames("min-h-12 rounded-2xl border px-4 text-sm font-semibold", getSkinAnswer(activeRow) === true ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-white text-ink")}
-                  onClick={() => setSkinAnswer(activeRow, true)}
-                >
-                  Yes
-                </button>
-              </div>
-
-              {getSkinAnswer(activeRow) === true ? (
-                <div className="space-y-3">
-                  {activeRow.goodSkinEntries.length ? (
-                    <div className="space-y-2">
-                      {activeRow.goodSkinEntries.map((entry) => (
-                        <div key={`${activeRow.playerId}-skin-${entry.holeNumber}`} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2.5 text-sm">
-                          <span className="font-semibold text-ink">Hole {entry.holeNumber} - {goodSkinTypeLabels[entry.type]}</span>
-                          <button type="button" className="rounded-full bg-canvas px-3 py-1 text-xs font-semibold text-ink" onClick={() => removeSkinEntry(activeRow, entry.holeNumber)}>
-                            Remove
-                          </button>
+                return (
+                  <div
+                    key={`entry-${row.playerId}`}
+                    className={classNames(
+                      "rounded-[18px] border px-3 py-2.5",
+                      completed ? "border-[#5A9764]/25 bg-[#EAF6EC]" : "border-sand/70 bg-white"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-extrabold text-ink">{row.playerName}</p>
+                        <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink/55">
+                          <span className="rounded-full bg-canvas px-2 py-0.5">Q{row.startQuota}</span>
+                          {row.team ? <span className="rounded-full bg-canvas px-2 py-0.5">Team {row.team}</span> : null}
+                          {completed ? <span className="rounded-full bg-[#1B6B3A] px-2 py-0.5 text-white">Done</span> : null}
                         </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="grid grid-cols-6 gap-2">
-                    {holeNumbers.map((holeNumber) => {
-                      const selected = activeRow.goodSkinEntries.some((entry) => entry.holeNumber === holeNumber);
-                      const pending = pendingSkinHoleByPlayerId[activeRow.playerId] === holeNumber;
-                      return (
-                        <button
-                          key={`${activeRow.playerId}-${holeNumber}`}
-                          type="button"
-                          className={classNames("min-h-11 rounded-2xl border text-sm font-semibold transition", getSkinHoleClasses(selected, pending))}
-                          onClick={() => selectSkinHole(activeRow, holeNumber)}
-                        >
-                          {holeNumber}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {pendingSkinHoleByPlayerId[activeRow.playerId] ? (
-                    <div className="space-y-2 rounded-2xl bg-white px-3 py-3">
-                      <p className="text-sm font-semibold text-ink">What was it?</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {goodSkinTypes.map((type) => (
-                          <button
-                            key={`${activeRow.playerId}-${type}`}
-                            type="button"
-                            className="min-h-11 rounded-2xl bg-canvas px-2 text-xs font-semibold text-ink"
-                            onClick={() => saveSkinEntry(activeRow, type)}
-                          >
-                            {goodSkinTypeLabels[type]}
-                          </button>
-                        ))}
+                      </div>
+                      <div className="shrink-0 text-right text-xs font-semibold text-ink/65">
+                        <p>{row.totalPoints} pts</p>
+                        {row.quickFrontNine != null || row.quickBackNine != null ? <p>{formatQuotaResult(row.plusMinus)}</p> : null}
                       </div>
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
 
-            <button
-              type="button"
-              className="club-btn-primary min-h-14 w-full text-base disabled:opacity-60"
-              disabled={isArchiving || (isIndividualQuotaSkins ? activeRow.quickFrontNine == null : activeRow.quickFrontNine == null || activeRow.quickBackNine == null)}
-              onClick={handleSavePlayerScore}
-            >
-              Save Player Score
-            </button>
+                    {isIndividualQuotaSkins ? (
+                      <label className="mt-2 grid grid-cols-[1fr_5rem] items-center gap-2">
+                        <span className="text-xs font-semibold text-ink/60">Total quota points</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          disabled={completed}
+                          className="h-11 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
+                          value={row.quickFrontNine ?? ""}
+                          onChange={(event) => handleTotalPointsChange(row.playerId, event.target.value)}
+                          placeholder="0"
+                        />
+                      </label>
+                    ) : (
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <label className="grid grid-cols-[3rem_1fr] items-center gap-2">
+                          <span className="text-xs font-semibold text-ink/60">Front</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            disabled={completed}
+                            className="h-11 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
+                            value={row.quickFrontNine ?? ""}
+                            onChange={(event) => onFrontNineChange(row.playerId, event.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label className="grid grid-cols-[2.7rem_1fr] items-center gap-2">
+                          <span className="text-xs font-semibold text-ink/60">Back</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            disabled={completed}
+                            className="h-11 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
+                            value={row.quickBackNine ?? ""}
+                            onChange={(event) => onBackNineChange(row.playerId, event.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-center gap-2">
+                      <span className="text-xs font-semibold text-ink/65">Skins?</span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          disabled={completed}
+                          className={classNames("min-h-9 rounded-xl border px-3 text-xs font-semibold disabled:opacity-60", skinAnswer === false ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-canvas text-ink")}
+                          onClick={() => setSkinAnswer(row, false)}
+                        >
+                          No
+                        </button>
+                        <button
+                          type="button"
+                          disabled={completed}
+                          className={classNames("min-h-9 rounded-xl border px-3 text-xs font-semibold disabled:opacity-60", skinAnswer === true ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-canvas text-ink")}
+                          onClick={() => setSkinAnswer(row, true)}
+                        >
+                          Yes
+                        </button>
+                      </div>
+                      {completed ? (
+                        <button type="button" className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink" onClick={() => editCompletedPlayer(row.playerId)}>
+                          Edit
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="rounded-full bg-pine px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                          disabled={isArchiving || missingScore}
+                          onClick={() => handleSavePlayerScore(row)}
+                        >
+                          Save
+                        </button>
+                      )}
+                    </div>
+
+                    {row.goodSkinEntries.length ? (
+                      <p className="mt-2 truncate text-xs font-semibold text-ink/65">{formatGoodSkins(row.goodSkinEntries)}</p>
+                    ) : null}
+
+                    {skinAnswer === true && !completed ? (
+                      <div className="mt-2 space-y-2 rounded-2xl bg-canvas/70 px-2 py-2">
+                        <div className="grid grid-cols-9 gap-1.5">
+                          {holeNumbers.map((holeNumber) => {
+                            const selected = row.goodSkinEntries.some((entry) => entry.holeNumber === holeNumber);
+                            const pending = pendingSkinHoleByPlayerId[row.playerId] === holeNumber;
+                            return (
+                              <button
+                                key={`${row.playerId}-${holeNumber}`}
+                                type="button"
+                                className={classNames("min-h-9 rounded-xl border text-xs font-semibold transition", getSkinHoleClasses(selected, pending))}
+                                onClick={() => selectSkinHole(row, holeNumber)}
+                              >
+                                {holeNumber}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {pendingSkinHoleByPlayerId[row.playerId] ? (
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {goodSkinTypes.map((type) => (
+                              <button
+                                key={`${row.playerId}-${type}`}
+                                type="button"
+                                className="min-h-10 rounded-xl bg-white px-2 text-[11px] font-semibold text-ink"
+                                onClick={() => saveSkinEntry(row, type)}
+                              >
+                                {goodSkinTypeLabels[type]}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
           </SectionCard>
         ) : (
           <SectionCard className="space-y-3 border border-pine/20 bg-[#E2F4E6]">
@@ -571,41 +576,6 @@ export function QuickEntryRoundView({
             <p className="text-sm text-ink/70">Review the completed list, then submit all scores.</p>
           </SectionCard>
         )}
-
-        {selectedGroup ? (
-          <SectionCard className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold text-ink">Completed Players</h3>
-            <span className="text-sm font-semibold text-ink/60">{completedRows.length}/{visibleRows.length}</span>
-            </div>
-            {completedRows.length ? (
-            <div className="space-y-2">
-              {completedRows.map((row) => (
-                <div key={`completed-${row.playerId}`} className="rounded-2xl bg-white px-3 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-ink">{row.playerName}</p>
-                      <p className="mt-1 text-xs text-ink/60">
-                        {row.totalPoints} pts | {formatQuotaResult(row.plusMinus)} | {formatGoodSkins(row.goodSkinEntries)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="min-h-9 rounded-full bg-canvas px-3 text-xs font-semibold text-ink"
-                      onClick={() => editCompletedPlayer(row.playerId)}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            ) : (
-              <p className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink/60">No completed players yet.</p>
-            )}
-          </SectionCard>
-        ) : null}
-
         {allPlayersComplete ? (
           <button
             type="button"
