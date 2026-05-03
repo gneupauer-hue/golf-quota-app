@@ -3133,9 +3133,18 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                       <div className="grid gap-2">
                         {setupTeams.map((team) => (
                           <div key={`review-${team.team}`} className="rounded-2xl border border-ink/10 bg-canvas px-3 py-2.5">
-                            <p className="truncate text-[15px] font-semibold leading-snug text-ink">
-                              {`${getSetupTeamLabel(team.team)} (${team.totalQuota}): ${team.players.map((player) => `${player.playerName} ${player.quota}`).join(" | ")}`}
-                            </p>
+                            <div className="text-[15px] leading-snug text-ink">
+                              <p className="font-semibold">{`${getSetupTeamLabel(team.team)} \u2014 Total: ${team.totalQuota}`}</p>
+                              <div className="mt-1 space-y-1 text-sm font-semibold text-ink/80">
+                                {Array.from({ length: Math.ceil(team.players.length / 2) }, (_, rowIndex) =>
+                                  team.players.slice(rowIndex * 2, rowIndex * 2 + 2)
+                                ).map((pair, rowIndex) => (
+                                  <p key={`review-${team.team}-pair-${rowIndex}`} className="break-words">
+                                    {pair.map((player) => `${player.playerName} (${player.quota})`).join(" \u2022 ")}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
                             {isSetupTeamEditMode ? (
                               <div className="mt-2 space-y-2">
                                 {team.players.map((player) => (
