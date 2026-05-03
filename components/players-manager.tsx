@@ -34,24 +34,6 @@ type BaselineQuotaRow = {
   baselineQuota: number;
 };
 
-type CurrentQuotaAuditIssue = {
-  roundLabel: string;
-  fieldLabel: string;
-  expected: string;
-  actual: string;
-};
-
-type CurrentQuotaRow = {
-  id: string;
-  name: string;
-  quota: number;
-  baselineQuota: number;
-  persistedCurrentQuota: number;
-  mismatchCount: number;
-  auditIssues: CurrentQuotaAuditIssue[];
-  history: PlayerHistoryItem[];
-  lastRoundPlayed: string;
-};
 
 function getLatestQuotaChange(history: PlayerHistoryItem[]) {
   return history[0]?.quotaMovement ?? null;
@@ -350,18 +332,15 @@ function PlayerRosterCard({
 export function PlayersManager({
   initialPlayers,
   initialQuotaAudit,
-  initialBaselineRows,
-  initialCurrentQuotaRows
+  initialBaselineRows
 }: {
   initialPlayers: PlayerItem[];
   initialQuotaAudit: QuotaValidationSummary;
   initialBaselineRows: BaselineQuotaRow[];
-  initialCurrentQuotaRows: CurrentQuotaRow[];
 }) {
   const [players, setPlayers] = useState(initialPlayers);
   const [quotaAudit, setQuotaAudit] = useState(initialQuotaAudit);
   const [baselineRows] = useState(initialBaselineRows);
-  const [currentQuotaRows, setCurrentQuotaRows] = useState(initialCurrentQuotaRows);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
@@ -374,7 +353,6 @@ export function PlayersManager({
   const [pendingUnlockAction, setPendingUnlockAction] = useState<"repair" | null>(null);
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
-  const [openCurrentQuotaPlayerId, setOpenCurrentQuotaPlayerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDormantPlayersOpen, setIsDormantPlayersOpen] = useState(false);
   const [isRepairPending, startRepairTransition] = useTransition();
@@ -408,14 +386,10 @@ export function PlayersManager({
   function applyPlayersResponse(result: {
   players: PlayerItem[];
   quotaAudit: QuotaValidationSummary;
-  currentQuotaRows?: CurrentQuotaRow[];
   message?: string;
 }) {
   setPlayers(result.players);
   setQuotaAudit(result.quotaAudit);
-  if (result.currentQuotaRows) {
-    setCurrentQuotaRows(result.currentQuotaRows);
-  }
   if (result.message) {
     setMessage(result.message);
   }
@@ -475,9 +449,6 @@ export function PlayersManager({
     setOpenHistoryPlayerId((current) => (current === playerId ? null : playerId));
   }
 
-  function toggleCurrentQuotaDetails(playerId: string) {
-    setOpenCurrentQuotaPlayerId((current) => (current === playerId ? null : playerId));
-  }
 
   function closeEditor() {
     setIsEditorOpen(false);
@@ -743,133 +714,6 @@ function handleRepairButtonPress() {
               </div>
             </SectionCard>
           </div>
-          <ReferenceSection
-            title="2026 Current Quotas"
-            subtitle="Read-only quota snapshot from completed 2026 rounds."
-          >
-            <div className="space-y-2">
-              {currentQuotaRows.map((row) => {
-                const isOpen = openCurrentQuotaPlayerId === row.id;
-                const latestChange = getLatestQuotaChange(row.history);
-                const hasRecentChange = latestChange != null && latestChange !== 0;
-                const latestChangeLabel =
-                  latestChange == null ? "Base" : formatMovement(latestChange);
-                const latestChangeBadgeClass =
-                  latestChange == null
-                    ? "bg-ink/10 text-ink/60"
-                    : latestChange > 0
-                      ? "bg-pine text-white"
-                      : latestChange < 0
-                        ? "bg-danger/85 text-white"
-                        : "bg-ink/10 text-ink/70";
-
-                return (
-                  <div
-                    key={row.id}
-                    className={classNames(
-                      "overflow-hidden rounded-2xl border bg-white",
-                      row.mismatchCount > 0 ? "border-danger/30" : "border-mist",
-                      hasRecentChange ? "shadow-[0_0_0_1px_rgba(28,110,74,0.08)]" : ""
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleCurrentQuotaDetails(row.id)}
-                      className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 px-4 py-3 text-left sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-ink">{row.name}</p>
-                        <div className="mt-1">
-                          <span
-                            className={classNames(
-                              "inline-flex min-w-9 items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none",
-                              latestChangeBadgeClass
-                            )}
-                          >
-                            {latestChangeLabel}
-                          </span>
-                        </div>
-                        {row.mismatchCount > 0 ? (
-                          <p className="mt-1 text-xs font-semibold text-danger">
-                            {"Audit warning: " + row.mismatchCount + " mismatch" + (row.mismatchCount === 1 ? "" : "es")}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span className="justify-self-start rounded-full bg-pine px-3 py-1 text-sm font-bold text-white sm:justify-self-center">
-                        {row.quota}
-                      </span>
-                      <div className="col-span-2 text-right sm:col-span-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Last updated</p>
-                        <p className="mt-1 text-xs text-ink/60">
-                          {row.lastRoundPlayed === "-" ? "Baseline only" : row.lastRoundPlayed}
-                        </p>
-                      </div>
-                    </button>
-
-                    {isOpen ? (
-                      <div className="border-t border-ink/10 bg-canvas px-4 py-3">
-                        <div className="space-y-3">
-                          <div className="rounded-2xl bg-white px-3 py-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">
-                              2026 baseline quota
-                            </p>
-                            <p className="mt-1 text-base font-semibold text-ink">{row.baselineQuota}</p>
-                            {row.mismatchCount > 0 ? (
-                              <p className="mt-2 text-sm text-danger">
-                                {"Persisted current quota " + row.persistedCurrentQuota + ", expected " + row.quota + "."}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          {row.auditIssues.length ? (
-                            <div className="space-y-2 rounded-2xl border border-danger/20 bg-[#FCE5E2] px-3 py-3">
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-danger/80">
-                                Audit mismatches
-                              </p>
-                              {row.auditIssues.map((issue, index) => (
-                                <div key={row.id + "-issue-" + index} className="text-sm text-ink/80">
-                                  <p className="font-semibold text-ink">{issue.roundLabel}</p>
-                                  <p className="mt-1">{issue.fieldLabel}</p>
-                                  <p className="mt-1 text-danger">{"Expected " + issue.expected + ", found " + issue.actual + "."}</p>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-
-                          {row.history.length ? (
-                            <div className="space-y-2">
-                              {row.history.map((item) => (
-                                <div key={row.id + "-quota-history-" + item.roundId} className="rounded-2xl bg-white px-3 py-3 shadow-sm">
-                                  <p className="text-sm font-semibold text-ink">
-                                    {formatDisplayDate(
-                                      getRoundDisplayDate({
-                                        roundName: item.roundName,
-                                        roundDate: item.roundDate,
-                                        completedAt: item.completedAt,
-                                        createdAt: item.createdAt
-                                      })
-                                    )}
-                                  </p>
-                                  <p className="mt-2 text-sm text-ink/80">{"Starting quota: " + item.startQuota}</p>
-                                  <p className="mt-1 text-sm text-ink/80">{"Points: " + item.totalPoints}</p>
-                                  <p className="mt-1 text-sm text-ink/80">{"Result: " + formatQuotaResult(item.plusMinus)}</p>
-                                  <p className="mt-1 text-sm text-ink/80">{"Adjustment: " + formatMovement(item.quotaMovement)}</p>
-                                  <p className="mt-1 text-sm text-ink/80">{"New quota: " + item.nextQuota}</p>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-ink/65">No completed 2026 rounds. Using baseline quota only.</p>
-                          )}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </ReferenceSection>
-
           <SectionCard className="p-4">
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -888,29 +732,11 @@ function handleRepairButtonPress() {
               </button>
             </div>
           </SectionCard>
-
-                    <ReferenceSection
-            title="Admin Tools"
-            subtitle="Hidden repair and maintenance actions."
-          >
-            <div className="space-y-3">
-              <p className="text-sm text-ink/70">Only use this if quotas become inconsistent.</p>
-              <button
-                type="button"
-                disabled={isRepairPending}
-                className="club-btn-primary min-h-12 w-full text-base disabled:opacity-60"
-                onClick={handleRepairButtonPress}
-              >
-                {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
-              </button>
-            </div>
-          </ReferenceSection>
-<ReferenceSection
+          <ReferenceSection
             title="2026 Starting Quotas"
             subtitle="Locked baseline before Apr 19, 2026"
           >
             <div className="space-y-2">
-
               {baselineRows.map((row) => (
                 <div
                   key={row.playerName}
@@ -922,6 +748,17 @@ function handleRepairButtonPress() {
                   </span>
                 </div>
               ))}
+              <div className="space-y-3 border-t border-ink/10 pt-3">
+                <p className="text-sm text-ink/70">Only use this if quotas become inconsistent.</p>
+                <button
+                  type="button"
+                  disabled={isRepairPending}
+                  className="club-btn-primary min-h-12 w-full text-base disabled:opacity-60"
+                  onClick={handleRepairButtonPress}
+                >
+                  {isRepairPending ? "Rebuilding..." : "Rebuild All Quotas From 2026 Baseline"}
+                </button>
+              </div>
             </div>
           </ReferenceSection>
         </>
