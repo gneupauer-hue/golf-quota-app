@@ -319,8 +319,7 @@ function formatGoalProgress(value: number) {
 }
 
 function getSetupTeamLabel(team: TeamCode) {
-  const index = teamOptions.indexOf(team);
-  return `Team ${index >= 0 ? index + 1 : team}`;
+  return `Team ${team}`;
 }
 
 function getGoalProgressTone(value: number) {
@@ -1119,7 +1118,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         const playersText = team.players
           .map((player) => `${player.playerName} (${player.quota})`)
           .join(" + ");
-        lines.push(`${teamCode}: ${playersText} ${arrow} ${team.totalQuota}`);
+        lines.push(`${getSetupTeamLabel(teamCode)}: ${playersText} ${arrow} ${team.totalQuota}`);
       }
       lines.push("");
     }
@@ -3163,7 +3162,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                           )}
                                           onClick={() => assignSetupPlayer(player.playerId, destinationTeam)}
                                         >
-                                          {getSetupTeamLabel(destinationTeam).replace("Team ", "T")}
+                                          {destinationTeam}
                                         </button>
                                       ))}
                                     </div>
@@ -3228,31 +3227,38 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                 {group.teams.map((team) => `Team ${team}`).join(" \u2022 ")}
                               </p>
                               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3">
-                                {rows
-                                  .filter((row) => row.team != null && group.teams.includes(row.team))
-                                  .sort((a, b) => {
-                                    const playerA = playersById.get(a.playerId);
-                                    const playerB = playersById.get(b.playerId);
-                                    const quotaA = playerA ? quotaSnapshot[a.playerId] ?? playerA.quota : 0;
-                                    const quotaB = playerB ? quotaSnapshot[b.playerId] ?? playerB.quota : 0;
-                                    return quotaB - quotaA;
-                                  })
-                                  .map((row, playerIndex) => {
-                                    const player = playersById.get(row.playerId);
-                                    const quota = player ? quotaSnapshot[row.playerId] ?? player.quota : 0;
-                                    return (
-                                      <div
-                                        key={`group-${group.key}-${row.playerId}`}
-                                        className={classNames("min-w-0", playerIndex % 2 === 1 ? "text-right" : "text-left")}
-                                      >
-                                        <p className="truncate text-sm font-semibold text-ink">
-                                          {player?.name ?? "Unknown Player"}
-                                          <span className="ml-1 text-xs font-semibold text-ink/45">{`(${quota})`}</span>
-                                          {row.team ? <span className="ml-1 text-xs font-semibold text-ink/45">{`(${row.team})`}</span> : null}
-                                        </p>
-                                      </div>
-                                    );
-                                  })}
+                                {group.teams.map((teamCode, teamIndex) => {
+                                  const teamRows = rows
+                                    .filter((row) => row.team === teamCode)
+                                    .sort((a, b) => {
+                                      const playerA = playersById.get(a.playerId);
+                                      const playerB = playersById.get(b.playerId);
+                                      const quotaA = playerA ? quotaSnapshot[a.playerId] ?? playerA.quota : 0;
+                                      const quotaB = playerB ? quotaSnapshot[b.playerId] ?? playerB.quota : 0;
+                                      return quotaB - quotaA;
+                                    });
+
+                                  return (
+                                    <div
+                                      key={`group-${group.key}-team-${teamCode}`}
+                                      className={classNames("min-w-0 space-y-1", teamIndex % 2 === 1 ? "text-right" : "text-left")}
+                                    >
+                                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+                                        {getSetupTeamLabel(teamCode)}
+                                      </p>
+                                      {teamRows.map((row) => {
+                                        const player = playersById.get(row.playerId);
+                                        const quota = player ? quotaSnapshot[row.playerId] ?? player.quota : 0;
+                                        return (
+                                          <p key={`group-${group.key}-${row.playerId}`} className="truncate text-sm font-semibold text-ink">
+                                            {player?.name ?? "Unknown Player"}
+                                            <span className="ml-1 text-xs font-semibold text-ink/45">{`(${quota})`}</span>
+                                          </p>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           ))}
