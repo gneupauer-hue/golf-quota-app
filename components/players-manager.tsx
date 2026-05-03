@@ -281,31 +281,26 @@ function PlayerRosterCard({
       <button
         type="button"
         onClick={onToggleHistory}
-        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 px-4 py-3 text-left sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1 px-3 py-2 text-left"
       >
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink">{player.name}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span
-              className={classNames(
-                "inline-flex min-w-9 items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none",
-                latestChangeBadgeClass
-              )}
-            >
-              {latestChangeLabel}
-            </span>
-            <span className="text-xs text-ink/55">
-              {`${getRoundsThisYear(player)} round${getRoundsThisYear(player) === 1 ? "" : "s"} this year`}
-            </span>
+          <p className="truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ink/55">
+            <span>{`${getRoundsThisYear(player)} round${getRoundsThisYear(player) === 1 ? "" : "s"}`}</span>
+            <span>{getLatestRound(player) ? getLastRoundLabel(player) : "Baseline only"}</span>
           </div>
         </div>
-        <span className="justify-self-start rounded-full bg-pine px-3 py-1 text-sm font-bold text-white sm:justify-self-center">
+        <span className="rounded-full bg-pine px-2.5 py-1 text-sm font-bold leading-none text-white">
           {player.quota}
         </span>
-        <div className="col-span-2 text-right sm:col-span-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Last updated</p>
-          <p className="mt-1 text-xs text-ink/60">{getLatestRound(player) ? getLastRoundLabel(player) : "Baseline only"}</p>
-        </div>
+        <span
+          className={classNames(
+            "inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none",
+            latestChangeBadgeClass
+          )}
+        >
+          {latestChangeLabel}
+        </span>
       </button>
 
       {isHistoryOpen ? (
@@ -685,7 +680,7 @@ function handleRepairButtonPress() {
                   </span>
                 </div>
               </div>
-              <div className="space-y-2 px-4 py-3">
+              <div className="space-y-1.5 px-3 py-2">
                 {currentPlayers.length ? (
                   currentPlayers.map((player) => (
                     <PlayerRosterCard
@@ -728,7 +723,7 @@ function handleRepairButtonPress() {
                 )}
               >
                 <div className="overflow-hidden">
-                  <div className="space-y-2 border-t border-ink/10 px-4 py-3">
+                  <div className="space-y-1.5 border-t border-ink/10 px-3 py-2">
                     {dormantPlayers.length ? (
                       dormantPlayers.map((player) => (
                         <PlayerRosterCard
