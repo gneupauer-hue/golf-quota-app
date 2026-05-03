@@ -259,6 +259,17 @@ function QuotaAuditWarning({
   );
 }
 
+function PlayerRosterHeader() {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] items-center gap-x-2 border-b border-ink/10 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+      <span>Player</span>
+      <span className="text-center">Quota</span>
+      <span className="text-center">Adj</span>
+      <span className="text-right">Date</span>
+    </div>
+  );
+}
+
 function PlayerRosterCard({
   player,
   isHistoryOpen,
@@ -285,15 +296,15 @@ function PlayerRosterCard({
       <button
         type="button"
         onClick={onToggleHistory}
-        className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-2 px-3 py-1 text-left"
+        className="grid w-full grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] items-center gap-x-2 px-3 py-1 text-left"
       >
         <p className="min-w-0 truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
-        <span className="rounded-full bg-pine px-2.5 py-1 text-sm font-bold leading-none text-white">
+        <span className="justify-self-center rounded-full bg-pine px-2.5 py-1 text-sm font-bold leading-none text-white">
           {player.quota}
         </span>
         <span
           className={classNames(
-            "inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none",
+            "inline-flex min-w-8 justify-self-center items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none",
             latestChangeBadgeClass
           )}
         >
@@ -670,14 +681,17 @@ function handleRepairButtonPress() {
               </div>
               <div className="space-y-1 px-2 py-1">
                 {currentPlayers.length ? (
-                  currentPlayers.map((player) => (
-                    <PlayerRosterCard
-                      key={player.id}
-                      player={player}
-                      isHistoryOpen={openHistoryPlayerId === player.id}
-                      onToggleHistory={() => toggleHistory(player.id)}
-                    />
-                  ))
+                  <>
+                    <PlayerRosterHeader />
+                    {currentPlayers.map((player) => (
+                      <PlayerRosterCard
+                        key={player.id}
+                        player={player}
+                        isHistoryOpen={openHistoryPlayerId === player.id}
+                        onToggleHistory={() => toggleHistory(player.id)}
+                      />
+                    ))}
+                  </>
                 ) : (
                   <p className="text-sm text-ink/65">
                     {shouldFilterPlayerResults ? "No current players match this search." : "No current players yet for this year."}
@@ -713,14 +727,17 @@ function handleRepairButtonPress() {
                 <div className="overflow-hidden">
                   <div className="space-y-1 border-t border-ink/10 px-2 py-1">
                     {dormantPlayers.length ? (
-                      dormantPlayers.map((player) => (
-                        <PlayerRosterCard
-                          key={player.id}
-                          player={player}
-                          isHistoryOpen={openHistoryPlayerId === player.id}
-                          onToggleHistory={() => toggleHistory(player.id)}
-                        />
-                      ))
+                      <>
+                        <PlayerRosterHeader />
+                        {dormantPlayers.map((player) => (
+                          <PlayerRosterCard
+                            key={player.id}
+                            player={player}
+                            isHistoryOpen={openHistoryPlayerId === player.id}
+                            onToggleHistory={() => toggleHistory(player.id)}
+                          />
+                        ))}
+                      </>
                     ) : (
                       <p className="text-sm text-ink/65">
                         {shouldFilterPlayerResults ? "No dormant players match this search." : "No dormant players."}
