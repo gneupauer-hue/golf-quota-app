@@ -288,7 +288,7 @@ function PlayerRosterCard({
       : latestChange > 0
         ? "bg-pine text-white"
         : latestChange < 0
-          ? "bg-danger/85 text-white"
+          ? "bg-[#FEE2E2] text-[#991B1B]"
           : "bg-ink/10 text-ink/70";
 
   return (
