@@ -120,6 +120,22 @@ function getShortRoundDateLabel(player: PlayerItem) {
   return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
 }
 
+function getShortHistoryDateLabel(round: PlayerHistoryItem) {
+  const displayDate = getRoundDisplayDate({
+    roundName: round.roundName,
+    roundDate: round.roundDate,
+    completedAt: round.completedAt,
+    createdAt: round.createdAt
+  });
+  const parsed = displayDate instanceof Date ? displayDate : new Date(displayDate);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDisplayDate(displayDate);
+  }
+
+  return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+}
+
 function getStartingQuotaLastRound(player: PlayerItem) {
   const latestRound = getLatestRound(player);
   return latestRound ? latestRound.startQuota : null;
@@ -148,6 +164,22 @@ function getRoundsThisYear(player: PlayerItem) {
       displayDate instanceof Date ? displayDate.getTime() : Date.parse(displayDate);
     return !Number.isNaN(parsed) && new Date(parsed).getFullYear() === currentYear;
   }).length;
+}
+
+function getAdjustmentBadgeClass(value: number | null) {
+  if (value == null) {
+    return "bg-ink/10 text-ink/60";
+  }
+
+  if (value > 0) {
+    return "bg-pine text-white";
+  }
+
+  if (value < 0) {
+    return "bg-[#FEE2E2] text-[#991B1B]";
+  }
+
+  return "bg-ink/10 text-ink/70";
 }
 
 function ReferenceSection({
@@ -282,14 +314,7 @@ function PlayerRosterCard({
   const latestChange = getLatestQuotaChange(player.history);
   const latestChangeLabel = latestChange == null ? "Base" : formatMovement(latestChange);
   const lastUpdatedLabel = getShortRoundDateLabel(player);
-  const latestChangeBadgeClass =
-    latestChange == null
-      ? "bg-ink/10 text-ink/60"
-      : latestChange > 0
-        ? "bg-pine text-white"
-        : latestChange < 0
-          ? "bg-[#FEE2E2] text-[#991B1B]"
-          : "bg-ink/10 text-ink/70";
+  const latestChangeBadgeClass = getAdjustmentBadgeClass(latestChange);
 
   return (
     <SectionCard className="overflow-hidden px-0 py-0">
@@ -314,44 +339,43 @@ function PlayerRosterCard({
       </button>
 
       {isHistoryOpen ? (
-        <div className="border-t border-ink/10 bg-canvas px-4 py-3">
-          <div className="space-y-3">
-            <div className="rounded-2xl bg-white px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">
-                Player snapshot
-              </p>
-              <div className="mt-2 grid gap-2 text-sm text-ink/80 sm:grid-cols-2">
-                <p>{`Previous quota: ${getStartingQuotaLastRound(player) ?? "-"}`}</p>
-                <p>{`Last adjustment: ${getLastAdjustmentLabel(player)}`}</p>
+        <div className="border-t border-ink/10 bg-canvas px-3 py-2">
+          {player.history.length ? (
+            <div className="overflow-hidden rounded-xl border border-ink/10 bg-white">
+              <div className="grid grid-cols-[2.6rem_2.4rem_2.6rem_2.6rem_2.8rem] items-center gap-x-2 border-b border-ink/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink/45">
+                <span>Date</span>
+                <span className="text-right">Total</span>
+                <span className="text-center">+/-</span>
+                <span className="text-center">Adj</span>
+                <span className="text-right">Quota</span>
               </div>
-            </div>
-
-            {player.history.length ? (
-              <div className="space-y-2">
+              <div className="divide-y divide-ink/10">
                 {player.history.map((item) => (
-                  <div key={player.id + "-" + item.roundId} className="rounded-2xl bg-white px-3 py-3 shadow-sm">
-                    <p className="text-sm font-semibold text-ink">
-                      {formatDisplayDate(
-                        getRoundDisplayDate({
-                          roundName: item.roundName,
-                          roundDate: item.roundDate,
-                          completedAt: item.completedAt,
-                          createdAt: item.createdAt
-                        })
+                  <div
+                    key={player.id + "-" + item.roundId}
+                    className="grid grid-cols-[2.6rem_2.4rem_2.6rem_2.6rem_2.8rem] items-center gap-x-2 px-2 py-1 text-xs text-ink/75"
+                  >
+                    <span className="font-semibold text-ink/70">{getShortHistoryDateLabel(item)}</span>
+                    <span className="text-right font-semibold text-ink">{item.totalPoints}</span>
+                    <span className="text-center font-semibold text-ink/70">{formatQuotaResult(item.plusMinus)}</span>
+                    <span
+                      className={classNames(
+                        "inline-flex min-w-8 justify-self-center items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none",
+                        getAdjustmentBadgeClass(item.quotaMovement)
                       )}
-                    </p>
-                    <p className="mt-2 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
-                    <p className="mt-1 text-sm text-ink/80">{`Points: ${item.totalPoints}`}</p>
-                    <p className="mt-1 text-sm text-ink/80">{`Result: ${formatQuotaResult(item.plusMinus)}`}</p>
-                    <p className="mt-1 text-sm text-ink/80">{`Adjustment: ${formatMovement(item.quotaMovement)}`}</p>
-                    <p className="mt-1 text-sm text-ink/80">{`New quota: ${item.nextQuota}`}</p>
+                    >
+                      {formatMovement(item.quotaMovement)}
+                    </span>
+                    <span className="justify-self-end rounded-full border border-[#E5E7EB] bg-[#F3F4F6] px-2 py-0.5 text-[11px] font-bold leading-none text-[#111827]">
+                      {item.nextQuota}
+                    </span>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-ink/65">No completed rounds this year. Using baseline quota only.</p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <p className="text-sm text-ink/65">No completed rounds this year. Using baseline quota only.</p>
+          )}
         </div>
       ) : null}
     </SectionCard>
