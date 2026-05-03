@@ -356,7 +356,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
       <CollapsibleSection
         title="Team Results"
         subtitle="Final front, back, and total team performance."
-        defaultOpen
       >
         {data.teamStandings.length ? (
           <div className="space-y-3">
@@ -435,7 +434,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
       </CollapsibleSection>
       ) : null}
 
-      <CollapsibleSection title="Individual Quota Standings" subtitle="Ranked final standings versus quota." badge={`${indyRankings.length} players`} defaultOpen>
+      <CollapsibleSection title="Individual Quota Standings" subtitle="Ranked final standings versus quota." badge={`${indyRankings.length} players`}>
         {indyRankings.length ? (
           <div className="space-y-2">
             {indyRankings.map((player) => {
@@ -478,7 +477,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
       <CollapsibleSection
         title="Good Skins"
         subtitle="Awarded winners only after tie and carryover resolution."
-        defaultOpen
       >
         {goodSkins.length ? (
           <div className="space-y-2">
