@@ -10,6 +10,7 @@ import {
   calculateTeamStandings,
   holeFieldNames,
   parseBirdieHolesInput,
+  parseGoodSkinEntriesInput,
   type RoundMode,
   type ScoringEntryMode,
   type TeamCode
@@ -27,6 +28,15 @@ function normalizeRoundMode(value: string): RoundMode {
 
 function normalizeScoringEntryMode(value: string | null | undefined): ScoringEntryMode {
   return value === "QUICK" ? "QUICK" : "DETAILED";
+}
+
+function parseTypedGoodSkinEntriesForDisplay(value: string | null | undefined) {
+  return parseGoodSkinEntriesInput(
+    (value ?? "")
+      .split(/[,\s]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.includes(":"))
+  );
 }
 
 function mapStoredRoundEntry(entry: any, scoringEntryMode: ScoringEntryMode) {
@@ -50,6 +60,7 @@ function mapStoredRoundEntry(entry: any, scoringEntryMode: ScoringEntryMode) {
     quickFrontNine: entry.quickFrontNine ?? null,
     quickBackNine: entry.quickBackNine ?? null,
     birdieHoles: parseBirdieHolesInput(entry.birdieHolesCsv ?? ""),
+    goodSkinEntries: parseTypedGoodSkinEntriesForDisplay(entry.birdieHolesCsv ?? ""),
     frontQuota: entry.frontQuota,
     backQuota: entry.backQuota,
     frontNine: entry.frontNine,

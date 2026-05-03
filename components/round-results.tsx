@@ -10,6 +10,8 @@ import {
   calculateFinalPayoutSummary,
   formatPayoutAuditStatus,
   formatPlusMinus,
+  goodSkinTypeLabels,
+  type GoodSkinEntry,
   type TeamCode
 } from "@/lib/quota";
 import { classNames, formatDisplayDate, getRoundDisplayDate } from "@/lib/utils";
@@ -32,6 +34,7 @@ type ResultsData = {
     playerName: string;
     team: TeamCode | null;
     holeScores: Array<number | null>;
+    goodSkinEntries: GoodSkinEntry[];
     startQuota: number;
     frontQuota: number;
     backQuota: number;
@@ -103,6 +106,7 @@ type ResultsData = {
         holeNumber: number;
         carryover: boolean;
         skinAwarded: boolean;
+        winnerPlayerId: string | null;
         winnerName: string | null;
       }>;
     };
@@ -133,6 +137,13 @@ function teamCardTone(isWinner: boolean) {
 
 function formatQuotaResult(value: number) {
   return value === 0 ? "Even" : formatPlusMinus(value);
+}
+
+function getGoodSkinTypeClasses(label: string) {
+  if (label === "Hole-in-One") return "bg-[#1B6B3A] text-white";
+  if (label === "Eagle") return "bg-[#1A263B] text-white";
+  if (label === "Birdie") return "bg-[#EAF6EC] text-pine";
+  return "bg-[#EAF6EC] text-pine";
 }
 
 function formatOrdinal(value: number) {
@@ -282,6 +293,12 @@ export function RoundResults({ data }: { data: ResultsData }) {
   );
   const indyWinnerIds = new Set(indyCashers.map((player) => player.playerId));
   const goodSkins = data.money.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
+  const goodSkinTypeByPlayerHole = new Map<string, string>();
+  for (const entry of data.entries) {
+    for (const skinEntry of entry.goodSkinEntries) {
+      goodSkinTypeByPlayerHole.set(`${entry.playerId}:${skinEntry.holeNumber}`, goodSkinTypeLabels[skinEntry.type] ?? "Skin");
+    }
+  }
 
   return (
     <div className="space-y-4 pb-8">
@@ -480,21 +497,27 @@ export function RoundResults({ data }: { data: ResultsData }) {
       >
         {goodSkins.length ? (
           <div className="space-y-2">
-            {goodSkins.map((hole) => (
-              <div
-                key={hole.holeNumber}
-                className="flex items-center justify-between gap-3 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5 shadow-sm"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-base font-extrabold text-ink">{hole.winnerName}</p>
-                  <p className="mt-1 text-sm font-semibold text-ink/60">Skin awarded</p>
+            {goodSkins.map((hole) => {
+              const typeLabel = hole.winnerPlayerId
+                ? goodSkinTypeByPlayerHole.get(`${hole.winnerPlayerId}:${hole.holeNumber}`) ?? "Skin"
+                : "Skin";
+
+              return (
+                <div
+                  key={hole.holeNumber}
+                  className="flex items-center justify-between gap-3 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5 shadow-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-extrabold text-ink">{hole.winnerName}</p>
+                    <p className="mt-1 text-sm font-semibold text-ink/60">Skin awarded</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full bg-[#1A263B] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">{`Hole ${hole.holeNumber}`}</span>
+                    <span className={classNames("rounded-full px-3 py-1.5 text-xs font-extrabold", getGoodSkinTypeClasses(typeLabel))}>{typeLabel}</span>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="rounded-full bg-[#1A263B] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">{`Hole ${hole.holeNumber}`}</span>
-                  <span className="rounded-full bg-[#EAF6EC] px-3 py-1.5 text-xs font-extrabold text-pine">Skin</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-ink/65">No good skins awarded.</p>
