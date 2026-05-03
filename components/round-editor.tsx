@@ -1064,6 +1064,45 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     return Math.max(...totals) - Math.min(...totals);
   }, [setupTeams]);
 
+  const groupChatText = useMemo(() => {
+    if (isSkinsOnly || !setupTeams.length || !setupScoringGroupsPreview.length) {
+      return "";
+    }
+
+    const teamByCode = new Map(setupTeams.map((team) => [team.team, team]));
+    const golf = "\uD83C\uDFCC\uFE0F\u200D\u2642\uFE0F";
+    const money = "\uD83D\uDCB0";
+    const clover = "\uD83C\uDF40";
+    const arrow = "\u2192";
+    const dash = "\u2013";
+    const bullet = "\u2022";
+    const lines = [`${golf} GOLF QUOTA TEAMS ${dash} ${displayRoundName}`, ""];
+
+    for (const group of setupScoringGroupsPreview) {
+      lines.push(group.label);
+      for (const teamCode of group.teams) {
+        const team = teamByCode.get(teamCode);
+        if (!team) continue;
+        const playersText = team.players
+          .map((player) => `${player.playerName} (${player.quota})`)
+          .join(" + ");
+        lines.push(`${teamCode}: ${playersText} ${arrow} ${team.totalQuota}`);
+      }
+      lines.push("");
+    }
+
+    lines.push(`${money} $40 Per Man`);
+    lines.push(`${bullet} $5 Front`);
+    lines.push(`${bullet} $5 Back`);
+    lines.push(`${bullet} $10 Total`);
+    lines.push(`${bullet} $10 Individual Quota`);
+    lines.push(`${bullet} $10 Skins`);
+    lines.push("");
+    lines.push(`Good luck boys ${clover}${golf}`);
+
+    return lines.join("\n");
+  }, [displayRoundName, isSkinsOnly, setupScoringGroupsPreview, setupTeams]);
+
   useEffect(() => {
     if (isSkinsOnly) {
       return;
@@ -1418,6 +1457,32 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       .join("|");
   }
 
+  async function copyTeamsForGroupChat() {
+    if (!groupChatText) {
+      setMessage("Build teams and foursomes before copying.");
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(groupChatText);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = groupChatText;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setToast("Copied to clipboard");
+      setMessage("");
+    } catch {
+      setMessage("Could not copy teams. Try again from your browser.");
+    }
+  }
   function autoAssignScoringGroups() {
     if (isSkinsOnly) {
       return;
@@ -3091,14 +3156,27 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                           </span>
                         ) : null}
                       </div>
-                      <button
-                        type="button"
-                        disabled={!hasAutoBuiltTeams}
-                        className="min-h-12 w-full rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
-                        onClick={autoAssignScoringGroups}
-                      >
-                        {hasAssignedScoringGroups ? "Rebuild Foursomes" : "Build Foursomes"}
-                      </button>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          disabled={!hasAutoBuiltTeams}
+                          className="min-h-12 rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                          onClick={autoAssignScoringGroups}
+                        >
+                          {hasAssignedScoringGroups ? "Rebuild Foursomes" : "Build Foursomes"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!groupChatText}
+                          className="min-h-12 rounded-full bg-pine px-4 text-sm font-semibold text-white disabled:opacity-60"
+                          onClick={copyTeamsForGroupChat}
+                        >
+                          Copy Teams for Group Chat
+                        </button>
+                      </div>
+                      {toast === "Copied to clipboard" ? (
+                        <p className="rounded-2xl bg-[#E2F4E6] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
+                      ) : null}
                       {setupScoringGroupsPreview.length ? (
                         <div className="grid gap-3">
                           {setupScoringGroupsPreview.map((group) => (
