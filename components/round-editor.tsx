@@ -1065,11 +1065,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
   }, [setupTeams]);
 
   const groupChatText = useMemo(() => {
-    if (isSkinsOnly || !setupTeams.length || !setupScoringGroupsPreview.length) {
-      return "";
-    }
-
-    const teamByCode = new Map(setupTeams.map((team) => [team.team, team]));
     const golf = "\uD83C\uDFCC\uFE0F\u200D\u2642\uFE0F";
     const money = "\uD83D\uDCB0";
     const clover = "\uD83C\uDF40";
@@ -1077,6 +1072,44 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     const dash = "\u2013";
     const bullet = "\u2022";
     const lines = [`${golf} GOLF QUOTA TEAMS ${dash} ${displayRoundName}`, ""];
+
+    if (isSkinsOnly) {
+      if (!individualScoringGroupsPreview.length) {
+        return "";
+      }
+
+      for (const group of individualScoringGroupsPreview) {
+        const playersText = group.playerIds
+          .map((playerId) => {
+            const player = playersById.get(playerId);
+            const quota = player ? quotaSnapshot[playerId] ?? player.quota : 0;
+            return `${player?.name ?? "Unknown Player"} (${quota})`;
+          })
+          .join(" + ");
+        const totalQuota = group.playerIds.reduce((sum, playerId) => {
+          const player = playersById.get(playerId);
+          return sum + (player ? quotaSnapshot[playerId] ?? player.quota : 0);
+        }, 0);
+        lines.push(group.label);
+        lines.push(`${playersText} ${arrow} ${totalQuota}`);
+        lines.push("");
+      }
+
+      lines.push(`${money} $40 Per Man`);
+      lines.push(`${bullet} $5 Front ${dash} individual quota front 9`);
+      lines.push(`${bullet} $5 Back ${dash} individual quota back 9`);
+      lines.push(`${bullet} $10 Total ${dash} individual quota total`);
+      lines.push(`${bullet} $20 Individual Skins`);
+      lines.push("");
+      lines.push(`Good luck boys ${clover}${golf}`);
+      return lines.join("\n");
+    }
+
+    if (!setupTeams.length || !setupScoringGroupsPreview.length) {
+      return "";
+    }
+
+    const teamByCode = new Map(setupTeams.map((team) => [team.team, team]));
 
     for (const group of setupScoringGroupsPreview) {
       lines.push(group.label);
@@ -1092,16 +1125,16 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     }
 
     lines.push(`${money} $40 Per Man`);
-    lines.push(`${bullet} $5 Front`);
-    lines.push(`${bullet} $5 Back`);
-    lines.push(`${bullet} $10 Total`);
+    lines.push(`${bullet} $5 Front ${dash} best team front 9`);
+    lines.push(`${bullet} $5 Back ${dash} best team back 9`);
+    lines.push(`${bullet} $10 Total ${dash} best team total`);
     lines.push(`${bullet} $10 Individual Quota`);
     lines.push(`${bullet} $10 Skins`);
     lines.push("");
     lines.push(`Good luck boys ${clover}${golf}`);
 
     return lines.join("\n");
-  }, [displayRoundName, isSkinsOnly, setupScoringGroupsPreview, setupTeams]);
+  }, [displayRoundName, individualScoringGroupsPreview, isSkinsOnly, playersById, quotaSnapshot, setupScoringGroupsPreview, setupTeams]);
 
   useEffect(() => {
     if (isSkinsOnly) {
@@ -3254,14 +3287,27 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         </span>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      disabled={!rows.length}
-                      className="min-h-12 w-full rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
-                      onClick={autoAssignIndividualScoringGroups}
-                    >
-                      {hasAssignedScoringGroups ? "Rebuild Foursomes" : "Build Foursomes"}
-                    </button>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        disabled={!rows.length}
+                        className="min-h-12 rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                        onClick={autoAssignIndividualScoringGroups}
+                      >
+                        {hasAssignedScoringGroups ? "Rebuild Foursomes" : "Build Foursomes"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!groupChatText}
+                        className="min-h-12 rounded-full bg-pine px-4 text-sm font-semibold text-white disabled:opacity-60"
+                        onClick={copyTeamsForGroupChat}
+                      >
+                        Copy Teams for Group Chat
+                      </button>
+                    </div>
+                    {toast === "Copied to clipboard" ? (
+                      <p className="rounded-2xl bg-[#E2F4E6] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
+                    ) : null}
                     {individualScoringGroupsPreview.length ? (
                       <div className="grid gap-3">
                         {individualScoringGroupsPreview.map((group) => (
