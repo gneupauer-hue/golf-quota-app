@@ -387,7 +387,7 @@ function PlayerRosterCard({
                       >
                         {formatMovement(item.quotaMovement)}
                       </span>
-                      <span className="text-right font-bold text-ink">{item.nextQuota}</span>
+                      <span className="justify-self-end rounded-full bg-[#1E3A8A] px-2 py-0.5 text-[11px] font-bold leading-none text-white">{item.nextQuota}</span>
                     </div>
                   ))}
                 </div>
