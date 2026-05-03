@@ -1099,7 +1099,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       lines.push(`${bullet} $5 Front ${dash} individual quota front 9`);
       lines.push(`${bullet} $5 Back ${dash} individual quota back 9`);
       lines.push(`${bullet} $10 Total ${dash} individual quota total`);
-      lines.push(`${bullet} $20 Individual Skins`);
+      lines.push(`${bullet} $20 Skins`);
       lines.push("");
       lines.push(`Good luck boys ${clover}${golf}`);
       return lines.join("\n");
