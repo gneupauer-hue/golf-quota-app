@@ -3313,16 +3313,19 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         {individualScoringGroupsPreview.map((group) => (
                           <div key={group.key} className="rounded-2xl bg-canvas px-4 py-4">
                             <p className="text-base font-semibold text-ink">{group.label}</p>
-                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/55">
-                              Individual quota players
-                            </p>
-                            <div className="mt-3 space-y-2">
-                              {group.playerIds.map((playerId) => {
+                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3">
+                              {group.playerIds.map((playerId, playerIndex) => {
                                 const player = playersById.get(playerId);
+                                const quota = player ? quotaSnapshot[playerId] ?? player.quota : 0;
                                 return (
-                                  <div key={`individual-group-${group.key}-${playerId}`} className="rounded-2xl bg-white px-4 py-3">
-                                    <p className="text-sm font-semibold text-ink">{player?.name ?? "Unknown Player"}</p>
-                                    <p className="mt-1 text-xs text-ink/55">{`Quota ${player ? quotaSnapshot[playerId] ?? player.quota : 0}`}</p>
+                                  <div
+                                    key={`individual-group-${group.key}-${playerId}`}
+                                    className={classNames("min-w-0", playerIndex % 2 === 1 ? "text-right" : "text-left")}
+                                  >
+                                    <p className="truncate text-sm font-semibold text-ink">
+                                      {player?.name ?? "Unknown Player"}
+                                      <span className="ml-1 text-xs font-semibold text-ink/45">{`(${quota})`}</span>
+                                    </p>
                                   </div>
                                 );
                               })}
