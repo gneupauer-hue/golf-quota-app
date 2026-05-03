@@ -299,7 +299,7 @@ function PlayerRosterCard({
         className="grid w-full grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] items-center gap-x-2 px-3 py-1 text-left"
       >
         <p className="min-w-0 truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
-        <span className="justify-self-center rounded-full bg-[#1F2937] px-2.5 py-1 text-sm font-bold leading-none text-white">
+        <span className="justify-self-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] px-2.5 py-1 text-sm font-bold leading-none text-[#111827]">
           {player.quota}
         </span>
         <span
@@ -777,7 +777,7 @@ function handleRepairButtonPress() {
                   className="flex items-center justify-between rounded-2xl border border-mist bg-white px-4 py-3"
                 >
                   <p className="text-sm font-semibold text-ink">{row.playerName}</p>
-                  <span className="rounded-full bg-[#1F2937] px-3 py-1 text-sm font-bold text-white">
+                  <span className="rounded-full border border-[#E5E7EB] bg-[#F3F4F6] px-3 py-1 text-sm font-bold text-[#111827]">
                     {row.baselineQuota}
                   </span>
                 </div>
