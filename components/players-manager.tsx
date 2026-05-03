@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
@@ -256,6 +256,90 @@ function QuotaAuditWarning({
   );
 }
 
+function PlayerRosterCard({
+  player,
+  isHistoryOpen,
+  onToggleHistory
+}: {
+  player: PlayerItem;
+  isHistoryOpen: boolean;
+  onToggleHistory: () => void;
+}) {
+  return (
+    <SectionCard className="p-2">
+      <div className="space-y-1.5">
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-semibold leading-5 text-ink">{player.name}</h3>
+          <div className="mt-1 grid gap-x-3 gap-y-0 text-[12px] leading-5 text-ink/72 sm:grid-cols-2">
+            <p>
+              Current quota: <span className="font-semibold text-ink">{player.quota}</span>
+            </p>
+            <p>
+              Previous quota: <span className="font-semibold text-ink">{getStartingQuotaLastRound(player) ?? "-"}</span>
+            </p>
+            <p>
+              Last adjustment: <span className="font-semibold text-ink">{getLastAdjustmentLabel(player)}</span>
+            </p>
+            <p>
+              Rounds this year: <span className="font-semibold text-ink">{getRoundsThisYear(player)}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          <p className="text-[12px] text-ink/55">
+            Last played: <span className="font-medium text-ink/75">{getLastRoundLabel(player)}</span>
+          </p>
+          <button
+            className="club-btn-primary min-h-9 px-3.5 text-sm"
+            type="button"
+            onClick={onToggleHistory}
+          >
+            {isHistoryOpen ? "Hide History" : "See History"}
+          </button>
+        </div>
+
+        {isHistoryOpen ? (
+          <div className="rounded-[20px] border border-ink/10 bg-canvas px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
+                Round History
+              </p>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-ink/70">
+                {player.history.length} {player.history.length === 1 ? "round" : "rounds"}
+              </span>
+            </div>
+
+            {player.history.length ? (
+              <div className="mt-2 space-y-2">
+                {player.history.map((item) => (
+                  <div key={player.id + "-" + item.roundId} className="rounded-2xl bg-white px-3 py-2.5 shadow-sm">
+                    <p className="text-sm font-semibold text-ink">
+                      {formatDisplayDate(
+                        getRoundDisplayDate({
+                          roundName: item.roundName,
+                          roundDate: item.roundDate,
+                          completedAt: item.completedAt,
+                          createdAt: item.createdAt
+                        })
+                      )}
+                    </p>
+                    <p className="mt-1.5 text-sm text-ink/80">{`Points scored: ${item.totalPoints}`}</p>
+                    <p className="mt-1 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
+                    <p className="mt-1 text-sm text-ink/80">{`Result vs quota: ${formatQuotaResult(item.plusMinus)}`}</p>
+                    <p className="mt-1 text-sm text-ink/65">{`Quota moved: ${formatMovement(item.quotaMovement)}`}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2.5 text-sm text-ink/65">No rounds yet.</p>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </SectionCard>
+  );
+}
 export function PlayersManager({
   initialPlayers,
   initialQuotaAudit,
@@ -285,54 +369,34 @@ export function PlayersManager({
   const [openHistoryPlayerId, setOpenHistoryPlayerId] = useState<string | null>(null);
   const [openCurrentQuotaPlayerId, setOpenCurrentQuotaPlayerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDormantPlayersOpen, setIsDormantPlayersOpen] = useState(false);
   const [isRepairPending, startRepairTransition] = useTransition();
   const hasPlayers = players.length > 0;
   const showAdminQuotaAudit = process.env.NODE_ENV !== "production" || isEditUnlocked;
 
   const groupedPlayers = useMemo(() => {
-    return [...players].sort((a, b) => {
-      if (a.isRegular !== b.isRegular) {
-        return a.isRegular ? -1 : 1;
-      }
-
-      return a.name.localeCompare(b.name);
-    });
+    return [...players].sort((a, b) => a.name.localeCompare(b.name));
   }, [players]);
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-  const shouldShowPlayerResults = normalizedSearchQuery.length >= 2;
+  const shouldFilterPlayerResults = normalizedSearchQuery.length >= 2;
 
-  const filteredPlayers = useMemo(() => {
-    if (!shouldShowPlayerResults) {
-      return [];
+  const visiblePlayers = useMemo(() => {
+    if (!shouldFilterPlayerResults) {
+      return groupedPlayers;
     }
 
     return groupedPlayers.filter((player) => player.name.toLowerCase().includes(normalizedSearchQuery));
-  }, [groupedPlayers, normalizedSearchQuery, shouldShowPlayerResults]);
+  }, [groupedPlayers, normalizedSearchQuery, shouldFilterPlayerResults]);
 
-  const playerSections = useMemo(() => {
-    const sections = new Map<string, PlayerItem[]>();
+  const currentPlayers = useMemo(
+    () => visiblePlayers.filter((player) => getRoundsThisYear(player) > 0),
+    [visiblePlayers]
+  );
 
-    for (const player of filteredPlayers) {
-      const normalized = player.name.trim().charAt(0).toUpperCase();
-      const letter = /[A-Z]/.test(normalized) ? normalized : "#";
-      const existing = sections.get(letter);
-
-      if (existing) {
-        existing.push(player);
-      } else {
-        sections.set(letter, [player]);
-      }
-    }
-
-    return Array.from(sections.entries())
-      .sort((left, right) => left[0].localeCompare(right[0]))
-      .map(([letter, items]) => ({ letter, items }));
-  }, [filteredPlayers]);
-
-  const availableLetters = useMemo(
-    () => playerSections.map((section) => section.letter),
-    [playerSections]
+  const dormantPlayers = useMemo(
+    () => visiblePlayers.filter((player) => getRoundsThisYear(player) === 0),
+    [visiblePlayers]
   );
   function applyPlayersResponse(result: {
   players: PlayerItem[];
@@ -584,127 +648,93 @@ function handleRepairButtonPress() {
                 />
               </label>
 
-              {shouldShowPlayerResults && availableLetters.length > 1 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {availableLetters.map((letter) => (
-                    <a
-                      key={letter}
-                      href={"#players-letter-" + letter}
-                      className="rounded-full border border-mist bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/65"
-                    >
-                      {letter}
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-
               {message ? <p className="text-sm font-medium text-pine">{message}</p> : null}
             </div>
           </SectionCard>
 
           <div className="space-y-3">
-            {!shouldShowPlayerResults ? (
-              <SectionCard className="p-4">
-                <p className="text-sm text-ink/70">Type at least 2 characters to search players.</p>
-              </SectionCard>
-            ) : null}
-
-            {shouldShowPlayerResults && playerSections.length === 0 ? (
+            {shouldFilterPlayerResults && currentPlayers.length === 0 && dormantPlayers.length === 0 ? (
               <SectionCard className="p-4">
                 <p className="text-sm text-ink/70">No players found.</p>
               </SectionCard>
             ) : null}
 
-            {playerSections.map((section) => (
-              <div key={section.letter} id={"players-letter-" + section.letter} className="space-y-2">
-                <div className="px-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">
-                    {section.letter}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  {section.items.map((player) => {
-                    const isHistoryOpen = openHistoryPlayerId === player.id;
-
-                    return (
-                      <SectionCard key={player.id} className="p-2">
-                        <div className="space-y-1.5">
-                          <div className="min-w-0">
-                            <h3 className="text-[15px] font-semibold leading-5 text-ink">{player.name}</h3>
-                            <div className="mt-1 grid gap-x-3 gap-y-0 text-[12px] leading-5 text-ink/72 sm:grid-cols-2">
-                              <p>
-                                Current quota: <span className="font-semibold text-ink">{player.quota}</span>
-                              </p>
-                              <p>
-                                Previous quota: <span className="font-semibold text-ink">{getStartingQuotaLastRound(player) ?? "-"}</span>
-                              </p>
-                              <p>
-                                Last adjustment: <span className="font-semibold text-ink">{getLastAdjustmentLabel(player)}</span>
-                              </p>
-                              <p>
-                                Rounds this year: <span className="font-semibold text-ink">{getRoundsThisYear(player)}</span>
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-2 pt-0.5">
-                            <p className="text-[12px] text-ink/55">
-                              Last played: <span className="font-medium text-ink/75">{getLastRoundLabel(player)}</span>
-                            </p>
-                            <button
-                              className="club-btn-primary min-h-9 px-3.5 text-sm"
-                              type="button"
-                              onClick={() => toggleHistory(player.id)}
-                            >
-                              {isHistoryOpen ? "Hide History" : "See History"}
-                            </button>
-                          </div>
-
-                          {isHistoryOpen ? (
-                            <div className="rounded-[20px] border border-ink/10 bg-canvas px-3 py-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
-                                  Round History
-                                </p>
-                                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-ink/70">
-                                  {player.history.length} {player.history.length === 1 ? "round" : "rounds"}
-                                </span>
-                              </div>
-
-                              {player.history.length ? (
-                                <div className="mt-2 space-y-2">
-                                  {player.history.map((item) => (
-                                    <div key={player.id + "-" + item.roundId} className="rounded-2xl bg-white px-3 py-2.5 shadow-sm">
-                                      <p className="text-sm font-semibold text-ink">
-                                        {formatDisplayDate(
-                                          getRoundDisplayDate({
-                                            roundName: item.roundName,
-                                            roundDate: item.roundDate,
-                                            completedAt: item.completedAt,
-                                            createdAt: item.createdAt
-                                          })
-                                        )}
-                                      </p>
-                                      <p className="mt-1.5 text-sm text-ink/80">{`Points scored: ${item.totalPoints}`}</p>
-                                      <p className="mt-1 text-sm text-ink/80">{`Starting quota: ${item.startQuota}`}</p>
-                                      <p className="mt-1 text-sm text-ink/80">{`Result vs quota: ${formatQuotaResult(item.plusMinus)}`}</p>
-                                      <p className="mt-1 text-sm text-ink/65">{`Quota moved: ${formatMovement(item.quotaMovement)}`}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="mt-2.5 text-sm text-ink/65">No rounds yet.</p>
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                      </SectionCard>
-                    );
-                  })}
+            <SectionCard className="overflow-hidden px-0 py-0">
+              <div className="border-b border-ink/10 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-ink/50">Current Players</p>
+                    <p className="mt-1 text-sm text-ink/65">
+                      {`${currentPlayers.length} player${currentPlayers.length === 1 ? "" : "s"} with completed rounds this year.`}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-pine px-3 py-1 text-sm font-bold text-white">
+                    {currentPlayers.length}
+                  </span>
                 </div>
               </div>
-            ))}
+              <div className="space-y-2 px-4 py-3">
+                {currentPlayers.length ? (
+                  currentPlayers.map((player) => (
+                    <PlayerRosterCard
+                      key={player.id}
+                      player={player}
+                      isHistoryOpen={openHistoryPlayerId === player.id}
+                      onToggleHistory={() => toggleHistory(player.id)}
+                    />
+                  ))
+                ) : (
+                  <p className="text-sm text-ink/65">
+                    {shouldFilterPlayerResults ? "No current players match this search." : "No current players yet for this year."}
+                  </p>
+                )}
+              </div>
+            </SectionCard>
+
+            <SectionCard className="overflow-hidden px-0 py-0">
+              <button
+                type="button"
+                onClick={() => setIsDormantPlayersOpen((current) => !current)}
+                className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+              >
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-ink/50">
+                    {`Dormant Players (${dormantPlayers.length})`}
+                  </p>
+                  <p className="mt-1 text-sm text-ink/65">
+                    Roster players without a completed round this year.
+                  </p>
+                </div>
+                <span className="shrink-0 pt-0.5 text-xs font-semibold text-ink/55">
+                  {isDormantPlayersOpen ? "Tap to collapse" : "Tap to expand"}
+                </span>
+              </button>
+              <div
+                className={classNames(
+                  "grid transition-all duration-200 ease-out",
+                  isDormantPlayersOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                )}
+              >
+                <div className="overflow-hidden">
+                  <div className="space-y-2 border-t border-ink/10 px-4 py-3">
+                    {dormantPlayers.length ? (
+                      dormantPlayers.map((player) => (
+                        <PlayerRosterCard
+                          key={player.id}
+                          player={player}
+                          isHistoryOpen={openHistoryPlayerId === player.id}
+                          onToggleHistory={() => toggleHistory(player.id)}
+                        />
+                      ))
+                    ) : (
+                      <p className="text-sm text-ink/65">
+                        {shouldFilterPlayerResults ? "No dormant players match this search." : "No dormant players."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
           </div>
           <ReferenceSection
             title="2026 Current Quotas"
