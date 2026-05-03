@@ -99,6 +99,27 @@ function getLastRoundLabel(player: PlayerItem) {
   return getRoundDateLabel(getLatestRound(player));
 }
 
+function getShortRoundDateLabel(player: PlayerItem) {
+  const latestRound = getLatestRound(player);
+  if (!latestRound) {
+    return "Base";
+  }
+
+  const displayDate = getRoundDisplayDate({
+    roundName: latestRound.roundName,
+    roundDate: latestRound.roundDate,
+    completedAt: latestRound.completedAt,
+    createdAt: latestRound.createdAt
+  });
+  const parsed = displayDate instanceof Date ? displayDate : new Date(displayDate);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return getLastRoundLabel(player);
+  }
+
+  return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+}
+
 function getStartingQuotaLastRound(player: PlayerItem) {
   const latestRound = getLatestRound(player);
   return latestRound ? latestRound.startQuota : null;
@@ -249,6 +270,7 @@ function PlayerRosterCard({
 }) {
   const latestChange = getLatestQuotaChange(player.history);
   const latestChangeLabel = latestChange == null ? "Base" : formatMovement(latestChange);
+  const lastUpdatedLabel = getShortRoundDateLabel(player);
   const latestChangeBadgeClass =
     latestChange == null
       ? "bg-ink/10 text-ink/60"
@@ -263,7 +285,7 @@ function PlayerRosterCard({
       <button
         type="button"
         onClick={onToggleHistory}
-        className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 px-3 py-1.5 text-left"
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-2 px-3 py-1 text-left"
       >
         <p className="min-w-0 truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
         <span className="rounded-full bg-pine px-2.5 py-1 text-sm font-bold leading-none text-white">
@@ -277,9 +299,7 @@ function PlayerRosterCard({
         >
           {latestChangeLabel}
         </span>
-        <p className="col-span-3 truncate text-[11px] leading-4 text-ink/55">
-          {`${getRoundsThisYear(player)} round${getRoundsThisYear(player) === 1 ? "" : "s"} \u2022 ${getLatestRound(player) ? getLastRoundLabel(player) : "Baseline only"}`}
-        </p>
+        <span className="text-right text-[11px] font-semibold leading-none text-ink/55">{lastUpdatedLabel}</span>
       </button>
 
       {isHistoryOpen ? (
@@ -648,7 +668,7 @@ function handleRepairButtonPress() {
                   </span>
                 </div>
               </div>
-              <div className="space-y-1 px-2.5 py-1.5">
+              <div className="space-y-1 px-2 py-1">
                 {currentPlayers.length ? (
                   currentPlayers.map((player) => (
                     <PlayerRosterCard
@@ -691,7 +711,7 @@ function handleRepairButtonPress() {
                 )}
               >
                 <div className="overflow-hidden">
-                  <div className="space-y-1 border-t border-ink/10 px-2.5 py-1.5">
+                  <div className="space-y-1 border-t border-ink/10 px-2 py-1">
                     {dormantPlayers.length ? (
                       dormantPlayers.map((player) => (
                         <PlayerRosterCard
