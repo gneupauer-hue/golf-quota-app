@@ -3221,8 +3221,16 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3">
                                 {rows
                                   .filter((row) => row.team != null && group.teams.includes(row.team))
+                                  .sort((a, b) => {
+                                    const playerA = playersById.get(a.playerId);
+                                    const playerB = playersById.get(b.playerId);
+                                    const quotaA = playerA ? quotaSnapshot[a.playerId] ?? playerA.quota : 0;
+                                    const quotaB = playerB ? quotaSnapshot[b.playerId] ?? playerB.quota : 0;
+                                    return quotaB - quotaA;
+                                  })
                                   .map((row, playerIndex) => {
                                     const player = playersById.get(row.playerId);
+                                    const quota = player ? quotaSnapshot[row.playerId] ?? player.quota : 0;
                                     return (
                                       <div
                                         key={`group-${group.key}-${row.playerId}`}
@@ -3230,6 +3238,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                       >
                                         <p className="truncate text-sm font-semibold text-ink">
                                           {player?.name ?? "Unknown Player"}
+                                          <span className="ml-1 text-xs font-semibold text-ink/45">{`(${quota})`}</span>
                                           {row.team ? <span className="ml-1 text-xs font-semibold text-ink/45">{`(${row.team})`}</span> : null}
                                         </p>
                                       </div>
@@ -3314,7 +3323,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                           <div key={group.key} className="rounded-2xl bg-canvas px-4 py-4">
                             <p className="text-base font-semibold text-ink">{group.label}</p>
                             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3">
-                              {group.playerIds.map((playerId, playerIndex) => {
+                              {[...group.playerIds].sort((a, b) => {
+                                const playerA = playersById.get(a);
+                                const playerB = playersById.get(b);
+                                const quotaA = playerA ? quotaSnapshot[a] ?? playerA.quota : 0;
+                                const quotaB = playerB ? quotaSnapshot[b] ?? playerB.quota : 0;
+                                return quotaB - quotaA;
+                              }).map((playerId, playerIndex) => {
                                 const player = playersById.get(playerId);
                                 const quota = player ? quotaSnapshot[playerId] ?? player.quota : 0;
                                 return (
