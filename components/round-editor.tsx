@@ -3032,38 +3032,27 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                       </button>
                     </div>
                     {hasAutoBuiltTeams ? (
-                      <div className="grid gap-3">
-                        {setupTeams.map((team, index) => (
-                          <div key={`review-${team.team}`} className="rounded-2xl border border-ink/10 bg-canvas px-4 py-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-lg font-semibold text-ink">{getSetupTeamLabel(team.team)}</p>
-                                <p className="mt-1 text-sm font-medium text-ink/60">
-                                  {`${team.players.length} of ${selectedMatchFormat.capacities[index] ?? 0} players`}
-                                </p>
-                              </div>
-                              <p className="shrink-0 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink">
-                                {`Total Quota: ${team.totalQuota}`}
+                      <div className="grid gap-2.5 sm:grid-cols-2">
+                        {setupTeams.map((team) => (
+                          <div key={`review-${team.team}`} className="rounded-2xl border border-ink/10 bg-canvas px-3 py-3">
+                            <p className="text-base font-semibold text-ink">{`${getSetupTeamLabel(team.team)} (${team.totalQuota})`}</p>
+                            <div className="mt-1.5 rounded-2xl bg-white px-3 py-2">
+                              <p className="truncate text-sm font-semibold text-ink">
+                                {team.players.map((player) => `${player.playerName} (${player.quota})`).join(" | ")}
                               </p>
                             </div>
-                            <div className="mt-4 divide-y divide-ink/10 overflow-hidden rounded-2xl bg-white">
-                              {team.players.map((player) => (
-                                <div
-                                  key={`review-player-${player.playerId}`}
-                                  className="px-4 py-3"
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <p className="min-w-0 truncate text-base font-semibold text-ink">{player.playerName}</p>
-                                    <p className="shrink-0 text-base font-bold text-ink">{player.quota}</p>
-                                  </div>
-                                  {isSetupTeamEditMode ? (
-                                    <div className="mt-3 flex flex-wrap gap-2">
+                            {isSetupTeamEditMode ? (
+                              <div className="mt-2 space-y-2">
+                                {team.players.map((player) => (
+                                  <div key={`review-player-${player.playerId}`} className="rounded-2xl bg-white px-3 py-2">
+                                    <p className="text-sm font-semibold text-ink">{`${player.playerName} (${player.quota})`}</p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
                                       {setupTeamCodes.map((destinationTeam) => (
                                         <button
                                           key={`move-${player.playerId}-${destinationTeam}`}
                                           type="button"
                                           className={classNames(
-                                            "min-h-10 rounded-full px-3 text-xs font-semibold",
+                                            "min-h-9 rounded-full px-3 text-xs font-semibold",
                                             destinationTeam === team.team
                                               ? "bg-pine text-white"
                                               : "bg-canvas text-ink/75"
@@ -3074,10 +3063,10 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                         </button>
                                       ))}
                                     </div>
-                                  ) : null}
-                                </div>
-                              ))}
-                            </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
