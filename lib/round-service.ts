@@ -14,7 +14,7 @@ import {
   type TeamCode
 } from "@/lib/quota";
 import { validateAllPlayerQuotas, type PlayerQuotaValidationInput } from "@/lib/quota-history";
-import { getMissingBaselineQuota2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
+import { getBaselineQuota2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
 import { formatRoundNameFromDate } from "@/lib/utils";
 import { getSeasonStartDate } from "@/lib/season";
 
@@ -43,6 +43,24 @@ type HoleEntryPayload = {
 
 type CompletionPreviewValidation = ReturnType<typeof validateAllPlayerQuotas>;
 
+type PlayerQuotaFallback = {
+  id: string;
+  name: string;
+  startingQuota?: number | null;
+  currentQuota?: number | null;
+  quota?: number | null;
+};
+
+function getSafeBaselineQuota(player: PlayerQuotaFallback) {
+  return (
+    getBaselineQuota2026(player.name) ??
+    player.startingQuota ??
+    player.currentQuota ??
+    player.quota ??
+    0
+  );
+}
+
 function getHoleScores(entry: Record<HoleFieldName, number | null>) {
   return holeFieldNames.map((fieldName) => entry[fieldName]);
 }
@@ -69,6 +87,7 @@ function buildRoundRowInput(
   entry: {
     playerId: string;
     player: { name: string };
+    startQuota?: number | null;
     team: string | null;
     quickFrontNine?: number | null;
     quickBackNine?: number | null;
@@ -228,7 +247,7 @@ async function syncRoundComputedState(tx: Tx, roundId: string) {
     round.entries.map((entry) =>
       buildRoundRowInput(
         entry,
-        quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name),
+        quotaMap[entry.playerId] ?? entry.startQuota ?? 0,
         scoringEntryMode
       )
     )
@@ -368,7 +387,7 @@ async function buildQuotaValidationSummary(
     return {
       playerId: player.id,
       playerName: player.name,
-      baselineQuota: requireBaselineQuota2026(player.name),
+      baselineQuota: getSafeBaselineQuota(player),
       currentQuota:
         !args.readOnly && previewRow
           ? previewRow.nextQuota
@@ -380,18 +399,8 @@ async function buildQuotaValidationSummary(
   return validateAllPlayerQuotas(validationInputs);
 }
 
-function buildBaselineQuotaMap(players: Array<{ id: string; name: string }>) {
-  const missingBaselinePlayers = getMissingBaselineQuota2026(players.map((player) => player.name));
-
-  if (missingBaselinePlayers.length > 0) {
-    throw new Error(
-      `Missing 2026 baseline quota for: ${missingBaselinePlayers.join(", ")}. Rebuild skipped.`
-    );
-  }
-
-  return new Map(
-    players.map((player) => [player.id, requireBaselineQuota2026(player.name)])
-  );
+function buildBaselineQuotaMap(players: PlayerQuotaFallback[]) {
+  return new Map(players.map((player) => [player.id, getSafeBaselineQuota(player)]));
 }
 
 async function buildStoredQuotaValidationSummary(tx: Tx) {
@@ -455,7 +464,7 @@ async function buildStoredQuotaValidationSummary(tx: Tx) {
     players.map((player) => ({
       playerId: player.id,
       playerName: player.name,
-      baselineQuota: requireBaselineQuota2026(player.name),
+      baselineQuota: getSafeBaselineQuota(player),
       currentQuota: player.currentQuota,
       rounds: player.roundEntries.map((entry) => ({
         roundId: entry.round.id,
@@ -513,7 +522,7 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
     round.entries.map((entry) =>
       buildRoundRowInput(
         entry,
-        quotaMap[entry.playerId] ?? requireBaselineQuota2026(entry.player.name),
+        quotaMap[entry.playerId] ?? entry.startQuota ?? 0,
         scoringEntryMode
       )
     )
@@ -770,7 +779,7 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
   const expectedQuotaByPlayerId = new Map<string, { name: string; baselineQuota: number; nextQuota: number }>();
 
   for (const player of players) {
-    const baselineQuota = baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name);
+    const baselineQuota = baseQuotaMap.get(player.id) ?? getSafeBaselineQuota(player);
     const nextQuota = quotaMap.get(player.id) ?? baselineQuota;
 
     expectedQuotaByPlayerId.set(player.id, {
@@ -989,7 +998,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
   return Object.fromEntries(
     players.map((player) => [
       player.id,
-      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? requireBaselineQuota2026(player.name)
+      quotaMap.get(player.id) ?? baseQuotaMap.get(player.id) ?? getSafeBaselineQuota(player)
     ])
   );
 }

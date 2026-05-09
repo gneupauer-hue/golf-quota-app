@@ -19,8 +19,18 @@ import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
 import { getSeasonConfig, getSeasonStartDate } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { formatDisplayDate } from "@/lib/utils";
-import { baseline_quotas_2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
+import { baseline_quotas_2026, getBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
 import { rebuildPlayerQuotaHistory, validateAllPlayerQuotas, validatePlayerQuotaHistory, type QuotaValidationSummary } from "@/lib/quota-history";
+
+function getSafeBaselineQuota(player: { name: string; startingQuota?: number | null; currentQuota?: number | null; quota?: number | null }) {
+  return (
+    getBaselineQuota2026(player.name) ??
+    player.startingQuota ??
+    player.currentQuota ??
+    player.quota ??
+    0
+  );
+}
 
 function normalizeRoundMode(value: string): RoundMode {
   return value === "SKINS_ONLY" ? "SKINS_ONLY" : "MATCH_QUOTA";
@@ -43,7 +53,7 @@ function mapStoredRoundEntry(entry: any, scoringEntryMode: ScoringEntryMode) {
   return {
     id: entry.id,
     playerId: entry.playerId,
-    playerName: entry.player?.name ?? entry.playerName,
+    playerName: entry.player?.name ?? entry.playerName ?? "Unknown Player",
     team: (entry.team as TeamCode | null) ?? null,
     groupNumber: entry.groupNumber ?? null,
     teeTime: entry.teeTime ?? null,
@@ -191,7 +201,7 @@ export async function getPlayersPageData() {
   const validationInputs = players.map((player) => ({
     playerId: player.id,
     playerName: player.name,
-    baselineQuota: requireBaselineQuota2026(player.name),
+    baselineQuota: getSafeBaselineQuota(player),
     currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
     rounds: player.roundEntries.map((entry) => ({
       roundId: entry.round.id,
@@ -279,7 +289,7 @@ export async function getCurrentQuotaRows() {
 
   return players
     .map((player) => {
-      const baselineQuota = requireBaselineQuota2026(player.name);
+      const baselineQuota = getSafeBaselineQuota(player);
       const validation = validatePlayerQuotaHistory({
         playerId: player.id,
         playerName: player.name,
@@ -617,7 +627,7 @@ export async function getRoundsList() {
       entryCount: round.entries.length,
       leader: round.entries[0]
         ? {
-            name: round.entries[0].player.name,
+            name: round.entries[0].player?.name ?? "Unknown Player",
             plusMinus: round.entries[0].plusMinus
           }
         : null
@@ -670,7 +680,7 @@ export async function getPastGamesList() {
       entryCount: round.entries.length,
       leader: round.entries[0]
         ? {
-            name: round.entries[0].player.name,
+            name: round.entries[0].player?.name ?? "Unknown Player",
             plusMinus: round.entries[0].plusMinus
           }
         : null
@@ -1040,7 +1050,7 @@ export async function getRoundResultsData(roundId: string) {
     quotaAuditPlayers.map((player) => ({
       playerId: player.id,
       playerName: player.name,
-      baselineQuota: requireBaselineQuota2026(player.name),
+      baselineQuota: getSafeBaselineQuota(player),
       currentQuota: player.currentQuota ?? player.quota ?? player.startingQuota,
       rounds: player.roundEntries.map((entry) => ({
         roundId: entry.round.id,

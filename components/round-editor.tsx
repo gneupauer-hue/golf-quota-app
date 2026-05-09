@@ -676,7 +676,7 @@ function buildIndividualScoringGroups(
   if (hasExplicitGroups) {
     for (const row of rows) {
       const player = playersById.get(row.playerId);
-      if (!player || row.groupNumber == null) continue;
+      if (row.groupNumber == null) continue;
       const current = assignedGroups.get(row.groupNumber) ?? {
         key: `individual-group-${row.groupNumber}`,
         label: `Group ${row.groupNumber}`,
@@ -685,7 +685,7 @@ function buildIndividualScoringGroups(
         playerNames: []
       };
       current.playerIds.push(row.playerId);
-      current.playerNames.push(player.name);
+      current.playerNames.push(player?.name ?? "Unknown Player");
       assignedGroups.set(row.groupNumber, current);
     }
 
@@ -797,6 +797,20 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     () => new Map(players.map((player) => [player.id, player])),
     [players]
   );
+  const roundPlayerNamesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of round.entries) {
+      map.set(entry.playerId, playersById.get(entry.playerId)?.name ?? entry.playerName ?? "Unknown Player");
+    }
+    return map;
+  }, [playersById, round.entries]);
+  const roundPlayerQuotasById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of round.entries) {
+      map.set(entry.playerId, quotaSnapshot[entry.playerId] ?? entry.startQuota ?? playersById.get(entry.playerId)?.quota ?? 0);
+    }
+    return map;
+  }, [playersById, quotaSnapshot, round.entries]);
 
   const filteredPlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -838,15 +852,13 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     return calculateRoundRows(
       rows
         .map((row) => {
-          const player = playersById.get(row.playerId);
-          if (!player) return null;
           return {
             playerId: row.playerId,
-            playerName: player.name,
+            playerName: roundPlayerNamesById.get(row.playerId) ?? "Unknown Player",
             team: row.team,
           groupNumber: row.groupNumber,
           teeTime: row.teeTime,
-            startQuota: quotaSnapshot[row.playerId] ?? player.quota,
+            startQuota: roundPlayerQuotasById.get(row.playerId) ?? 0,
             holeScores: row.holeScores,
             scoringEntryMode,
             quickFrontNine: row.quickFrontNine,
@@ -866,7 +878,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           birdieHoles: number[];
         }>
     );
-  }, [playersById, quotaSnapshot, rows, scoringEntryMode]);
+  }, [roundPlayerNamesById, roundPlayerQuotasById, rows, scoringEntryMode]);
 
   const teamStandings = useMemo(() => calculateTeamStandings(calculatedRows), [calculatedRows]);
   const sideGames = useMemo(() => calculateSideGameResults(calculatedRows), [calculatedRows]);
@@ -895,15 +907,14 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     const calculatedByPlayerId = new Map(calculatedRows.map((row) => [row.playerId, row]));
     return rows
       .map((row) => {
-        const player = playersById.get(row.playerId);
         const calculated = calculatedByPlayerId.get(row.playerId);
-        if (!player || !calculated) {
+        if (!calculated) {
           return null;
         }
 
         return {
           playerId: row.playerId,
-          playerName: player.name,
+          playerName: calculated.playerName,
           team: row.team,
           groupNumber: row.groupNumber,
           teeTime: row.teeTime,
@@ -930,7 +941,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         plusMinus: number;
         nextQuota: number;
       }>;
-  }, [calculatedRows, playersById, rows]);
+  }, [calculatedRows, rows]);
 
   const setupValidation = useMemo(() => {
     if (isSkinsOnly) {
@@ -1194,13 +1205,11 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     setSkinsActiveHole(getSuggestedHole(calculateRoundRows(
       nextRows
         .map((row) => {
-          const player = playersById.get(row.playerId);
-          if (!player) return null;
           return {
             playerId: row.playerId,
-            playerName: player.name,
+            playerName: roundPlayerNamesById.get(row.playerId) ?? "Unknown Player",
             team: row.team,
-            startQuota: quotaSnapshot[row.playerId] ?? player.quota,
+            startQuota: roundPlayerQuotasById.get(row.playerId) ?? 0,
             holeScores: row.holeScores
           };
         })
@@ -1222,7 +1231,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         backSubmittedAt: row.backSubmittedAt
       }))
     });
-  }, [playersById, quotaSnapshot, round.buyInPaidPlayerIds, round.entries, round.id, round.lockedAt, round.roundDate, round.roundMode, round.startedAt, round.teamCount]);
+  }, [roundPlayerNamesById, roundPlayerQuotasById, round.buyInPaidPlayerIds, round.entries, round.id, round.lockedAt, round.roundDate, round.roundMode, round.startedAt, round.teamCount]);
 
   useEffect(() => {
     if (!selectedTeam) {
