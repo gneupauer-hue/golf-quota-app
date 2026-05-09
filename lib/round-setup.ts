@@ -141,11 +141,16 @@ export function getTeamCapacities(teamCodes: TeamCode[], playerCount: number) {
 // and every setup/build/validation path should read from this map.
 export const SUPPORTED_TEAM_FORMATS_MAP = new Map<number, number[][]>([
   [4, [[2, 2]]],
-  [6, [[2, 2, 2], [3, 3]]],
+  [6, [[3, 3]]],
+  [7, [[3, 4]]],
   [8, [[2, 2, 2, 2], [4, 4]]],
-  [10, [[2, 2, 2, 2, 2], [3, 3, 4]]],
+  [9, [[3, 3, 3]]],
+  [10, [[2, 2, 2, 2, 2]]],
+  [11, [[3, 4, 4]]],
   [12, [[2, 2, 2, 2, 2, 2], [3, 3, 3, 3], [4, 4, 4]]],
+  [13, [[3, 3, 3, 4]]],
   [14, [[2, 2, 2, 2, 2, 2, 2], [3, 3, 4, 4]]],
+  [15, [[3, 3, 3, 3, 3]]],
   [16, [[2, 2, 2, 2, 2, 2, 2, 2], [4, 4, 4, 4]]]
 ]);
 
@@ -176,7 +181,7 @@ function formatTeamFormatLabel(capacities: number[]) {
   return Array.from(countsBySize.entries())
     .sort((left, right) => left[0] - right[0])
     .map(([size, count]) => formatTeamCountPhrase(count, size))
-    .join(", ");
+    .join(" + ");
 }
 
 export function getTeamFormats(playerCount: number) {
