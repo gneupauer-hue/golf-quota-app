@@ -1,4 +1,4 @@
-﻿export type BaselineQuota2026 = {
+export type BaselineQuota2026 = {
   player_name: string;
   baseline_quota: number;
 };
@@ -16,7 +16,7 @@ export const baseline_quotas_2026: BaselineQuota2026[] = [
   { player_name: "Brett Slocum", baseline_quota: 25 },
   { player_name: "Broj", baseline_quota: 33 },
   { player_name: "Chad DeBona", baseline_quota: 30 },
-  { player_name: "Chad Kelly", baseline_quota: 23 },
+  { player_name: "Chad Kelley", baseline_quota: 23 },
   { player_name: "Charlie Gelso", baseline_quota: 29 },
   { player_name: "Chris Jones", baseline_quota: 29 },
   { player_name: "Chris Sikora", baseline_quota: 15 },
@@ -63,8 +63,12 @@ const baselineQuotaMap = new Map<string, number>(
   baseline_quotas_2026.map((entry) => [entry.player_name, entry.baseline_quota])
 );
 
+const baselineNameAliases = new Map<string, string>([
+  ["Chad Kelly", "Chad Kelley"]
+]);
+
 export function getBaselineQuota2026(playerName: string) {
-  return baselineQuotaMap.get(playerName);
+  return baselineQuotaMap.get(playerName) ?? baselineQuotaMap.get(baselineNameAliases.get(playerName) ?? "");
 }
 
 export function requireBaselineQuota2026(playerName: string) {

@@ -7,7 +7,7 @@ export const regularPlayers = [
   { name: "Billy Mattioli", quota: 27 },
   { name: "Bob Lipski", quota: 34 },
   { name: "Brandon Wills", quota: 33 },
-  { name: "Chad Kelly", quota: 23 },
+  { name: "Chad Kelley", quota: 23, previousNames: ["Chad Kelly"] },
   { name: "Gary Neupauer", quota: 17 },
   { name: "Jay Thomas", quota: 32 },
   { name: "Jeff Hodorowski", quota: 28 },
@@ -64,6 +64,7 @@ type StarterPlayerSeed = {
   name: string;
   quota: number;
   isRegular: boolean;
+  previousNames?: readonly string[];
 };
 
 const starterPlayers: StarterPlayerSeed[] = [
@@ -149,7 +150,7 @@ export async function resetDemoData(prisma: PrismaClient) {
     ["Gary Neupauer", 24, "A"],
     ["Ryan Holthaus", 16, "A"],
     ["Scott Francis", 35, "B"],
-    ["Chad Kelly", 30, "B"],
+    ["Chad Kelley", 30, "B"],
     ["Jeff Hodorowski", 28, "C"],
     ["Mike Mahasky", 24, "C"],
     ["Tony Bevevino", 39, "D"],
@@ -175,28 +176,36 @@ export async function ensureStarterPlayers(prisma: PrismaClient) {
   const createdPlayers = new Map<string, string>();
 
   for (const playerSeed of starterPlayers) {
-    const player = await prisma.player.upsert({
+    const existingPlayer = await prisma.player.findFirst({
       where: {
-        name: playerSeed.name
-      },
-      update: {
-        quota: playerSeed.quota,
-        currentQuota: playerSeed.quota,
-        startingQuota: playerSeed.quota,
-        isRegular: playerSeed.isRegular,
-        isActive: true
-      },
-      create: {
-        name: playerSeed.name,
-        quota: playerSeed.quota,
-        currentQuota: playerSeed.quota,
-        startingQuota: playerSeed.quota,
-        isRegular: playerSeed.isRegular,
-        isActive: true
+        OR: [{ name: playerSeed.name }, ...(playerSeed.previousNames ?? []).map((name) => ({ name }))]
       }
     });
 
+    const player = existingPlayer
+      ? await prisma.player.update({
+          where: { id: existingPlayer.id },
+          data: {
+            name: playerSeed.name,
+            isRegular: playerSeed.isRegular,
+            isActive: true
+          }
+        })
+      : await prisma.player.create({
+          data: {
+            name: playerSeed.name,
+            quota: playerSeed.quota,
+            currentQuota: playerSeed.quota,
+            startingQuota: playerSeed.quota,
+            isRegular: playerSeed.isRegular,
+            isActive: true
+          }
+        });
+
     createdPlayers.set(playerSeed.name, player.id);
+    for (const previousName of playerSeed.previousNames ?? []) {
+      createdPlayers.set(previousName, player.id);
+    }
   }
 
   return createdPlayers;
