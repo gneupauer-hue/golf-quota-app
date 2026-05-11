@@ -127,7 +127,9 @@ export function QuickEntryRoundView({
   onArchiveRound: () => void;
   onRefresh: () => void;
 }) {
-  const [completedPlayerIds, setCompletedPlayerIds] = useState<string[]>([]);
+  const [completedPlayerIds, setCompletedPlayerIds] = useState<string[]>(() =>
+    rows.filter((row) => hasSavedScore({ ...row, goodSkinEntries: [] }, isIndividualQuotaSkins)).map((row) => row.playerId)
+  );
   const [editingPlayerIds, setEditingPlayerIds] = useState<string[]>([]);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
@@ -153,7 +155,7 @@ export function QuickEntryRoundView({
   const completedSet = useMemo(() => new Set(completedPlayerIds), [completedPlayerIds]);
   const editingSet = useMemo(() => new Set(editingPlayerIds), [editingPlayerIds]);
   const isPlayerComplete = (row: SummaryRow) =>
-    !editingSet.has(row.playerId) && (completedSet.has(row.playerId) || hasSavedScore(row, isIndividualQuotaSkins));
+    !editingSet.has(row.playerId) && completedSet.has(row.playerId);
 
   const entryGroups = useMemo<EntryGroup[]>(() => {
     const groups = new Map<string, Omit<EntryGroup, "completedCount" | "isComplete">>();
@@ -296,7 +298,11 @@ export function QuickEntryRoundView({
   function handleSavePlayerScore(row: SummaryRow) {
     if (isArchiving) return;
 
-    if (isIndividualQuotaSkins ? row.quickFrontNine == null : row.quickFrontNine == null || row.quickBackNine == null) {
+    const valuesToValidate = isIndividualQuotaSkins
+      ? [row.quickFrontNine]
+      : [row.quickFrontNine, row.quickBackNine];
+
+    if (valuesToValidate.some((value) => value == null || value < 0 || !Number.isInteger(value))) {
       return;
     }
 
@@ -311,7 +317,7 @@ export function QuickEntryRoundView({
     const nextCompletedSet = new Set([...completedPlayerIds, confirmedId]);
     const nextEditingSet = new Set(editingPlayerIds.filter((playerId) => playerId !== confirmedId));
     const nextIsComplete = (row: SummaryRow) =>
-      !nextEditingSet.has(row.playerId) && (nextCompletedSet.has(row.playerId) || hasSavedScore(row, isIndividualQuotaSkins));
+      !nextEditingSet.has(row.playerId) && nextCompletedSet.has(row.playerId);
 
     setCompletedPlayerIds((current) =>
       current.includes(confirmedId) ? current : [...current, confirmedId]
@@ -451,8 +457,10 @@ export function QuickEntryRoundView({
                         <input
                           type="number"
                           inputMode="numeric"
+                          min={0}
+                          step={1}
                           disabled={completed}
-                          className="h-11 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
+                          className="h-11 w-full min-w-0 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
                           value={row.quickFrontNine ?? ""}
                           onChange={(event) => handleTotalPointsChange(row.playerId, event.target.value)}
                           placeholder="0"
@@ -460,25 +468,29 @@ export function QuickEntryRoundView({
                       </label>
                     ) : (
                       <div className="mt-2 grid grid-cols-2 gap-2">
-                        <label className="grid grid-cols-[3rem_1fr] items-center gap-2">
-                          <span className="text-xs font-semibold text-ink/60">Front</span>
+                        <label className="min-w-0">
+                          <span className="block text-xs font-semibold text-ink/60">Front</span>
                           <input
                             type="number"
                             inputMode="numeric"
+                            min={0}
+                            step={1}
                             disabled={completed}
-                            className="h-11 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
+                            className="h-11 w-full min-w-0 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
                             value={row.quickFrontNine ?? ""}
                             onChange={(event) => onFrontNineChange(row.playerId, event.target.value)}
                             placeholder="0"
                           />
                         </label>
-                        <label className="grid grid-cols-[2.7rem_1fr] items-center gap-2">
-                          <span className="text-xs font-semibold text-ink/60">Back</span>
+                        <label className="min-w-0">
+                          <span className="block text-xs font-semibold text-ink/60">Back</span>
                           <input
                             type="number"
                             inputMode="numeric"
+                            min={0}
+                            step={1}
                             disabled={completed}
-                            className="h-11 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
+                            className="h-11 w-full min-w-0 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
                             value={row.quickBackNine ?? ""}
                             onChange={(event) => onBackNineChange(row.playerId, event.target.value)}
                             placeholder="0"
