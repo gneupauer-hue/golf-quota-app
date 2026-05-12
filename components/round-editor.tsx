@@ -2034,45 +2034,20 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
   function assignSetupPlayer(playerId: string, destinationTeam: TeamCode) {
     const sourceRow = rows.find((row) => row.playerId === playerId);
-    if (!sourceRow || sourceRow.team === destinationTeam) {
-      return;
-    }
-
-    const sourceTeam = sourceRow.team;
-    const destinationTeamIndex = setupTeamCodes.indexOf(destinationTeam);
-    const destinationCapacity = selectedMatchFormat?.capacities[destinationTeamIndex] ?? 0;
-    const destinationRows = rows.filter((row) => row.team === destinationTeam);
-    const destinationIsFull = destinationCapacity > 0 && destinationRows.length >= destinationCapacity;
-    const swapRow = destinationIsFull && sourceTeam
-      ? destinationRows.find((row) => row.playerId !== playerId) ?? null
-      : null;
-
-    if (destinationIsFull && !swapRow) {
-      setMessage(`${getSetupTeamLabel(destinationTeam)} already has its required ${destinationCapacity} players.`);
+    if (!sourceRow || sourceRow.team === destinationTeam || !setupTeamCodes.includes(destinationTeam)) {
       return;
     }
 
     setRows((current) =>
-      current.map((row) => {
-        const clearedGroup = { ...row, groupNumber: null, teeTime: null };
-
-        if (row.playerId === playerId) {
-          return { ...clearedGroup, team: destinationTeam };
-        }
-
-        if (swapRow && sourceTeam && row.playerId === swapRow.playerId) {
-          return { ...clearedGroup, team: sourceTeam };
-        }
-
-        return clearedGroup;
-      })
+      current.map((row) => ({
+        ...row,
+        team: row.playerId === playerId ? destinationTeam : row.team,
+        groupNumber: null,
+        teeTime: null
+      }))
     );
     setTeamBuildVariant(0);
-    setMessage(
-      swapRow && sourceTeam
-        ? `Moved player to ${getSetupTeamLabel(destinationTeam)} and swapped another player to ${getSetupTeamLabel(sourceTeam)}.`
-        : `Moved player to ${getSetupTeamLabel(destinationTeam)}.`
-    );
+    setMessage(`Assigned player to ${getSetupTeamLabel(destinationTeam)}.`);
   }
   function clearSetupPlayerAssignment(playerId: string) {
     const sourceRow = rows.find((row) => row.playerId === playerId);
@@ -3136,22 +3111,48 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                       </button>
                       <button
                         type="button"
-                        disabled={!selectedMatchFormat || !hasAutoBuiltTeams}
+                        disabled={!selectedMatchFormat || rows.length === 0}
                         className="min-h-12 flex-1 rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
-                        onClick={() => autoBuildMatchQuotaTeams(true)}
-                      >
-                        Rebuild Teams
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!hasAutoBuiltTeams}
-                        className="min-h-12 flex-1 rounded-full bg-white px-4 text-sm font-semibold text-ink disabled:opacity-60"
                         onClick={() => setIsSetupTeamEditMode((current) => !current)}
                       >
-                        {isSetupTeamEditMode ? "Done Editing" : "Edit Teams"}
+                        {isSetupTeamEditMode ? "Done Editing" : "Manually Build Teams"}
                       </button>
                     </div>
-                    {hasAutoBuiltTeams ? (
+                    {isSetupTeamEditMode ? (
+                      <div className="space-y-2 rounded-2xl border border-ink/10 bg-white px-3 py-3">
+                        <p className="text-sm font-semibold text-ink">Manual team assignment</p>
+                        <div className="space-y-2">
+                          {rows.map((row) => {
+                            const player = playersById.get(row.playerId);
+                            const quota = player ? quotaSnapshot[row.playerId] ?? player.quota : 0;
+                            return (
+                              <div key={`manual-team-${row.playerId}`} className="flex items-center justify-between gap-3 rounded-2xl bg-canvas px-3 py-2">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-ink">{player?.name ?? "Unknown Player"}</p>
+                                  <p className="text-xs font-semibold text-ink/50">{`Quota ${quota}`}</p>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                                  {setupTeamCodes.map((destinationTeam) => (
+                                    <button
+                                      key={`manual-team-${row.playerId}-${destinationTeam}`}
+                                      type="button"
+                                      className={classNames(
+                                        "min-h-9 min-w-9 rounded-full px-3 text-xs font-semibold",
+                                        row.team === destinationTeam ? "bg-pine text-white" : "bg-white text-ink/75"
+                                      )}
+                                      onClick={() => assignSetupPlayer(row.playerId, destinationTeam)}
+                                    >
+                                      {destinationTeam}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                    {hasAutoBuiltTeams || isSetupTeamEditMode ? (
                       <div className="grid gap-2">
                         {setupTeams.map((team) => (
                           <div key={`review-${team.team}`} className="rounded-2xl border border-ink/10 bg-canvas px-3 py-2.5">
@@ -3167,32 +3168,6 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                                 ))}
                               </div>
                             </div>
-                            {isSetupTeamEditMode ? (
-                              <div className="mt-2 space-y-2">
-                                {team.players.map((player) => (
-                                  <div key={`review-player-${player.playerId}`} className="rounded-2xl bg-white px-3 py-2">
-                                    <p className="text-sm font-semibold text-ink">{`${player.playerName} (${player.quota})`}</p>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                      {setupTeamCodes.map((destinationTeam) => (
-                                        <button
-                                          key={`move-${player.playerId}-${destinationTeam}`}
-                                          type="button"
-                                          className={classNames(
-                                            "min-h-9 rounded-full px-3 text-xs font-semibold",
-                                            destinationTeam === team.team
-                                              ? "bg-pine text-white"
-                                              : "bg-canvas text-ink/75"
-                                          )}
-                                          onClick={() => assignSetupPlayer(player.playerId, destinationTeam)}
-                                        >
-                                          {destinationTeam}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
                           </div>
                         ))}
                       </div>
