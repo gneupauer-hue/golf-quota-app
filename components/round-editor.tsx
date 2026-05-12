@@ -2038,28 +2038,42 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       return;
     }
 
-    const teamIndex = setupTeamCodes.indexOf(destinationTeam);
-    const requiredPlayers = selectedMatchFormat?.capacities[teamIndex] ?? 0;
-    const assignedPlayers = rows.filter((row) => row.team === destinationTeam).length;
+    const sourceTeam = sourceRow.team;
+    const destinationTeamIndex = setupTeamCodes.indexOf(destinationTeam);
+    const destinationCapacity = selectedMatchFormat?.capacities[destinationTeamIndex] ?? 0;
+    const destinationRows = rows.filter((row) => row.team === destinationTeam);
+    const destinationIsFull = destinationCapacity > 0 && destinationRows.length >= destinationCapacity;
+    const swapRow = destinationIsFull && sourceTeam
+      ? destinationRows.find((row) => row.playerId !== playerId) ?? null
+      : null;
 
-    if (requiredPlayers > 0 && assignedPlayers >= requiredPlayers) {
-      setMessage(`${getSetupTeamLabel(destinationTeam)} already has its required ${requiredPlayers} players.`);
+    if (destinationIsFull && !swapRow) {
+      setMessage(`${getSetupTeamLabel(destinationTeam)} already has its required ${destinationCapacity} players.`);
       return;
     }
 
     setRows((current) =>
-      current.map((row) =>
-        row.playerId === playerId ? { ...row, team: destinationTeam } : row
-      )
+      current.map((row) => {
+        const clearedGroup = { ...row, groupNumber: null, teeTime: null };
+
+        if (row.playerId === playerId) {
+          return { ...clearedGroup, team: destinationTeam };
+        }
+
+        if (swapRow && sourceTeam && row.playerId === swapRow.playerId) {
+          return { ...clearedGroup, team: sourceTeam };
+        }
+
+        return clearedGroup;
+      })
     );
     setTeamBuildVariant(0);
     setMessage(
-      sourceRow.team
-        ? `Moved player to Team ${destinationTeam}.`
-        : `Assigned player to Team ${destinationTeam}.`
+      swapRow && sourceTeam
+        ? `Moved player to ${getSetupTeamLabel(destinationTeam)} and swapped another player to ${getSetupTeamLabel(sourceTeam)}.`
+        : `Moved player to ${getSetupTeamLabel(destinationTeam)}.`
     );
   }
-
   function clearSetupPlayerAssignment(playerId: string) {
     const sourceRow = rows.find((row) => row.playerId === playerId);
     if (!sourceRow?.team) {
