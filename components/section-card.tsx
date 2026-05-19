@@ -10,7 +10,7 @@ export function SectionCard({
   return (
     <section
       className={classNames(
-        "h-auto min-h-0 rounded-[28px] border border-mist bg-white p-4 shadow-card sm:p-5",
+        "h-auto min-h-0 rounded-[28px] border border-mist bg-card p-4 shadow-card sm:p-5",
         className
       )}
     >

@@ -6,8 +6,8 @@
   color-scheme: light;
   --club-cream: #F9FAFB;
   --club-cream-deep: #F8E8EC;
-  --club-card: #FFFFFF;
-  --club-card-border: #E5E7EB;
+  --club-card: #F8E8EC;
+  --club-card-border: #D8A2AE;
   --club-green: #7A1E2C;
   --club-green-dark: #4A0F1A;
   --club-gold: #C9A227;
@@ -62,7 +62,7 @@ button {
 
 @layer components {
   .club-card {
-    @apply rounded-[28px] border border-mist bg-white shadow-card;
+    @apply rounded-[28px] border border-mist bg-card shadow-card;
   }
 
   .club-card-muted {
@@ -82,7 +82,7 @@ button {
   }
 
   .club-input {
-    @apply w-full rounded-2xl border border-mist bg-card px-4 py-3 text-base font-medium text-ink outline-none;
+    @apply w-full rounded-2xl border border-mist bg-white px-4 py-3 text-base font-medium text-ink outline-none;
   }
 
   .club-pill {

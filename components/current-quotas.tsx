@@ -19,7 +19,7 @@ export function CurrentQuotas({ rows }: { rows: BaselineQuotaRow[] }) {
           {rows.map((row) => (
             <div
               key={row.playerName}
-              className="flex items-center justify-between rounded-2xl border border-mist bg-white px-4 py-3"
+              className="flex items-center justify-between rounded-2xl border border-mist bg-card px-4 py-3"
             >
               <p className="text-sm font-semibold text-ink">{row.playerName}</p>
               <span className="rounded-full bg-pine px-3 py-1 text-sm font-bold text-white">

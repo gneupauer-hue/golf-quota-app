@@ -16,9 +16,9 @@ const config: Config = {
         sand: "#C9A227",
         clay: "#B48A1F",
         danger: "#991B1B",
-        mist: "#E5E7EB",
+        mist: "#D8A2AE",
         grove: "#4A0F1A",
-        card: "#FFFFFF"
+        card: "#F8E8EC"
       },
       boxShadow: {
         card: "0 10px 28px rgba(74, 15, 26, 0.10)"

@@ -28,13 +28,13 @@ export function TeamSummaryMini({
           { label: "Total", value: totalPoints },
           { label: "Quota", value: totalQuota }
         ].map((item) => (
-          <div key={item.label} className="rounded-2xl bg-white px-3 py-3">
+          <div key={item.label} className="rounded-2xl bg-white/75 px-3 py-3">
             <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">{item.label}</p>
             <p className="mt-1 text-lg font-semibold">{item.value}</p>
           </div>
         ))}
       </div>
-      <div className="mt-2 rounded-2xl bg-white px-3 py-3">
+      <div className="mt-2 rounded-2xl bg-white/75 px-3 py-3">
         <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points vs Quota</p>
         <p className={classNames("mt-1 text-2xl font-semibold", totalNegative ? "text-danger" : "text-[#1B6B3A]")}>
           {formatPlusMinus(totalPlusMinus)}

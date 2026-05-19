@@ -201,7 +201,7 @@ function ResultStatCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-[18px] border border-ink/10 bg-white px-4 py-3 shadow-sm">
+    <div className="rounded-[18px] border border-mist bg-card px-4 py-3 shadow-sm">
       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink/45">{title}</p>
       <p className="mt-1.5 text-2xl font-extrabold tracking-tight text-pine">{value}</p>
       {detail ? <p className="mt-1.5 text-sm font-medium text-ink/65">{detail}</p> : null}
@@ -213,7 +213,7 @@ function CollapsibleSection({ title, subtitle, badge, defaultOpen = false, featu
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <SectionCard className={classNames("overflow-hidden px-0 py-0 shadow-sm", featured ? "border border-[#1B6B3A]/25 bg-[#FFF8F9]" : "border border-ink/10 bg-white")}>
+    <SectionCard className={classNames("overflow-hidden px-0 py-0 shadow-sm", featured ? "border border-[#1B6B3A]/25 bg-[#FFF8F9]" : "border border-mist bg-card")}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -336,7 +336,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
               return (
                 <details
                   key={player.playerId}
-                  className="group rounded-[18px] border border-[#1B6B3A]/20 bg-white px-3 py-2 shadow-sm [&>summary::-webkit-details-marker]:hidden"
+                  className="group rounded-[18px] border border-[#1B6B3A]/20 bg-card px-3 py-2 shadow-sm [&>summary::-webkit-details-marker]:hidden"
                 >
                   <summary className="cursor-pointer list-none">
                     <div className="flex items-center justify-between gap-3">
@@ -632,7 +632,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
-
 
 
 

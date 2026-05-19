@@ -214,7 +214,7 @@ export function LeaderboardPayoutPredictions({
             <details
               key={player.playerId}
               className={classNames(
-                "overflow-hidden rounded-[22px] border bg-white",
+                "overflow-hidden rounded-[22px] border bg-[color:var(--club-card)]",
                 player.isPaid
                   ? "border-[color:var(--club-green)] bg-[#F6FBF7]"
                   : "border-[color:var(--club-card-border)]"
@@ -248,7 +248,7 @@ export function LeaderboardPayoutPredictions({
                   {player.categories.map((category) => (
                     <div
                       key={category.label}
-                      className="flex items-center justify-between rounded-2xl border border-[color:var(--club-card-border)] bg-white px-3 py-3"
+                      className="flex items-center justify-between rounded-2xl border border-[color:var(--club-card-border)] bg-[color:var(--club-card)] px-3 py-3"
                     >
                       <p className="text-sm font-semibold text-ink">{category.label}</p>
                       <p className="text-base font-bold text-ink">{formatCurrency(category.value)}</p>
@@ -343,7 +343,7 @@ export function LeaderboardPayoutPredictions({
                   "rounded-2xl border px-3 py-3",
                   mismatch
                     ? "border-[#C2A878] bg-[#FFF7E7]"
-                    : "border-[color:var(--club-card-border)] bg-white"
+                    : "border-[color:var(--club-card-border)] bg-[color:var(--club-card)]"
                 )}
               >
                 <div className="flex items-center justify-between gap-3">

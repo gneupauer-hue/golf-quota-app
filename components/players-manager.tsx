@@ -358,7 +358,7 @@ function PlayerRosterCard({
                 <span>{`Previous quota: ${getStartingQuotaLastRound(player) ?? "-"}`}</span>
                 <span>{`Last adjustment: ${formatMovement(player.history[0]?.quotaMovement ?? null)} (${getShortHistoryDateLabel(player.history[0])})`}</span>
               </div>
-              <div className="overflow-hidden border-y border-ink/10 bg-white">
+              <div className="overflow-hidden border-y border-ink/10 bg-card">
                 <div className="grid grid-cols-[2.4rem_2.3rem_2.1rem_2.4rem_2.4rem_2.3rem] items-center gap-x-1.5 border-b border-ink/10 px-1.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink/45">
                   <span>Date</span>
                   <span className="text-right">Start</span>
@@ -818,7 +818,7 @@ function handleRepairButtonPress() {
               {baselineRows.map((row) => (
                 <div
                   key={row.playerName}
-                  className="flex items-center justify-between rounded-2xl border border-mist bg-white px-4 py-3"
+                  className="flex items-center justify-between rounded-2xl border border-mist bg-card px-4 py-3"
                 >
                   <p className="text-sm font-semibold text-ink">{row.playerName}</p>
                   <span className="rounded-full bg-[#1E3A8A] px-3 py-1 text-sm font-bold text-white">

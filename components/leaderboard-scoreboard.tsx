@@ -43,7 +43,7 @@ function entryTone(rank: number, plusMinus: number) {
   if (rank === 1) return "border-[#7A1E2C] bg-[#F8E8EC]";
   if (rank === 2) return "border-[#D5B154] bg-[#FFF1BF]";
   if (rank === 3) return "border-[#D37A47] bg-[#FCE0D2]";
-  return "border-[color:var(--club-card-border)] bg-white";
+  return "border-[color:var(--club-card-border)] bg-[color:var(--club-card)]";
 }
 
 export function LeaderboardScoreboard({
@@ -124,7 +124,7 @@ export function LeaderboardScoreboard({
                     "rounded-[22px] border px-4 py-4",
                     totalWinner
                       ? "border-[#7A1E2C] bg-[#F8E8EC]"
-                      : "border-[color:var(--club-card-border)] bg-white"
+                      : "border-[color:var(--club-card-border)] bg-[color:var(--club-card)]"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">

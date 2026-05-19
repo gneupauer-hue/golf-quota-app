@@ -3119,7 +3119,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                       </button>
                     </div>
                     {isSetupTeamEditMode ? (
-                      <div className="space-y-2 rounded-2xl border border-ink/10 bg-white px-3 py-3">
+                      <div className="space-y-2 rounded-2xl border border-mist bg-card px-3 py-3">
                         <p className="text-sm font-semibold text-ink">Manual team assignment</p>
                         <div className="space-y-2">
                           {rows.map((row) => {
@@ -3224,7 +3224,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink/55">
                                 {group.teams.map((team) => `Team ${team}`).join(" \u2022 ")}
                               </p>
-                              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3">
+                              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-card px-4 py-3">
                                 {group.teams.map((teamCode, teamIndex) => {
                                   const teamRows = rows
                                     .filter((row) => row.team === teamCode)
@@ -3335,7 +3335,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         {individualScoringGroupsPreview.map((group) => (
                           <div key={group.key} className="rounded-2xl bg-canvas px-4 py-4">
                             <p className="text-base font-semibold text-ink">{group.label}</p>
-                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white px-4 py-3">
+                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-card px-4 py-3">
                               {[...group.playerIds].sort((a, b) => {
                                 const playerA = playersById.get(a);
                                 const playerB = playersById.get(b);
@@ -3889,7 +3889,7 @@ function TeamScoreEntry({
           );
 
           return (
-            <div key={row.playerId} className="rounded-[20px] border border-ink/10 bg-white px-3 py-2.5 shadow-sm">
+            <div key={row.playerId} className="rounded-[20px] border border-mist bg-card px-3 py-2.5 shadow-sm">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-tight text-ink">{row.playerName}</p>
@@ -4185,7 +4185,7 @@ function RoundTabView({
           const progress = getTeamProgress(teamRows);
           const teamComplete = isTeamFinished(teamRows);
           return (
-            <button key={team.team} type="button" onClick={() => onOpenTeam(team.team)} className="w-full rounded-[28px] border border-ink/10 bg-white/90 px-4 py-4 text-left shadow-card">
+            <button key={team.team} type="button" onClick={() => onOpenTeam(team.team)} className="w-full rounded-[28px] border border-mist bg-card px-4 py-4 text-left shadow-card">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
@@ -4458,7 +4458,7 @@ function SkinsOnlyScoreEntry({
             );
 
             return (
-              <div key={row.playerId} className="rounded-[20px] border border-ink/10 bg-white px-3 py-2.5 shadow-sm">
+              <div key={row.playerId} className="rounded-[20px] border border-mist bg-card px-3 py-2.5 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold leading-tight text-ink">{row.playerName}</p>
@@ -4717,7 +4717,7 @@ function PlayersTab({
         const playerComplete = hasRecordedFinalHole(row.holeScores);
 
         return (
-          <SectionCard key={row.playerId} className={classNames("space-y-3 border", rankTone === "first" ? "border-[#7A1E2C] bg-[#F8E8EC]" : rankTone === "second" ? "border-[#D5B154] bg-[#FFF1BF]" : rankTone === "third" ? "border-[#D37A47] bg-[#FCE0D2]" : row.plusMinus < 0 ? "border-[#D7655D] bg-[#FCE5E2]" : "border-white/70 bg-white/85")}>
+          <SectionCard key={row.playerId} className={classNames("space-y-3 border", rankTone === "first" ? "border-[#7A1E2C] bg-[#F8E8EC]" : rankTone === "second" ? "border-[#D5B154] bg-[#FFF1BF]" : rankTone === "third" ? "border-[#D37A47] bg-[#FCE0D2]" : row.plusMinus < 0 ? "border-[#D7655D] bg-[#FCE5E2]" : "border-mist bg-card")}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-semibold">{row.playerName}</h3>

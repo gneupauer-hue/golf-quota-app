@@ -391,7 +391,7 @@ export function QuickEntryRoundView({
                   <button
                     key={group.key}
                     type="button"
-                    className="w-full rounded-[22px] border border-sand/70 bg-white px-4 py-3 text-left transition hover:border-pine/40"
+                    className="w-full rounded-[22px] border border-mist bg-card px-4 py-3 text-left transition hover:border-pine/40"
                     onClick={() => {
                       setSelectedGroupKey(group.key);
                       setActivePlayerId(group.rows.find((row) => !isPlayerComplete(row))?.playerId ?? group.rows[0]?.playerId ?? null);
@@ -433,7 +433,7 @@ export function QuickEntryRoundView({
                     key={`entry-${row.playerId}`}
                     className={classNames(
                       "rounded-[18px] border px-3 py-2.5",
-                      completed ? "border-[#7A1E2C]/25 bg-[#F8E8EC]" : "border-sand/70 bg-white"
+                      completed ? "border-[#7A1E2C]/25 bg-[#F8E8EC]" : "border-mist bg-card"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">

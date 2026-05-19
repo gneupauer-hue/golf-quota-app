@@ -434,7 +434,7 @@ export function MatchRoundView({
               key={team.team}
               type="button"
               onClick={() => onOpenTeam(team.team)}
-              className="w-full rounded-[28px] border border-ink/10 bg-white/90 px-4 py-4 text-left shadow-card"
+              className="w-full rounded-[28px] border border-mist bg-card px-4 py-4 text-left shadow-card"
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
@@ -549,15 +549,15 @@ export function MatchRoundView({
                         ) : null}
                       </div>
                       <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                        <div className="rounded-2xl bg-white px-3 py-2.5">
+                        <div className="rounded-2xl bg-white/75 px-3 py-2.5">
                           <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Starting quota</p>
                           <p className="mt-1 font-semibold text-ink">{player.startQuota}</p>
                         </div>
-                        <div className="rounded-2xl bg-white px-3 py-2.5">
+                        <div className="rounded-2xl bg-white/75 px-3 py-2.5">
                           <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points scored</p>
                           <p className="mt-1 font-semibold text-ink">{player.totalPoints}</p>
                         </div>
-                        <div className="rounded-2xl bg-white px-3 py-2.5">
+                        <div className="rounded-2xl bg-white/75 px-3 py-2.5">
                           <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Result</p>
                           <p className={classNames("mt-1 font-semibold", isIndyWinner ? "text-[#1B6B3A]" : "text-ink")}>
                             {formatQuotaResult(player.plusMinus)}
