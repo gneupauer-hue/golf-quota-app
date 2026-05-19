@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ForceClearActiveRound } from "@/components/force-clear-active-round";
 import { QuickRoundLauncher } from "@/components/quick-round-launcher";
+import { RefreshAppButton } from "@/components/refresh-app-button";
 import { SectionCard } from "@/components/section-card";
 import { getHomePageData } from "@/lib/data";
 
@@ -60,6 +61,8 @@ export default async function HomePage() {
           </>
         )}
       </SectionCard>
+
+      <RefreshAppButton />
 
       <div className="flex flex-col gap-3">
         {actions.map((action) => (
