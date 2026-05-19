@@ -132,7 +132,7 @@ function formatCurrency(value: number) {
 }
 
 function teamCardTone(isWinner: boolean) {
-  return isWinner ? "border-[#7A1E2C] bg-[#F8E8EC]" : "border-ink/10 bg-canvas";
+  return isWinner ? "border-[#7A1E2C] bg-[#FBF7F0]" : "border-ink/10 bg-canvas";
 }
 
 function formatQuotaResult(value: number) {
@@ -142,8 +142,8 @@ function formatQuotaResult(value: number) {
 function getGoodSkinTypeClasses(label: string) {
   if (label === "Hole-in-One") return "bg-[#1B6B3A] text-white";
   if (label === "Eagle") return "bg-[#4A0F1A] text-white";
-  if (label === "Birdie") return "bg-[#F8E8EC] text-pine";
-  return "bg-[#F8E8EC] text-pine";
+  if (label === "Birdie") return "bg-[#FBF7F0] text-pine";
+  return "bg-[#FBF7F0] text-pine";
 }
 
 function formatOrdinal(value: number) {
@@ -351,7 +351,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                     {categories.map((category) => (
                       <span
                         key={`${player.playerId}-${category.label}`}
-                        className="rounded-full bg-[#F8E8EC] px-2.5 py-1 text-[11px] font-bold text-[#4A0F1A]"
+                        className="rounded-full bg-[#FBF7F0] px-2.5 py-1 text-[11px] font-bold text-[#4A0F1A]"
                       >
                         {`${category.label}: ${formatCurrency(category.value)}`}
                       </span>
@@ -397,7 +397,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                   key={team.team}
                   className={classNames(
                     "group rounded-[18px] border px-3 py-2 shadow-sm [&>summary::-webkit-details-marker]:hidden",
-                    winningTotal ? "border-[#7A1E2C]/30 bg-[#F8E8EC]" : "border-ink/10 bg-canvas"
+                    winningTotal ? "border-[#7A1E2C]/30 bg-[#FBF7F0]" : "border-ink/10 bg-canvas"
                   )}
                 >
                   <summary className="cursor-pointer list-none">
@@ -454,7 +454,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                   key={player.playerId}
                   className={classNames(
                     "rounded-[22px] border px-4 py-3",
-                    isIndyWinner ? "border-[#7A1E2C]/20 bg-[#F8E8EC]" : "border-ink/10 bg-canvas"
+                    isIndyWinner ? "border-[#7A1E2C]/20 bg-[#FBF7F0]" : "border-ink/10 bg-canvas"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -607,7 +607,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
               key={check.label}
               className={classNames(
                 "rounded-[22px] border px-4 py-3",
-                check.passed ? "border-[#7A1E2C]/20 bg-[#F8E8EC]" : "border-danger/20 bg-[#FCE5E2]"
+                check.passed ? "border-[#7A1E2C]/20 bg-[#FBF7F0]" : "border-danger/20 bg-[#FCE5E2]"
               )}
             >
               <div className="flex items-center justify-between gap-3">

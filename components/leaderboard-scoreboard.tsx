@@ -40,7 +40,7 @@ type LeaderboardScoreboardProps = {
 
 function entryTone(rank: number, plusMinus: number) {
   if (plusMinus < 0) return "border-[#D7655D] bg-[#FCE5E2]";
-  if (rank === 1) return "border-[#7A1E2C] bg-[#F8E8EC]";
+  if (rank === 1) return "border-[#7A1E2C] bg-[#FBF7F0]";
   if (rank === 2) return "border-[#D5B154] bg-[#FFF1BF]";
   if (rank === 3) return "border-[#D37A47] bg-[#FCE0D2]";
   return "border-[color:var(--club-card-border)] bg-[color:var(--club-card)]";
@@ -123,7 +123,7 @@ export function LeaderboardScoreboard({
                   className={classNames(
                     "rounded-[22px] border px-4 py-4",
                     totalWinner
-                      ? "border-[#7A1E2C] bg-[#F8E8EC]"
+                      ? "border-[#7A1E2C] bg-[#FBF7F0]"
                       : "border-[color:var(--club-card-border)] bg-[color:var(--club-card)]"
                   )}
                 >

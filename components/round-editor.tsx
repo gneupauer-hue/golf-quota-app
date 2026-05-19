@@ -2944,7 +2944,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                     <h3 className="mt-1 text-lg font-semibold">Add players</h3>
                     <p className="mt-1 text-sm text-ink/65">Select everyone playing today.</p>
                   </div>
-                  <span className="rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">
+                  <span className="rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
                     {`Players selected: ${rows.length}`}
                   </span>
                 </div>
@@ -3190,7 +3190,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                           </p>
                         </div>
                         {hasAssignedScoringGroups ? (
-                          <span className="rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">
+                          <span className="rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
                             Ready
                           </span>
                         ) : null}
@@ -3214,7 +3214,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         </button>
                       </div>
                       {toast === "Copied to clipboard" ? (
-                        <p className="rounded-2xl bg-[#F8E8EC] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
+                        <p className="rounded-2xl bg-[#FBF7F0] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
                       ) : null}
                       {setupScoringGroupsPreview.length ? (
                         <div className="grid gap-3">
@@ -3304,7 +3304,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         </p>
                       </div>
                       {hasAssignedScoringGroups ? (
-                        <span className="rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">
+                        <span className="rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
                           Ready
                         </span>
                       ) : null}
@@ -3328,7 +3328,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                       </button>
                     </div>
                     {toast === "Copied to clipboard" ? (
-                      <p className="rounded-2xl bg-[#F8E8EC] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
+                      <p className="rounded-2xl bg-[#FBF7F0] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
                     ) : null}
                     {individualScoringGroupsPreview.length ? (
                       <div className="grid gap-3">
@@ -4099,7 +4099,7 @@ function LeadersTab({
               <div key={hole.holeNumber} className="rounded-[22px] bg-canvas px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-base font-semibold">{`Hole ${hole.holeNumber}`}</p>
-                  <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", hole.skinAwarded ? "bg-[#F8E8EC] text-pine" : "bg-white text-ink/70")}>
+                  <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", hole.skinAwarded ? "bg-[#FBF7F0] text-pine" : "bg-white text-ink/70")}>
                     {hole.skinAwarded ? "Skin Won" : "Carryover"}
                   </span>
                 </div>
@@ -4191,7 +4191,7 @@ function RoundTabView({
                   <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
                   <p className="mt-1 text-sm text-ink/60">{team.players.join(", ")}</p>
                   {teamComplete ? (
-                    <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">
+                    <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
                       <span aria-hidden="true">âœ”</span>
                       Team Complete
                     </span>
@@ -4200,7 +4200,7 @@ function RoundTabView({
                 <div
                   className={classNames(
                     "rounded-2xl px-4 py-3 text-center",
-                    teamComplete ? "bg-[#F8E8EC]" : "bg-canvas"
+                    teamComplete ? "bg-[#FBF7F0]" : "bg-canvas"
                   )}
                 >
                   <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">
@@ -4315,7 +4315,7 @@ function SkinsOnlyRoundTab({
                   <p className="text-base font-semibold">{row.playerName}</p>
                   <p className="mt-1 text-xs text-ink/60">{`${row.totalPoints} points`}</p>
                   {playerComplete ? (
-                    <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">
+                    <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
                       <span aria-hidden="true">âœ”</span>
                       Completed
                     </span>
@@ -4399,7 +4399,7 @@ function SkinsOnlyScoreEntry({
                   </span>
                 ) : null}
                 {saveState.tone === "saved" && toast ? (
-                  <span className="rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">
+                  <span className="rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
                     {toast}
                   </span>
                 ) : null}
@@ -4565,7 +4565,7 @@ function SkinsOnlyLeadersTab({
               <div key={hole.holeNumber} className="rounded-[22px] bg-canvas px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-base font-semibold">{`Hole ${hole.holeNumber}`}</p>
-                  <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", hole.skinAwarded ? "bg-[#F8E8EC] text-pine" : "bg-white text-ink/70")}>
+                  <span className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", hole.skinAwarded ? "bg-[#FBF7F0] text-pine" : "bg-white text-ink/70")}>
                     {hole.skinAwarded ? "Skin Won" : "Carryover"}
                   </span>
                 </div>
@@ -4688,7 +4688,7 @@ function BuyInStatusSection({
           ))}
         </div>
       ) : (
-        <div className="rounded-[22px] border border-[#7A1E2C]/25 bg-[#F8E8EC] px-4 py-4 text-center">
+        <div className="rounded-[22px] border border-[#7A1E2C]/25 bg-[#FBF7F0] px-4 py-4 text-center">
           <p className="text-base font-semibold text-pine">All players paid in ðŸ‘</p>
         </div>
       )}
@@ -4717,7 +4717,7 @@ function PlayersTab({
         const playerComplete = hasRecordedFinalHole(row.holeScores);
 
         return (
-          <SectionCard key={row.playerId} className={classNames("space-y-3 border", rankTone === "first" ? "border-[#7A1E2C] bg-[#F8E8EC]" : rankTone === "second" ? "border-[#D5B154] bg-[#FFF1BF]" : rankTone === "third" ? "border-[#D37A47] bg-[#FCE0D2]" : row.plusMinus < 0 ? "border-[#D7655D] bg-[#FCE5E2]" : "border-mist bg-card")}>
+          <SectionCard key={row.playerId} className={classNames("space-y-3 border", rankTone === "first" ? "border-[#7A1E2C] bg-[#FBF7F0]" : rankTone === "second" ? "border-[#D5B154] bg-[#FFF1BF]" : rankTone === "third" ? "border-[#D37A47] bg-[#FCE0D2]" : row.plusMinus < 0 ? "border-[#D7655D] bg-[#FCE5E2]" : "border-mist bg-card")}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-semibold">{row.playerName}</h3>
@@ -4725,7 +4725,7 @@ function PlayersTab({
                   {isSkinsOnly ? `Total ${row.totalPoints} points` : `Team ${row.team ?? "-"} | Rank ${row.rank}`}
                 </p>
                 {playerComplete ? (
-                  <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">
+                  <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
                     <span aria-hidden="true">âœ”</span>
                     Completed
                   </span>
@@ -4761,7 +4761,7 @@ function PlayersTab({
             <div className="flex flex-wrap gap-2">
               {!isSkinsOnly && leaders.leaderGroup.some((entry) => entry.playerId === row.playerId) ? <span className="rounded-full bg-pine px-3 py-1.5 text-xs font-semibold text-white">Leader</span> : null}
               {!isSkinsOnly && leaders.payoutGroup.some((entry) => entry.playerId === row.playerId) ? <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white">Payout Position</span> : null}
-              {skinsWinner ? <span className="rounded-full bg-[#F8E8EC] px-3 py-1.5 text-xs font-semibold text-pine">{`${skinsWinner.skinsWon} skin${skinsWinner.skinsWon === 1 ? "" : "s"}`}</span> : null}
+              {skinsWinner ? <span className="rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">{`${skinsWinner.skinsWon} skin${skinsWinner.skinsWon === 1 ? "" : "s"}`}</span> : null}
             </div>
           </SectionCard>
         );

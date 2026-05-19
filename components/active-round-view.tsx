@@ -442,7 +442,7 @@ export function MatchRoundView({
                     <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
                     <p className="mt-1 text-sm leading-6 text-ink/70">{playerSummary}</p>
                   </div>
-                  <div className={classNames("rounded-2xl px-4 py-3 text-center", teamSubmitted ? "bg-[#F8E8EC]" : "bg-canvas")}>
+                  <div className={classNames("rounded-2xl px-4 py-3 text-center", teamSubmitted ? "bg-[#FBF7F0]" : "bg-canvas")}>
                     <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">
                       {teamSubmitted ? "Status" : "Next Hole"}
                     </p>
@@ -530,7 +530,7 @@ export function MatchRoundView({
                       key={`indy-ranking-${player.playerId}`}
                       className={classNames(
                         "rounded-[22px] border px-4 py-3",
-                        isIndyWinner ? "border-[#7A1E2C]/20 bg-[#F8E8EC]" : "border-ink/10 bg-canvas"
+                        isIndyWinner ? "border-[#7A1E2C]/20 bg-[#FBF7F0]" : "border-ink/10 bg-canvas"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -654,7 +654,7 @@ export function MatchRoundView({
                 <span
                   className={classNames(
                     "rounded-full px-3 py-1.5 text-xs font-semibold",
-                    payoutAudit.passed ? "bg-[#F8E8EC] text-pine" : "bg-[#FCE5E2] text-danger"
+                    payoutAudit.passed ? "bg-[#FBF7F0] text-pine" : "bg-[#FCE5E2] text-danger"
                   )}
                 >
                   {payoutAudit.passed ? "Pot Check Passed" : "Needs Review"}
@@ -666,7 +666,7 @@ export function MatchRoundView({
                     key={check.label}
                     className={classNames(
                       "rounded-[22px] px-4 py-3",
-                      check.passed ? "bg-[#F8E8EC]" : "bg-[#FCE5E2]"
+                      check.passed ? "bg-[#FBF7F0]" : "bg-[#FCE5E2]"
                     )}
                     >
                       <div className="flex items-center justify-between gap-3">

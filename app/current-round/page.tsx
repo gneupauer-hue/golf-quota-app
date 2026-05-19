@@ -36,7 +36,7 @@ export default async function CurrentRoundPage({
           </p>
         </SectionCard>
       ) : null}
-      <SectionCard className="space-y-4 border border-pine/20 bg-[#F8E8EC]">
+      <SectionCard className="space-y-4 border border-pine/20 bg-[#FBF7F0]">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine">No Active Round</p>
         <div className="space-y-2">
           <h3 className="text-2xl font-semibold text-ink">

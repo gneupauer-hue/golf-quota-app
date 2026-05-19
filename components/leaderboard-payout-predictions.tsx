@@ -198,7 +198,7 @@ export function LeaderboardPayoutPredictions({
             onClick={handleLockPayouts}
             className={classNames(
               "min-h-11 rounded-2xl px-4 text-sm font-semibold disabled:opacity-45",
-              payoutLocked ? "bg-[#F8E8EC] text-[color:var(--club-green)]" : "club-btn-primary"
+              payoutLocked ? "bg-[#FBF7F0] text-[color:var(--club-green)]" : "club-btn-primary"
             )}
           >
             {payoutLocked ? "Payouts Locked" : "Lock Payouts"}
@@ -225,7 +225,7 @@ export function LeaderboardPayoutPredictions({
                   <div className="flex items-center gap-2">
                     <p className="text-base font-semibold text-ink">{player.playerName}</p>
                     {player.isPaid ? (
-                      <span className="rounded-full bg-[#F8E8EC] px-2.5 py-1 text-xs font-semibold text-[color:var(--club-green)]">
+                      <span className="rounded-full bg-[#FBF7F0] px-2.5 py-1 text-xs font-semibold text-[color:var(--club-green)]">
                         ✔ Paid
                       </span>
                     ) : null}
