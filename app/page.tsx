@@ -34,7 +34,7 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-3">
-      <SectionCard className="space-y-4 border border-pine/20 bg-[#E2F4E6]">
+      <SectionCard className="space-y-4 border border-pine/20 bg-[#F8E8EC]">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine">Current Round</p>
         {home.currentRound && currentRoundHref ? (
           <>

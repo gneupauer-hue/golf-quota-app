@@ -168,7 +168,7 @@ function getRoundsThisYear(player: PlayerItem) {
 
 function getResultTextClass(value: number) {
   if (value > 0) {
-    return "text-pine";
+    return "text-[#1B6B3A]";
   }
 
   if (value < 0) {
@@ -184,7 +184,7 @@ function getAdjustmentBadgeClass(value: number | null) {
   }
 
   if (value > 0) {
-    return "bg-pine text-white";
+    return "bg-[#1B6B3A] text-white";
   }
 
   if (value < 0) {

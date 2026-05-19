@@ -224,7 +224,7 @@ export function SideMatchesBoard({
             subtitle="Track live 2v2 Nassau side matches for the current round."
           />
         ) : null}
-        <SectionCard className="space-y-4 border border-pine/20 bg-[#E2F4E6]">
+        <SectionCard className="space-y-4 border border-pine/20 bg-[#F8E8EC]">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine">No Active Round</p>
           <div className="space-y-2">
             <h3 className="text-2xl font-semibold text-ink">Start a round to use side matches</h3>
@@ -419,7 +419,7 @@ export function SideMatchesBoard({
                           segment.notStarted
                             ? "bg-white text-ink/60"
                             : segment.winner === "A"
-                              ? "bg-[#E2F4E6] text-pine"
+                              ? "bg-[#F8E8EC] text-pine"
                               : segment.winner === "B"
                                 ? "bg-[#FCE5E2] text-danger"
                                 : "bg-white text-ink"

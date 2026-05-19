@@ -132,7 +132,7 @@ function formatCurrency(value: number) {
 }
 
 function teamCardTone(isWinner: boolean) {
-  return isWinner ? "border-[#5A9764] bg-[#EAF6EC]" : "border-ink/10 bg-canvas";
+  return isWinner ? "border-[#7A1E2C] bg-[#F8E8EC]" : "border-ink/10 bg-canvas";
 }
 
 function formatQuotaResult(value: number) {
@@ -141,9 +141,9 @@ function formatQuotaResult(value: number) {
 
 function getGoodSkinTypeClasses(label: string) {
   if (label === "Hole-in-One") return "bg-[#1B6B3A] text-white";
-  if (label === "Eagle") return "bg-[#1A263B] text-white";
-  if (label === "Birdie") return "bg-[#EAF6EC] text-pine";
-  return "bg-[#EAF6EC] text-pine";
+  if (label === "Eagle") return "bg-[#4A0F1A] text-white";
+  if (label === "Birdie") return "bg-[#F8E8EC] text-pine";
+  return "bg-[#F8E8EC] text-pine";
 }
 
 function formatOrdinal(value: number) {
@@ -213,7 +213,7 @@ function CollapsibleSection({ title, subtitle, badge, defaultOpen = false, featu
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <SectionCard className={classNames("overflow-hidden px-0 py-0 shadow-sm", featured ? "border border-[#1B6B3A]/25 bg-[#F7FBF4]" : "border border-ink/10 bg-white")}>
+    <SectionCard className={classNames("overflow-hidden px-0 py-0 shadow-sm", featured ? "border border-[#1B6B3A]/25 bg-[#FFF8F9]" : "border border-ink/10 bg-white")}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -221,14 +221,14 @@ function CollapsibleSection({ title, subtitle, badge, defaultOpen = false, featu
       >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className={classNames("font-extrabold uppercase tracking-[0.12em]", featured ? "text-xl text-[#123D2A]" : "text-lg text-[#1A263B]")}>{title}</p>
+            <p className={classNames("font-extrabold uppercase tracking-[0.12em]", featured ? "text-xl text-[#4A0F1A]" : "text-lg text-[#4A0F1A]")}>{title}</p>
             {badge ? (
               <span className={classNames("rounded-full px-3 py-1 text-xs font-bold", featured ? "bg-[#1B6B3A] text-white" : "bg-canvas text-ink/70")}>
                 {badge}
               </span>
             ) : null}
           </div>
-          <div className={classNames("mt-2 h-1 w-16 rounded-full", featured ? "bg-[#1B6B3A]" : "bg-[#1A263B]/25")} />
+          <div className={classNames("mt-2 h-1 w-16 rounded-full", featured ? "bg-[#1B6B3A]" : "bg-[#4A0F1A]/25")} />
           {subtitle ? <p className="mt-2 text-sm font-medium text-ink/65">{subtitle}</p> : null}
         </div>
         <span className="shrink-0 rounded-full bg-canvas px-3 py-1.5 text-xs font-bold text-ink/60">
@@ -351,7 +351,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                     {categories.map((category) => (
                       <span
                         key={`${player.playerId}-${category.label}`}
-                        className="rounded-full bg-[#EAF6EC] px-2.5 py-1 text-[11px] font-bold text-[#123D2A]"
+                        className="rounded-full bg-[#F8E8EC] px-2.5 py-1 text-[11px] font-bold text-[#4A0F1A]"
                       >
                         {`${category.label}: ${formatCurrency(category.value)}`}
                       </span>
@@ -397,13 +397,13 @@ export function RoundResults({ data }: { data: ResultsData }) {
                   key={team.team}
                   className={classNames(
                     "group rounded-[18px] border px-3 py-2 shadow-sm [&>summary::-webkit-details-marker]:hidden",
-                    winningTotal ? "border-[#5A9764]/30 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
+                    winningTotal ? "border-[#7A1E2C]/30 bg-[#F8E8EC]" : "border-ink/10 bg-canvas"
                   )}
                 >
                   <summary className="cursor-pointer list-none">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-extrabold text-ink">{`Team ${team.team}`}</p>
-                      <p className="shrink-0 text-base font-extrabold tracking-tight text-pine">
+                      <p className="shrink-0 text-base font-extrabold tracking-tight text-[#1B6B3A]">
                         {formatPlusMinus(team.totalPlusMinus)}
                       </p>
                     </div>
@@ -454,12 +454,12 @@ export function RoundResults({ data }: { data: ResultsData }) {
                   key={player.playerId}
                   className={classNames(
                     "rounded-[22px] border px-4 py-3",
-                    isIndyWinner ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
+                    isIndyWinner ? "border-[#7A1E2C]/20 bg-[#F8E8EC]" : "border-ink/10 bg-canvas"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="flex h-10 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1A263B] text-sm font-extrabold text-white">
+                      <span className="flex h-10 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#4A0F1A] text-sm font-extrabold text-white">
                         {formatOrdinal(player.rank)}
                       </span>
                       <div className="min-w-0">
@@ -503,7 +503,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                     <p className="mt-1 text-sm font-semibold text-ink/60">Skin awarded</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded-full bg-[#1A263B] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">{`Hole ${hole.holeNumber}`}</span>
+                    <span className="rounded-full bg-[#4A0F1A] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">{`Hole ${hole.holeNumber}`}</span>
                     <span className={classNames("rounded-full px-3 py-1.5 text-xs font-extrabold", getGoodSkinTypeClasses(typeLabel))}>{typeLabel}</span>
                   </div>
                 </div>
@@ -607,7 +607,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
               key={check.label}
               className={classNames(
                 "rounded-[22px] border px-4 py-3",
-                check.passed ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-danger/20 bg-[#FCE5E2]"
+                check.passed ? "border-[#7A1E2C]/20 bg-[#F8E8EC]" : "border-danger/20 bg-[#FCE5E2]"
               )}
             >
               <div className="flex items-center justify-between gap-3">

@@ -70,7 +70,7 @@ function formatGoodSkins(entries: GoodSkinEntry[]) {
 
 function getStatusClasses(tone: SaveState["tone"]) {
   if (tone === "failed") return "bg-[#FCE5E2] text-danger";
-  if (tone === "saved") return "bg-[#EAF6EC] text-pine";
+  if (tone === "saved") return "bg-[#F8E8EC] text-pine";
   if (tone === "saving") return "bg-[#FFF1BF] text-ink";
   return "bg-canvas text-ink/70";
 }
@@ -92,7 +92,7 @@ function getGroupKey(row: Pick<SummaryRow, "groupNumber">) {
 }
 
 function getSkinHoleClasses(selected: boolean, pending: boolean) {
-  if (pending) return "border-[#1A263B] bg-ink text-white";
+  if (pending) return "border-[#4A0F1A] bg-ink text-white";
   if (selected) return "border-[#1B6B3A] bg-[#1B6B3A] text-white";
   return "border-sand/70 bg-white text-ink/70";
 }
@@ -402,7 +402,7 @@ export function QuickEntryRoundView({
                         <p className="text-base font-semibold text-ink">{group.label}</p>
                         <p className="mt-1 text-sm text-ink/65">{group.rows.map((row) => row.playerName).join(", ")}</p>
                       </div>
-                      <span className={classNames("shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold", group.isComplete ? "bg-[#EAF6EC] text-pine" : "bg-canvas text-ink/70")}>
+                      <span className={classNames("shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold", group.isComplete ? "bg-[#F8E8EC] text-pine" : "bg-canvas text-ink/70")}>
                         {group.isComplete ? "Completed" : `${group.completedCount}/${group.rows.length}`}
                       </span>
                     </div>
@@ -433,7 +433,7 @@ export function QuickEntryRoundView({
                     key={`entry-${row.playerId}`}
                     className={classNames(
                       "rounded-[18px] border px-3 py-2.5",
-                      completed ? "border-[#5A9764]/25 bg-[#EAF6EC]" : "border-sand/70 bg-white"
+                      completed ? "border-[#7A1E2C]/25 bg-[#F8E8EC]" : "border-sand/70 bg-white"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -580,7 +580,7 @@ export function QuickEntryRoundView({
             </div>
           </SectionCard>
         ) : (
-          <SectionCard className="space-y-3 border border-pine/20 bg-[#E2F4E6]">
+          <SectionCard className="space-y-3 border border-pine/20 bg-[#F8E8EC]">
             <button type="button" className="w-fit rounded-full bg-white px-3 py-2 text-xs font-semibold text-ink" onClick={() => setSelectedGroupKey(null)}>
               Back to groups
             </button>

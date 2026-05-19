@@ -9,22 +9,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        canvas: "#F5F2EA",
-        ink: "#1B1B1B",
-        pine: "#1F5E3B",
-        fairway: "#6E8E72",
-        sand: "#C2A878",
-        clay: "#A88461",
-        danger: "#8C5A50",
-        mist: "#E8E2D6",
-        grove: "#164A2E",
-        card: "#FAF8F2"
+        canvas: "#F9FAFB",
+        ink: "#111827",
+        pine: "#7A1E2C",
+        fairway: "#9F4A58",
+        sand: "#C9A227",
+        clay: "#B48A1F",
+        danger: "#991B1B",
+        mist: "#E5E7EB",
+        grove: "#4A0F1A",
+        card: "#FFFFFF"
       },
       boxShadow: {
-        card: "0 10px 28px rgba(31, 53, 38, 0.08)"
+        card: "0 10px 28px rgba(74, 15, 26, 0.10)"
       },
       backgroundImage: {
-        hero: "radial-gradient(circle at 18% 12%, rgba(194, 168, 120, 0.16), transparent 0 24%), radial-gradient(circle at 82% 10%, rgba(31, 94, 59, 0.08), transparent 0 28%), linear-gradient(180deg, rgba(248, 245, 238, 0.98) 0%, rgba(245, 242, 234, 0.98) 48%, rgba(239, 233, 221, 0.98) 100%)"
+        hero: "radial-gradient(circle at 18% 12%, rgba(201, 162, 39, 0.12), transparent 0 24%), radial-gradient(circle at 82% 10%, rgba(122, 30, 44, 0.07), transparent 0 28%), linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.98) 48%, rgba(248, 232, 236, 0.76) 100%)"
       }
     }
   },

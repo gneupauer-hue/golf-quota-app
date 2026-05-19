@@ -4,15 +4,15 @@
 
 :root {
   color-scheme: light;
-  --club-cream: #f5f2ea;
-  --club-cream-deep: #efe9dd;
-  --club-card: #faf8f2;
-  --club-card-border: #e8e2d6;
-  --club-green: #1f5e3b;
-  --club-green-dark: #164a2e;
-  --club-gold: #c2a878;
-  --club-text: #1b1b1b;
-  --club-text-soft: #6b6b6b;
+  --club-cream: #F9FAFB;
+  --club-cream-deep: #F8E8EC;
+  --club-card: #FFFFFF;
+  --club-card-border: #E5E7EB;
+  --club-green: #7A1E2C;
+  --club-green-dark: #4A0F1A;
+  --club-gold: #C9A227;
+  --club-text: #111827;
+  --club-text-soft: #6B7280;
 }
 
 html {
@@ -25,8 +25,8 @@ body {
   background-color: var(--club-cream);
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)),
-    radial-gradient(circle at 20% 14%, rgba(194, 168, 120, 0.05), transparent 0 18%),
-    radial-gradient(circle at 82% 10%, rgba(31, 94, 59, 0.035), transparent 0 20%);
+    radial-gradient(circle at 20% 14%, rgba(201, 162, 39, 0.06), transparent 0 18%),
+    radial-gradient(circle at 82% 10%, rgba(122, 30, 44, 0.04), transparent 0 20%);
   color: var(--club-text);
   font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
   font-weight: 500;
@@ -38,7 +38,7 @@ body {
 }
 
 ::selection {
-  background: rgba(194, 168, 120, 0.28);
+  background: rgba(201, 162, 39, 0.24);
   color: var(--club-text);
 }
 

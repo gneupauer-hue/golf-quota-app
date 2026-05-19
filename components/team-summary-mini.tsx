@@ -36,7 +36,7 @@ export function TeamSummaryMini({
       </div>
       <div className="mt-2 rounded-2xl bg-white px-3 py-3">
         <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points vs Quota</p>
-        <p className={classNames("mt-1 text-2xl font-semibold", totalNegative ? "text-danger" : "text-pine")}>
+        <p className={classNames("mt-1 text-2xl font-semibold", totalNegative ? "text-danger" : "text-[#1B6B3A]")}>
           {formatPlusMinus(totalPlusMinus)}
         </p>
       </div>

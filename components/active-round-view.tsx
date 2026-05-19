@@ -43,7 +43,7 @@ function formatCurrency(value: number) {
 
 function getGoalProgressTone(value: number) {
   if (value < 0) return "text-danger";
-  if (value > 0) return "text-pine";
+  if (value > 0) return "text-[#1B6B3A]";
   return "text-ink";
 }
 
@@ -52,7 +52,7 @@ function getGoalStatusChipClasses(value: number) {
     return "bg-[#FCE5E2] text-danger";
   }
   if (value > 0) {
-    return "bg-[#E2F4E6] text-pine";
+    return "bg-[#EAF6EC] text-[#1B6B3A]";
   }
   return "bg-canvas text-ink";
 }
@@ -157,7 +157,7 @@ function getPaceTileClasses(current: number, expected: number, holesPlayed: numb
 
   const delta = current - expected;
   if (delta > tolerance) {
-    return "bg-[#EAF6EC] text-pine";
+    return "bg-[#EAF6EC] text-[#1B6B3A]";
   }
   if (delta < -tolerance) {
     return "bg-[#FCE5E2] text-danger";
@@ -442,7 +442,7 @@ export function MatchRoundView({
                     <p className="text-2xl font-semibold">{`Team ${team.team}`}</p>
                     <p className="mt-1 text-sm leading-6 text-ink/70">{playerSummary}</p>
                   </div>
-                  <div className={classNames("rounded-2xl px-4 py-3 text-center", teamSubmitted ? "bg-[#E2F4E6]" : "bg-canvas")}>
+                  <div className={classNames("rounded-2xl px-4 py-3 text-center", teamSubmitted ? "bg-[#F8E8EC]" : "bg-canvas")}>
                     <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">
                       {teamSubmitted ? "Status" : "Next Hole"}
                     </p>
@@ -530,7 +530,7 @@ export function MatchRoundView({
                       key={`indy-ranking-${player.playerId}`}
                       className={classNames(
                         "rounded-[22px] border px-4 py-3",
-                        isIndyWinner ? "border-[#5A9764]/20 bg-[#EAF6EC]" : "border-ink/10 bg-canvas"
+                        isIndyWinner ? "border-[#7A1E2C]/20 bg-[#F8E8EC]" : "border-ink/10 bg-canvas"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -559,7 +559,7 @@ export function MatchRoundView({
                         </div>
                         <div className="rounded-2xl bg-white px-3 py-2.5">
                           <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Result</p>
-                          <p className={classNames("mt-1 font-semibold", isIndyWinner ? "text-pine" : "text-ink")}>
+                          <p className={classNames("mt-1 font-semibold", isIndyWinner ? "text-[#1B6B3A]" : "text-ink")}>
                             {formatQuotaResult(player.plusMinus)}
                           </p>
                         </div>
@@ -590,7 +590,7 @@ export function MatchRoundView({
                     <div key={player.playerId} className="rounded-[22px] bg-canvas px-4 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-base font-semibold text-ink">{player.playerName}</p>
-                        <p className="text-lg font-semibold text-pine">{formatCurrency(player.projectedTotal)}</p>
+                        <p className="text-lg font-semibold text-[#1B6B3A]">{formatCurrency(player.projectedTotal)}</p>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {categories.map((category) => (
@@ -654,7 +654,7 @@ export function MatchRoundView({
                 <span
                   className={classNames(
                     "rounded-full px-3 py-1.5 text-xs font-semibold",
-                    payoutAudit.passed ? "bg-[#E2F4E6] text-pine" : "bg-[#FCE5E2] text-danger"
+                    payoutAudit.passed ? "bg-[#F8E8EC] text-pine" : "bg-[#FCE5E2] text-danger"
                   )}
                 >
                   {payoutAudit.passed ? "Pot Check Passed" : "Needs Review"}
@@ -666,7 +666,7 @@ export function MatchRoundView({
                     key={check.label}
                     className={classNames(
                       "rounded-[22px] px-4 py-3",
-                      check.passed ? "bg-[#EAF6EC]" : "bg-[#FCE5E2]"
+                      check.passed ? "bg-[#F8E8EC]" : "bg-[#FCE5E2]"
                     )}
                     >
                       <div className="flex items-center justify-between gap-3">
