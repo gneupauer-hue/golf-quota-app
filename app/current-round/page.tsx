@@ -12,10 +12,22 @@ export default async function CurrentRoundPage({
   searchParams?: Promise<{ deleted?: string }>;
 }) {
   const params = searchParams ? await searchParams : undefined;
-  const roundId = await getCurrentRoundId();
+  let roundId: string | null = null;
+  let loadError = false;
+
+  try {
+    roundId = await getCurrentRoundId();
+  } catch (error) {
+    console.error("[current-round] Could not load current round", error);
+    loadError = true;
+  }
 
   if (roundId) {
-    const data = await getRoundEditorData(roundId);
+    const data = await getRoundEditorData(roundId).catch((error) => {
+      console.error("[current-round] Could not load round editor data", error);
+      loadError = true;
+      return null;
+    });
 
     if (data?.round.lockedAt || data?.round.startedAt) {
       redirect(`/rounds/${roundId}`);
@@ -34,6 +46,12 @@ export default async function CurrentRoundPage({
           <p className="text-sm text-ink/75">
             The current round was removed. Set up a new round when the group is ready.
           </p>
+        </SectionCard>
+      ) : null}
+      {loadError ? (
+        <SectionCard className="space-y-2 border border-danger/20 bg-[#FCE5E2]">
+          <h3 className="text-base font-semibold text-danger">Current round temporarily unavailable</h3>
+          <p className="text-sm text-ink/75">Refresh in a moment. The page is protected from crashing while the database recovers.</p>
         </SectionCard>
       ) : null}
       <SectionCard className="space-y-4 border border-pine/20 bg-[#FBF7F0]">

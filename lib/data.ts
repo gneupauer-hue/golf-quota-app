@@ -1105,42 +1105,38 @@ export async function getRoundResultsData(roundId: string) {
 }
 
 export async function getHomePageData() {
-  const [playersCount, activeCount, roundCount, latestRound, activeRound] = await Promise.all([
-    prisma.player.count(),
-    prisma.player.count({ where: { isActive: true } }),
-    prisma.round.count(),
-    prisma.round.findFirst({
-      orderBy: [{ completedAt: "desc" }, { roundDate: "desc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        roundName: true,
-        roundDate: true,
-        completedAt: true
-      }
-    }),
-    resolveActiveRound(prisma)
-  ]);
+  try {
+    const activeRound = await resolveActiveRound(prisma);
+    const currentRound = activeRound
+      ? await prisma.round.findUnique({
+          where: { id: activeRound.id },
+          select: {
+            id: true,
+            roundName: true,
+            roundDate: true,
+            teamCount: true,
+            startedAt: true
+          }
+        })
+      : null;
 
-  const currentRound = activeRound
-    ? await prisma.round.findUnique({
-        where: { id: activeRound.id },
-        select: {
-          id: true,
-          roundName: true,
-          roundDate: true,
-          teamCount: true,
-          startedAt: true
-        }
-      })
-    : null;
-
-  return {
-    playersCount,
-    activeCount,
-    roundCount,
-    latestRound,
-    currentRound
-  };
+    return {
+      playersCount: 0,
+      activeCount: 0,
+      roundCount: 0,
+      latestRound: null,
+      currentRound
+    };
+  } catch (error) {
+    console.error("[home] Falling back after home data load failed", error);
+    return {
+      playersCount: 0,
+      activeCount: 0,
+      roundCount: 0,
+      latestRound: null,
+      currentRound: null
+    };
+  }
 }
 
 
