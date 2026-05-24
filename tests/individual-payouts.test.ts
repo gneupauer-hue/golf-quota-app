@@ -21,12 +21,14 @@ function buildRows(playerCount: number): CalculatedRoundRow[] {
   return Array.from({ length: playerCount }, (_, index) => {
     const rank = index + 1;
     const totalPoints = 40 - index;
+    const plusMinus = playerCount - index;
+    const startQuota = totalPoints - plusMinus;
     return {
       playerId: `player-${rank}`,
       playerName: `Player ${rank}`,
       team: null,
       holeScores: Array.from({ length: 18 }, () => 2),
-      startQuota: totalPoints - 5,
+      startQuota,
       frontQuota: 0,
       backQuota: 0,
       frontNine: 18,
@@ -34,8 +36,33 @@ function buildRows(playerCount: number): CalculatedRoundRow[] {
       frontPlusMinus: 0,
       backPlusMinus: 0,
       totalPoints,
-      plusMinus: totalPoints - (totalPoints - 5),
-      nextQuota: totalPoints - 4,
+      plusMinus,
+      nextQuota: startQuota + 1,
+      rank
+    };
+  });
+}
+
+function buildRowsWithResults(results: number[]): CalculatedRoundRow[] {
+  return results.map((plusMinus, index) => {
+    const rank = index + 1;
+    const totalPoints = 40 - index;
+    const startQuota = totalPoints - plusMinus;
+    return {
+      playerId: `player-${rank}`,
+      playerName: `Player ${rank}`,
+      team: null,
+      holeScores: Array.from({ length: 18 }, () => 2),
+      startQuota,
+      frontQuota: 0,
+      backQuota: 0,
+      frontNine: 18,
+      backNine: 18,
+      frontPlusMinus: 0,
+      backPlusMinus: 0,
+      totalPoints,
+      plusMinus,
+      nextQuota: startQuota + 1,
       rank
     };
   });
@@ -57,4 +84,44 @@ test("unsupported player counts do not invent percentage-based individual payout
   assert.equal(results.overallPot.placesPaid, 0);
   assert.deepEqual(results.payoutByPlace, []);
   assert.deepEqual(results.individualPayouts, []);
+});
+
+test("two players tied for first split first and second individual quota payouts", () => {
+  const results = calculateSideGameResults(buildRowsWithResults([-1, -1, -2, -3, -4, -5]));
+  const payouts = results.individualPayouts.map((player) => ({
+    playerName: player.playerName,
+    rank: player.rank,
+    payout: player.payout,
+    placeLabel: player.placeLabel
+  }));
+
+  assert.deepEqual(payouts, [
+    { playerName: "Player 1", rank: 1, payout: 30, placeLabel: "1-2" },
+    { playerName: "Player 2", rank: 1, payout: 30, placeLabel: "1-2" }
+  ]);
+});
+
+test("three players tied for first split first through third individual quota payouts", () => {
+  const results = calculateSideGameResults(buildRowsWithResults([0, 0, 0, -1, -2, -3, -4, -5, -6]));
+  const payouts = results.individualPayouts.map((player) => player.payout);
+  const ranks = results.individualPayouts.map((player) => player.rank);
+
+  assert.deepEqual(payouts, [30, 30, 30]);
+  assert.deepEqual(ranks, [1, 1, 1]);
+});
+
+test("two players tied for second split second and third individual quota payouts", () => {
+  const results = calculateSideGameResults(buildRowsWithResults([2, 1, 1, 0, -1, -2, -3, -4, -5]));
+  const payouts = results.individualPayouts.map((player) => ({
+    playerName: player.playerName,
+    rank: player.rank,
+    payout: player.payout,
+    placeLabel: player.placeLabel
+  }));
+
+  assert.deepEqual(payouts, [
+    { playerName: "Player 1", rank: 1, payout: 55, placeLabel: "1" },
+    { playerName: "Player 2", rank: 2, payout: 17.5, placeLabel: "2-3" },
+    { playerName: "Player 3", rank: 2, payout: 17.5, placeLabel: "2-3" }
+  ]);
 });

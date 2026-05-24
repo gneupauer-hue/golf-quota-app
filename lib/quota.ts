@@ -949,11 +949,7 @@ function buildRankedGroups(rows: CalculatedRoundRow[]) {
     const tiedRows = [anchor];
     let cursor = index + 1;
 
-    while (
-      cursor < ranked.length &&
-      ranked[cursor].plusMinus === anchor.plusMinus &&
-      ranked[cursor].totalPoints === anchor.totalPoints
-    ) {
+    while (cursor < ranked.length && ranked[cursor].plusMinus === anchor.plusMinus) {
       tiedRows.push(ranked[cursor]);
       cursor += 1;
     }
@@ -982,7 +978,7 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
       rankings.push({
         playerId: row.playerId,
         playerName: row.playerName,
-        rank: row.rank,
+        rank: group.startPlace,
         plusMinus: row.plusMinus,
         totalPoints: row.totalPoints,
         startQuota: row.startQuota,
@@ -1003,7 +999,7 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
       payouts.push({
         playerId: row.playerId,
         playerName: row.playerName,
-        rank: row.rank,
+        rank: group.startPlace,
         plusMinus: row.plusMinus,
         totalPoints: row.totalPoints,
         tied: group.rows.length > 1,
