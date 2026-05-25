@@ -1017,6 +1017,8 @@ export async function createOrReplaceRoundEntries(
     lockedAt?: Date | null;
     startedAt?: Date | null;
     forceComplete?: boolean;
+    replaceMissingEntries?: boolean;
+    updateRoundMetadata?: boolean;
     entries: HoleEntryPayload[];
   }
 ) {
@@ -1036,27 +1038,31 @@ export async function createOrReplaceRoundEntries(
 
   const existingByPlayerId = new Map(existingEntries.map((entry) => [entry.playerId, entry]));
 
-  await tx.round.update({
-    where: { id: input.roundId },
-    data: {
-      roundName: input.roundName,
-      roundDate: input.roundDate,
-      roundMode: input.roundMode,
-      scoringEntryMode: input.scoringEntryMode,
-      isTestRound: Boolean(input.isTestRound),
-      notes: input.notes?.trim() ? input.notes.trim() : null,
-      teamCount: input.roundMode === "SKINS_ONLY" ? null : input.teamCount ?? null,
-      lockedAt: input.lockedAt ?? null,
-      startedAt: input.startedAt ?? null,
-      completedAt: input.forceComplete ? new Date() : null
-    }
-  });
+  if (input.updateRoundMetadata !== false) {
+    await tx.round.update({
+      where: { id: input.roundId },
+      data: {
+        roundName: input.roundName,
+        roundDate: input.roundDate,
+        roundMode: input.roundMode,
+        scoringEntryMode: input.scoringEntryMode,
+        isTestRound: Boolean(input.isTestRound),
+        notes: input.notes?.trim() ? input.notes.trim() : null,
+        teamCount: input.roundMode === "SKINS_ONLY" ? null : input.teamCount ?? null,
+        lockedAt: input.lockedAt ?? null,
+        startedAt: input.startedAt ?? null,
+        completedAt: input.forceComplete ? new Date() : null
+      }
+    });
+  }
 
   const nextPlayerIds = new Set(input.entries.map((entry) => entry.playerId));
 
-  const removedEntryIds = existingEntries
-    .filter((entry) => !nextPlayerIds.has(entry.playerId))
-    .map((entry) => entry.id);
+  const removedEntryIds = input.replaceMissingEntries === false
+    ? []
+    : existingEntries
+        .filter((entry) => !nextPlayerIds.has(entry.playerId))
+        .map((entry) => entry.id);
 
   if (removedEntryIds.length) {
     await tx.roundEntry.deleteMany({

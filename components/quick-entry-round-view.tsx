@@ -135,7 +135,7 @@ export function QuickEntryRoundView({
   onFrontNineChange: (playerId: string, value: string) => void;
   onBackNineChange: (playerId: string, value: string) => void;
   onBirdieHolesChange: (playerId: string, value: string) => void;
-  onSaveRound: () => void;
+  onSaveRound: (playerId: string) => void;
   onArchiveRound: () => void;
   onRefresh: () => void;
 }) {
@@ -335,7 +335,7 @@ export function QuickEntryRoundView({
     );
     setEditingPlayerIds((current) => current.filter((playerId) => playerId !== confirmedId));
     setPlayerConfirmId(null);
-    onSaveRound();
+    onSaveRound(confirmedId);
 
     const nextIncomplete = visibleRows.find(
       (row) => row.playerId !== confirmedId && !nextIsComplete(row)

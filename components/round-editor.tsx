@@ -1289,7 +1289,8 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     nextRoundName = displayRoundName,
     nextRoundDate = roundDate,
     nextNotes = round.notes,
-      forceComplete = false
+      forceComplete = false,
+      mergeEntries = false
     ) {
       const resolvedTeamCount =
         gameMode === "SKINS_ONLY"
@@ -1309,6 +1310,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
         lockedAt: nextLockedAt,
         startedAt: nextStartedAt,
         forceComplete,
+        mergeEntries,
         entries: nextRows.map((row) => ({
           playerId: row.playerId,
           team: row.team,
@@ -2141,7 +2143,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     });
   }
 
-  function saveRound(messageText = "Round saved.") {
+  function saveRound(messageText = "Round saved.", playerId?: string) {
     if (invalidSequence) {
       setMessage("Finish holes in order before saving.");
       setSaveFailed("Save failed. Finish holes in order first.");
@@ -2151,10 +2153,37 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     startTransition(async () => {
       try {
         setSaving("Saving...");
-        await persistRound();
-        setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        const rowsToSave = playerId ? rows.filter((row) => row.playerId === playerId) : rows;
+        if (playerId && !rowsToSave.length) {
+          throw new Error("Could not find this player in the current round. Refresh and try again.");
+        }
+        await persistRound(
+          rowsToSave,
+          lockedAt,
+          startedAt,
+          setupTeamCount == null ? "" : String(setupTeamCount),
+          displayRoundName,
+          roundDate,
+          round.notes,
+          false,
+          Boolean(playerId)
+        );
+        setSavedRows((current) => {
+          if (!playerId) {
+            return rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
+          }
+
+          const savedByPlayerId = new Map(rowsToSave.map((row) => [row.playerId, row]));
+          return current.map((row) => {
+            const savedRow = savedByPlayerId.get(row.playerId);
+            return savedRow ? { ...savedRow, holeScores: [...savedRow.holeScores] } : row;
+          });
+        });
         setMessage(messageText);
         setSaved("Saved");
+        if (playerId) {
+          await refreshRoundData();
+        }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Could not save round.";
         setMessage(errorMessage);
@@ -2181,10 +2210,15 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
     startTransition(async () => {
       try {
         setMessage("");
-        setSaving("Saving round before quota review...");
-        await persistRound();
-        const nextSavedRows = rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
-        setSavedRows(nextSavedRows);
+        setSaving(isQuickEntryMode ? "Loading latest scores before quota review..." : "Saving round before quota review...");
+        if (isQuickEntryMode) {
+          router.refresh();
+          setLastRefreshedAt(new Date().toISOString());
+        } else {
+          await persistRound();
+          const nextSavedRows = rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
+          setSavedRows(nextSavedRows);
+        }
 
         const response = await fetch(`/api/rounds/${round.id}/complete`, {
           method: "GET"
@@ -3419,7 +3453,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
           onBackNineChange={updateQuickBackNine}
           isIndividualQuotaSkins={isSkinsOnly}
           onBirdieHolesChange={updateQuickBirdieHoles}
-          onSaveRound={() => saveRound("Scorecard saved.")}
+          onSaveRound={(playerId) => saveRound("Scorecard saved.", playerId)}
           onArchiveRound={archiveRound}
           onRefresh={refreshRoundData}
         />

@@ -75,6 +75,7 @@ export async function PUT(
     const startedAt =
       body.startedAt == null || body.startedAt === "" ? null : new Date(String(body.startedAt));
     const forceComplete = Boolean(body.forceComplete);
+    const mergeEntries = Boolean(body.mergeEntries);
     const entries = Array.isArray(body.entries)
       ? (body.entries as Array<Record<string, unknown>>)
       : [];
@@ -303,6 +304,8 @@ export async function PUT(
         lockedAt,
         startedAt,
         forceComplete,
+        replaceMissingEntries: !mergeEntries,
+        updateRoundMetadata: !mergeEntries,
         entries: entries.map((entry: Record<string, unknown>) => ({
           playerId: String(entry.playerId),
           team:
