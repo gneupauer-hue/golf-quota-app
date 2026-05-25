@@ -50,6 +50,18 @@ type EntryGroup = {
 
 const goodSkinTypes: GoodSkinType[] = ["birdie", "eagle", "ace"];
 
+const compactGoodSkinTypeLabels: Record<GoodSkinType, string> = {
+  birdie: "Birdie",
+  eagle: "Eagle",
+  ace: "HIO"
+};
+
+function getGoodSkinScore(type: GoodSkinType) {
+  if (type === "ace") return 8;
+  if (type === "eagle") return 6;
+  return 4;
+}
+
 function formatTimeLabel(value: string | null) {
   if (!value) return null;
   return new Date(value).toLocaleTimeString([], {
@@ -136,8 +148,8 @@ export function QuickEntryRoundView({
   const [playerConfirmId, setPlayerConfirmId] = useState<string | null>(null);
   const [isFinalConfirmOpen, setIsFinalConfirmOpen] = useState(false);
   const [hasFinalSubmitStarted, setHasFinalSubmitStarted] = useState(false);
-  const [skinAnswerByPlayerId, setSkinAnswerByPlayerId] = useState<Record<string, boolean | null>>({});
-  const [pendingSkinHoleByPlayerId, setPendingSkinHoleByPlayerId] = useState<Record<string, number | null>>({});
+  const [activeSkinTypeByPlayerId, setActiveSkinTypeByPlayerId] = useState<Record<string, GoodSkinType | null>>({});
+  const [skinValidationByPlayerId, setSkinValidationByPlayerId] = useState<Record<string, string | null>>({});
 
   const lastSavedLabel = formatTimeLabel(lastSavedAt);
   const lastRefreshedLabel = formatTimeLabel(lastRefreshedAt);
@@ -203,8 +215,8 @@ export function QuickEntryRoundView({
   useEffect(() => {
     setCompletedPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
     setEditingPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
-    setSkinAnswerByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
-    setPendingSkinHoleByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
+    setActiveSkinTypeByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
+    setSkinValidationByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
   }, [rowIds]);
 
   useEffect(() => {
@@ -226,58 +238,48 @@ export function QuickEntryRoundView({
     setActivePlayerId(incompleteRows[0]?.playerId ?? null);
   }, [activePlayerId, incompleteRows, selectedGroup, visibleRowIds, visibleRows]);
 
-  function getSkinAnswer(row: SummaryRow) {
-    return skinAnswerByPlayerId[row.playerId] ?? (row.goodSkinEntries.length ? true : null);
+  function getActiveSkinType(row: SummaryRow) {
+    return activeSkinTypeByPlayerId[row.playerId] ?? null;
   }
 
-  function setSkinAnswer(row: SummaryRow, value: boolean) {
-    setSkinAnswerByPlayerId((current) => ({
-      ...current,
-      [row.playerId]: value
-    }));
-    setPendingSkinHoleByPlayerId((current) => ({
+  function hasSkinType(row: SummaryRow, type: GoodSkinType) {
+    return row.goodSkinEntries.some((entry) => entry.type === type);
+  }
+
+  function setSkinTypeAnswer(row: SummaryRow, type: GoodSkinType, value: boolean) {
+    setSkinValidationByPlayerId((current) => ({
       ...current,
       [row.playerId]: null
     }));
+    setActiveSkinTypeByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: value ? type : current[row.playerId] === type ? null : current[row.playerId] ?? null
+    }));
+
     if (!value) {
-      onBirdieHolesChange(row.playerId, "");
+      onBirdieHolesChange(
+        row.playerId,
+        formatGoodSkinEntriesInput(row.goodSkinEntries.filter((entry) => entry.type !== type))
+      );
     }
   }
 
-  function selectSkinHole(row: SummaryRow, holeNumber: number) {
-    setSkinAnswerByPlayerId((current) => ({
-      ...current,
-      [row.playerId]: true
-    }));
-    setPendingSkinHoleByPlayerId((current) => ({
-      ...current,
-      [row.playerId]: holeNumber
-    }));
-  }
-
-  function saveSkinEntry(row: SummaryRow, type: GoodSkinType) {
-    const holeNumber = pendingSkinHoleByPlayerId[row.playerId];
-    if (!holeNumber) return;
-
-    const nextEntries = [
-      ...row.goodSkinEntries.filter((entry) => entry.holeNumber !== holeNumber),
-      { holeNumber, type, score: type === "ace" ? 8 : type === "eagle" ? 6 : 4 }
-    ];
-
-    onBirdieHolesChange(row.playerId, formatGoodSkinEntriesInput(nextEntries));
-    setPendingSkinHoleByPlayerId((current) => ({
+  function toggleTypedSkinHole(row: SummaryRow, type: GoodSkinType, holeNumber: number) {
+    setSkinValidationByPlayerId((current) => ({
       ...current,
       [row.playerId]: null
     }));
-  }
 
-  function removeSkinEntry(row: SummaryRow, holeNumber: number) {
-    const nextEntries = row.goodSkinEntries.filter((entry) => entry.holeNumber !== holeNumber);
+    const currentEntry = row.goodSkinEntries.find((entry) => entry.holeNumber === holeNumber);
+    const nextEntries =
+      currentEntry?.type === type
+        ? row.goodSkinEntries.filter((entry) => entry.holeNumber !== holeNumber)
+        : [
+            ...row.goodSkinEntries.filter((entry) => entry.holeNumber !== holeNumber),
+            { holeNumber, type, score: getGoodSkinScore(type) }
+          ];
+
     onBirdieHolesChange(row.playerId, formatGoodSkinEntriesInput(nextEntries));
-    setPendingSkinHoleByPlayerId((current) => ({
-      ...current,
-      [row.playerId]: null
-    }));
   }
 
   function editCompletedPlayer(playerId: string) {
@@ -303,6 +305,15 @@ export function QuickEntryRoundView({
       : [row.quickFrontNine, row.quickBackNine];
 
     if (valuesToValidate.some((value) => value == null || value < 0 || !Number.isInteger(value))) {
+      return;
+    }
+
+    const activeSkinType = getActiveSkinType(row);
+    if (activeSkinType && !hasSkinType(row, activeSkinType)) {
+      setSkinValidationByPlayerId((current) => ({
+        ...current,
+        [row.playerId]: `Select at least one ${compactGoodSkinTypeLabels[activeSkinType]} hole, or switch it back to No.`
+      }));
       return;
     }
 
@@ -426,7 +437,8 @@ export function QuickEntryRoundView({
               {visibleRows.map((row) => {
                 const completed = isPlayerComplete(row);
                 const missingScore = isIndividualQuotaSkins ? row.quickFrontNine == null : row.quickFrontNine == null || row.quickBackNine == null;
-                const skinAnswer = getSkinAnswer(row);
+                const activeSkinType = getActiveSkinType(row);
+                const skinValidationMessage = skinValidationByPlayerId[row.playerId] ?? null;
 
                 return (
                   <div
@@ -499,25 +511,36 @@ export function QuickEntryRoundView({
                       </div>
                     )}
 
-                    <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-                      <span className="text-xs font-semibold text-ink/65">Skins?</span>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
-                          disabled={completed}
-                          className={classNames("min-h-9 rounded-xl border px-3 text-xs font-semibold disabled:opacity-60", skinAnswer === false ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-canvas text-ink")}
-                          onClick={() => setSkinAnswer(row, false)}
-                        >
-                          No
-                        </button>
-                        <button
-                          type="button"
-                          disabled={completed}
-                          className={classNames("min-h-9 rounded-xl border px-3 text-xs font-semibold disabled:opacity-60", skinAnswer === true ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-canvas text-ink")}
-                          onClick={() => setSkinAnswer(row, true)}
-                        >
-                          Yes
-                        </button>
+                    <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                      <div className="space-y-1.5">
+                        {goodSkinTypes.map((type) => {
+                          const typeSelected = hasSkinType(row, type);
+                          const typeActive = activeSkinType === type;
+                          const yesActive = typeSelected || typeActive;
+                          return (
+                            <div key={`${row.playerId}-${type}-answer`} className="grid grid-cols-[3.4rem_1fr] items-center gap-1.5">
+                              <span className="text-[11px] font-bold text-ink/65">{compactGoodSkinTypeLabels[type]}?</span>
+                              <div className="grid grid-cols-2 gap-1">
+                                <button
+                                  type="button"
+                                  disabled={completed}
+                                  className={classNames("min-h-7 rounded-lg border px-2 text-[11px] font-semibold disabled:opacity-60", !yesActive ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-canvas text-ink")}
+                                  onClick={() => setSkinTypeAnswer(row, type, false)}
+                                >
+                                  No
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={completed}
+                                  className={classNames("min-h-7 rounded-lg border px-2 text-[11px] font-semibold disabled:opacity-60", yesActive ? "border-[#1B6B3A] bg-[#1B6B3A] text-white" : "border-sand/70 bg-canvas text-ink")}
+                                  onClick={() => setSkinTypeAnswer(row, type, true)}
+                                >
+                                  Yes
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                       {completed ? (
                         <button type="button" className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink" onClick={() => editCompletedPlayer(row.playerId)}>
@@ -535,43 +558,34 @@ export function QuickEntryRoundView({
                       )}
                     </div>
 
+                    {skinValidationMessage ? (
+                      <p className="mt-2 rounded-xl bg-[#FCE5E2] px-3 py-2 text-xs font-semibold text-danger">{skinValidationMessage}</p>
+                    ) : null}
+
                     {row.goodSkinEntries.length ? (
                       <p className="mt-2 truncate text-xs font-semibold text-ink/65">{formatGoodSkins(row.goodSkinEntries)}</p>
                     ) : null}
 
-                    {skinAnswer === true && !completed ? (
+                    {activeSkinType && !completed ? (
                       <div className="mt-2 space-y-2 rounded-2xl bg-canvas/70 px-2 py-2">
+                        <p className="text-[11px] font-bold text-ink/60">
+                          Select {compactGoodSkinTypeLabels[activeSkinType]} hole(s)
+                        </p>
                         <div className="grid grid-cols-9 gap-1.5">
                           {holeNumbers.map((holeNumber) => {
-                            const selected = row.goodSkinEntries.some((entry) => entry.holeNumber === holeNumber);
-                            const pending = pendingSkinHoleByPlayerId[row.playerId] === holeNumber;
+                            const selected = row.goodSkinEntries.some((entry) => entry.holeNumber === holeNumber && entry.type === activeSkinType);
                             return (
                               <button
                                 key={`${row.playerId}-${holeNumber}`}
                                 type="button"
-                                className={classNames("min-h-9 rounded-xl border text-xs font-semibold transition", getSkinHoleClasses(selected, pending))}
-                                onClick={() => selectSkinHole(row, holeNumber)}
+                                className={classNames("min-h-9 rounded-xl border text-xs font-semibold transition", getSkinHoleClasses(selected, false))}
+                                onClick={() => toggleTypedSkinHole(row, activeSkinType, holeNumber)}
                               >
                                 {holeNumber}
                               </button>
                             );
                           })}
                         </div>
-
-                        {pendingSkinHoleByPlayerId[row.playerId] ? (
-                          <div className="grid grid-cols-3 gap-1.5">
-                            {goodSkinTypes.map((type) => (
-                              <button
-                                key={`${row.playerId}-${type}`}
-                                type="button"
-                                className="min-h-10 rounded-xl bg-white px-2 text-[11px] font-semibold text-ink"
-                                onClick={() => saveSkinEntry(row, type)}
-                              >
-                                {goodSkinTypeLabels[type]}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
                       </div>
                     ) : null}
                   </div>
