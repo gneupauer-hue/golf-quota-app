@@ -159,7 +159,8 @@ export async function getPlayersPageData() {
               not: null,
               gte: seasonStartDate
             },
-            canceledAt: null
+            canceledAt: null,
+            isTestRound: false
           }
         },
         orderBy: [
@@ -260,7 +261,8 @@ export async function getCurrentQuotaRows() {
               not: null,
               gte: seasonStartDate
             },
-            canceledAt: null
+            canceledAt: null,
+            isTestRound: false
           }
         },
         orderBy: {
@@ -641,7 +643,8 @@ export async function getPastGamesList() {
       completedAt: {
         not: null
       },
-      canceledAt: null
+      canceledAt: null,
+      isTestRound: false
     },
     include: {
       entries: {
@@ -1007,7 +1010,8 @@ export async function getRoundResultsData(roundId: string) {
               not: null,
               gte: seasonStartDate
             },
-            canceledAt: null
+            canceledAt: null,
+            isTestRound: false
           }
         },
         orderBy: [

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
@@ -22,6 +23,7 @@ type ResultsData = {
     roundName: string;
     roundDate: Date | string;
     roundMode: "MATCH_QUOTA" | "SKINS_ONLY";
+    isTestRound?: boolean;
     isPayoutLocked: boolean;
     paidPlayerIds: string[];
     notes: string | null;
@@ -269,7 +271,11 @@ function QuotaAuditWarning({ quotaAudit }: { quotaAudit?: QuotaValidationSummary
 }
 
 export function RoundResults({ data }: { data: ResultsData }) {
+  const router = useRouter();
+  const [isDeletingTestRound, setIsDeletingTestRound] = useState(false);
+  const [testRoundMessage, setTestRoundMessage] = useState<string | null>(null);
   const isIndividualQuotaSkins = data.round.roundMode === "SKINS_ONLY";
+  const isTestRound = Boolean(data.round.isTestRound);
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
   const payoutAudit = calculatePayoutAudit(data.entries, data.round.roundMode);
   const displayRoundDate = getRoundDisplayDate({
@@ -300,9 +306,46 @@ export function RoundResults({ data }: { data: ResultsData }) {
     }
   }
 
+  async function deleteTestRound() {
+    if (!isTestRound || isDeletingTestRound) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete Test Round\n\nThis will remove the test round. Real quotas were not changed."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingTestRound(true);
+    setTestRoundMessage(null);
+
+    try {
+      const response = await fetch(`/api/rounds/${data.round.id}?force=1`, {
+        method: "DELETE"
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Could not delete test round.");
+      }
+
+      router.push("/current-round");
+      router.refresh();
+    } catch (error) {
+      setTestRoundMessage(error instanceof Error ? error.message : "Could not delete test round.");
+      setIsDeletingTestRound(false);
+    }
+  }
+
   return (
     <div className="space-y-4 pb-8">
-      <PageTitle title="Results" subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`} />
+      <PageTitle
+        title={isTestRound ? "TEST RESULTS \u2014 quotas not updated" : "Results"}
+        subtitle={`Completed ${formatDisplayDate(displayRoundDate)}`}
+      />
       <Link
         href="/past-games"
         className="inline-flex min-h-11 items-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
@@ -310,7 +353,34 @@ export function RoundResults({ data }: { data: ResultsData }) {
         ← See All Results
       </Link>
 
-
+      {isTestRound ? (
+        <SectionCard className="border-[#7A1E2C]/30 bg-[#FBF7F0]">
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#7A1E2C]">
+                TEST ROUND
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink/75">
+                Test results only. Real quotas, official past games, player history, and stats were not updated.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={deleteTestRound}
+              disabled={isDeletingTestRound}
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-danger/20 bg-white px-4 py-2 text-sm font-extrabold text-danger shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isDeletingTestRound ? "Deleting Test Round..." : "Delete Test Round"}
+            </button>
+            <p className="text-xs font-semibold text-ink/60">
+              This will remove the test round. Real quotas were not changed.
+            </p>
+            {testRoundMessage ? (
+              <p className="text-sm font-semibold text-danger">{testRoundMessage}</p>
+            ) : null}
+          </div>
+        </SectionCard>
+      ) : null}
 
       <CollapsibleSection
         title="Payout Summary"
@@ -632,9 +702,4 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
-
-
-
-
-
 

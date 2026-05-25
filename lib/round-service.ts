@@ -314,7 +314,9 @@ async function buildQuotaValidationSummary(
           round: {
             completedAt: {
               not: null
-            }
+            },
+            canceledAt: null,
+            isTestRound: false
           }
         },
         orderBy: [
@@ -421,7 +423,8 @@ async function buildStoredQuotaValidationSummary(tx: Tx) {
               not: null,
               gte: seasonStartDate
             },
-            canceledAt: null
+            canceledAt: null,
+            isTestRound: false
           }
         },
         orderBy: [
@@ -570,7 +573,8 @@ export async function finalizeRound(tx: Tx, roundId: string) {
     select: {
       id: true,
       completedAt: true,
-      canceledAt: true
+      canceledAt: true,
+      isTestRound: true
     }
   });
 
@@ -618,7 +622,9 @@ export async function finalizeRound(tx: Tx, roundId: string) {
     }
   });
 
-  await recomputeHistoricalState(tx);
+  if (!round.isTestRound) {
+    await recomputeHistoricalState(tx);
+  }
 }
 
 export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomputeResult> {
@@ -640,7 +646,8 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
         not: null,
         gte: seasonStartDate
       },
-      canceledAt: null
+      canceledAt: null,
+      isTestRound: false
     },
     include: {
       entries: {
@@ -935,7 +942,8 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
         not: null,
         gte: seasonStartDate
       },
-      canceledAt: null
+      canceledAt: null,
+      isTestRound: false
     },
     include: {
       entries: {

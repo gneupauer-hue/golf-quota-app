@@ -415,6 +415,13 @@ export async function DELETE(
       return NextResponse.json({ ok: true });
     }
 
+    if (round.isTestRound) {
+      await prisma.round.delete({
+        where: { id }
+      });
+      return NextResponse.json({ ok: true });
+    }
+
     if (round.completedAt) {
       return NextResponse.json(
         { error: "Completed rounds cannot be deleted from the live flow." },
@@ -465,11 +472,7 @@ export async function DELETE(
       );
     }
 
-    if (round.isTestRound) {
-      await prisma.round.delete({
-        where: { id }
-      });
-    } else if (savedScoreCount > 0 && forceDelete) {
+    if (savedScoreCount > 0 && forceDelete) {
       await prisma.round.update({
         where: { id },
         data: {
