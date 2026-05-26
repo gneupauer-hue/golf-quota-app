@@ -114,6 +114,13 @@ type ResultsData = {
       }>;
     };
   };
+  storedSkinHoles?: Array<{
+    holeNumber: number;
+    eligibleNames: string | null;
+    skinAwarded: boolean;
+    winnerPlayerId: string | null;
+    winnerName: string | null;
+  }>;
   quotaAudit?: QuotaValidationSummary;
 };
 
@@ -126,9 +133,13 @@ type CollapsibleSectionProps = {
   children: React.ReactNode;
 };
 
-type AllSkinEntry = GoodSkinEntry & {
+type AllSkinEntry = {
   playerId: string;
   playerName: string;
+  holeNumber: number;
+  type: GoodSkinType | null;
+  score: number;
+  typeLabel: string;
 };
 
 const goodSkinTypeOrder: GoodSkinType[] = ["birdie", "eagle", "ace"];
@@ -143,6 +154,19 @@ function getGoodSkinScore(type: GoodSkinType) {
   if (type === "ace") return 8;
   if (type === "eagle") return 6;
   return 4;
+}
+
+function parseStoredSkinNames(value: string | null | undefined, winnerName: string | null | undefined) {
+  const names = (value ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  if (!names.length && winnerName) {
+    names.push(winnerName);
+  }
+
+  return [...new Set(names)];
 }
 
 function formatCurrency(value: number) {
@@ -331,20 +355,39 @@ export function RoundResults({ data }: { data: ResultsData }) {
   );
   const indyWinnerIds = new Set(indyCashers.map((player) => player.playerId));
   const goodSkins = data.money.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
-  const allSkins = displayEntries
+  const typedAllSkins = displayEntries
     .flatMap((entry) =>
       entry.goodSkinEntries.map((skinEntry) => ({
-        ...skinEntry,
+        holeNumber: skinEntry.holeNumber,
+        type: skinEntry.type,
+        score: skinEntry.score,
+        typeLabel: goodSkinTypeLabels[skinEntry.type] ?? "Skin",
         playerId: entry.playerId,
         playerName: entry.playerName
       }))
-    )
-    .sort(
-      (left, right) =>
-        goodSkinTypeOrder.indexOf(left.type) - goodSkinTypeOrder.indexOf(right.type) ||
-        left.holeNumber - right.holeNumber ||
-        left.playerName.localeCompare(right.playerName)
     );
+  const storedFallbackSkins =
+    typedAllSkins.length > 0
+      ? []
+      : (data.storedSkinHoles ?? []).flatMap((hole) =>
+          parseStoredSkinNames(hole.eligibleNames, hole.winnerName).map((playerName, index) => ({
+            playerId: hole.winnerPlayerId && playerName === hole.winnerName
+              ? hole.winnerPlayerId
+              : `stored-skin-${hole.holeNumber}-${index}-${playerName}`,
+            playerName,
+            holeNumber: hole.holeNumber,
+            type: null,
+            score: 0,
+            typeLabel: "Skin"
+          }))
+        );
+  const allSkins = [...typedAllSkins, ...storedFallbackSkins].sort(
+    (left, right) =>
+      (left.type == null ? 999 : goodSkinTypeOrder.indexOf(left.type)) -
+        (right.type == null ? 999 : goodSkinTypeOrder.indexOf(right.type)) ||
+      left.holeNumber - right.holeNumber ||
+      left.playerName.localeCompare(right.playerName)
+  );
   const goodSkinTypeByPlayerHole = new Map<string, string>();
   for (const entry of displayEntries) {
     for (const skinEntry of entry.goodSkinEntries) {
@@ -731,7 +774,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
 
           {allSkins.length ? (
             <div className="space-y-3">
-              {goodSkinTypeOrder.map((type) => {
+              {[...goodSkinTypeOrder, null].map((type) => {
                 const typeEntries = allSkins.filter((entry) => entry.type === type);
 
                 if (!typeEntries.length) {
@@ -739,18 +782,18 @@ export function RoundResults({ data }: { data: ResultsData }) {
                 }
 
                 return (
-                  <div key={type} className="rounded-[18px] border border-ink/10 bg-canvas px-3 py-2">
+                  <div key={type ?? "skin"} className="rounded-[18px] border border-ink/10 bg-canvas px-3 py-2">
                     <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#4A0F1A]">
-                      {allSkinGroupTitles[type]}
+                      {type == null ? "Skins" : allSkinGroupTitles[type]}
                     </p>
                     <div className="mt-2 space-y-1.5">
                       {typeEntries.map((entry) => (
                         <div
-                          key={`${entry.playerId}-${entry.holeNumber}-${entry.type}`}
+                          key={`${entry.playerId}-${entry.holeNumber}-${entry.type ?? "skin"}`}
                           className="flex items-center justify-between gap-3 text-sm"
                         >
                           <p className="min-w-0 truncate font-semibold text-ink">{entry.playerName}</p>
-                          <p className="shrink-0 font-bold text-ink/70">{`Hole ${entry.holeNumber}`}</p>
+                          <p className="shrink-0 font-bold text-ink/70">{`Hole ${entry.holeNumber} - ${entry.typeLabel}`}</p>
                         </div>
                       ))}
                     </div>
@@ -954,7 +997,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-extrabold text-ink">{entry.playerName}</p>
                         <p className="text-xs font-semibold text-ink/60">
-                          {`Hole ${entry.holeNumber} - ${goodSkinTypeLabels[entry.type]}`}
+                          {`Hole ${entry.holeNumber} - ${entry.typeLabel}`}
                         </p>
                       </div>
                       <button

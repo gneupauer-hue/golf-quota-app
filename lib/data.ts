@@ -981,6 +981,11 @@ export async function getRoundResultsData(roundId: string) {
         orderBy: {
           rank: "asc"
         }
+      },
+      skinHoles: {
+        orderBy: {
+          holeNumber: "asc"
+        }
       }
     }
   });
@@ -1104,6 +1109,13 @@ export async function getRoundResultsData(roundId: string) {
     teamStandings: calculateTeamStandings(entries),
     leaders: calculateLiveLeaders(entries),
     money: calculateSideGameResults(entries),
+    storedSkinHoles: (round.skinHoles as any[]).map((hole: any) => ({
+      holeNumber: hole.holeNumber,
+      eligibleNames: hole.eligibleNames ?? null,
+      skinAwarded: Boolean(hole.skinAwarded),
+      winnerPlayerId: hole.winnerPlayerId ?? null,
+      winnerName: hole.winnerName ?? null
+    })),
     quotaAudit
   };
 }
