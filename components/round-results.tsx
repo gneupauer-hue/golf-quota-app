@@ -13,6 +13,7 @@ import {
   formatPlusMinus,
   goodSkinTypeLabels,
   type GoodSkinEntry,
+  type GoodSkinType,
   type TeamCode
 } from "@/lib/quota";
 import { classNames, formatDisplayDate, getRoundDisplayDate } from "@/lib/utils";
@@ -124,6 +125,25 @@ type CollapsibleSectionProps = {
   featured?: boolean;
   children: React.ReactNode;
 };
+
+type AllSkinEntry = GoodSkinEntry & {
+  playerId: string;
+  playerName: string;
+};
+
+const goodSkinTypeOrder: GoodSkinType[] = ["birdie", "eagle", "ace"];
+
+const allSkinGroupTitles: Record<GoodSkinType, string> = {
+  birdie: "Birdies",
+  eagle: "Eagles",
+  ace: "Hole-in-Ones"
+};
+
+function getGoodSkinScore(type: GoodSkinType) {
+  if (type === "ace") return 8;
+  if (type === "eagle") return 6;
+  return 4;
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -274,8 +294,20 @@ export function RoundResults({ data }: { data: ResultsData }) {
   const router = useRouter();
   const [isDeletingTestRound, setIsDeletingTestRound] = useState(false);
   const [testRoundMessage, setTestRoundMessage] = useState<string | null>(null);
+  const [skinOverridesByPlayerId, setSkinOverridesByPlayerId] = useState<Record<string, GoodSkinEntry[]>>({});
+  const [isSkinEditorOpen, setIsSkinEditorOpen] = useState(false);
+  const [skinEditorPlayerId, setSkinEditorPlayerId] = useState(data.entries[0]?.playerId ?? "");
+  const [skinEditorHole, setSkinEditorHole] = useState("1");
+  const [skinEditorType, setSkinEditorType] = useState<GoodSkinType>("birdie");
+  const [skinEditorMessage, setSkinEditorMessage] = useState<string | null>(null);
+  const [isSavingSkins, setIsSavingSkins] = useState(false);
   const isIndividualQuotaSkins = data.round.roundMode === "SKINS_ONLY";
   const isTestRound = Boolean(data.round.isTestRound);
+  const canEditSkins = !data.round.completedAt;
+  const displayEntries = data.entries.map((entry) => ({
+    ...entry,
+    goodSkinEntries: skinOverridesByPlayerId[entry.playerId] ?? entry.goodSkinEntries
+  }));
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
   const payoutAudit = calculatePayoutAudit(data.entries, data.round.roundMode);
   const displayRoundDate = getRoundDisplayDate({
@@ -299,8 +331,22 @@ export function RoundResults({ data }: { data: ResultsData }) {
   );
   const indyWinnerIds = new Set(indyCashers.map((player) => player.playerId));
   const goodSkins = data.money.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
+  const allSkins = displayEntries
+    .flatMap((entry) =>
+      entry.goodSkinEntries.map((skinEntry) => ({
+        ...skinEntry,
+        playerId: entry.playerId,
+        playerName: entry.playerName
+      }))
+    )
+    .sort(
+      (left, right) =>
+        goodSkinTypeOrder.indexOf(left.type) - goodSkinTypeOrder.indexOf(right.type) ||
+        left.holeNumber - right.holeNumber ||
+        left.playerName.localeCompare(right.playerName)
+    );
   const goodSkinTypeByPlayerHole = new Map<string, string>();
-  for (const entry of data.entries) {
+  for (const entry of displayEntries) {
     for (const skinEntry of entry.goodSkinEntries) {
       goodSkinTypeByPlayerHole.set(`${entry.playerId}:${skinEntry.holeNumber}`, goodSkinTypeLabels[skinEntry.type] ?? "Skin");
     }
@@ -338,6 +384,79 @@ export function RoundResults({ data }: { data: ResultsData }) {
       setTestRoundMessage(error instanceof Error ? error.message : "Could not delete test round.");
       setIsDeletingTestRound(false);
     }
+  }
+
+  async function savePlayerSkinEntries(playerId: string, nextEntries: GoodSkinEntry[]) {
+    if (!canEditSkins || isSavingSkins) {
+      return;
+    }
+
+    setIsSavingSkins(true);
+    setSkinEditorMessage(null);
+
+    try {
+      const response = await fetch(`/api/rounds/${data.round.id}/skins`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playerId,
+          goodSkinEntries: nextEntries
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        goodSkinEntries?: GoodSkinEntry[];
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Could not update skins.");
+      }
+
+      setSkinOverridesByPlayerId((current) => ({
+        ...current,
+        [playerId]: payload?.goodSkinEntries ?? nextEntries
+      }));
+      setSkinEditorMessage("Skins updated. Payouts recalculated.");
+      router.refresh();
+    } catch (error) {
+      setSkinEditorMessage(error instanceof Error ? error.message : "Could not update skins.");
+    } finally {
+      setIsSavingSkins(false);
+    }
+  }
+
+  function addSkinEntry() {
+    const player = displayEntries.find((entry) => entry.playerId === skinEditorPlayerId);
+    const holeNumber = Number(skinEditorHole);
+
+    if (!player || !Number.isInteger(holeNumber) || holeNumber < 1 || holeNumber > 18) {
+      setSkinEditorMessage("Choose a player, hole, and skin type.");
+      return;
+    }
+
+    const nextEntries = [
+      ...player.goodSkinEntries.filter((entry) => entry.holeNumber !== holeNumber),
+      {
+        holeNumber,
+        type: skinEditorType,
+        score: getGoodSkinScore(skinEditorType)
+      }
+    ].sort((left, right) => left.holeNumber - right.holeNumber);
+
+    void savePlayerSkinEntries(player.playerId, nextEntries);
+  }
+
+  function removeSkinEntry(entryToRemove: AllSkinEntry) {
+    const player = displayEntries.find((entry) => entry.playerId === entryToRemove.playerId);
+
+    if (!player) {
+      return;
+    }
+
+    void savePlayerSkinEntries(
+      player.playerId,
+      player.goodSkinEntries.filter((entry) => entry.holeNumber !== entryToRemove.holeNumber)
+    );
   }
 
   return (
@@ -586,6 +705,68 @@ export function RoundResults({ data }: { data: ResultsData }) {
       </CollapsibleSection>
 
       <CollapsibleSection
+        title="All Skins"
+        subtitle="Every recorded birdie, eagle, and hole-in-one for review."
+        badge={`${allSkins.length} recorded`}
+      >
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-ink/65">
+              {canEditSkins
+                ? "Review or edit recorded skins before finalizing."
+                : "Review only. Editing is disabled after finalizing."}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSkinEditorMessage(null);
+                setIsSkinEditorOpen(true);
+              }}
+              disabled={!canEditSkins}
+              className="min-h-10 rounded-2xl border border-[#7A1E2C]/20 bg-white px-3 py-2 text-xs font-extrabold text-[#7A1E2C] shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Edit Skins
+            </button>
+          </div>
+
+          {allSkins.length ? (
+            <div className="space-y-3">
+              {goodSkinTypeOrder.map((type) => {
+                const typeEntries = allSkins.filter((entry) => entry.type === type);
+
+                if (!typeEntries.length) {
+                  return null;
+                }
+
+                return (
+                  <div key={type} className="rounded-[18px] border border-ink/10 bg-canvas px-3 py-2">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#4A0F1A]">
+                      {allSkinGroupTitles[type]}
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {typeEntries.map((entry) => (
+                        <div
+                          key={`${entry.playerId}-${entry.holeNumber}-${entry.type}`}
+                          className="flex items-center justify-between gap-3 text-sm"
+                        >
+                          <p className="min-w-0 truncate font-semibold text-ink">{entry.playerName}</p>
+                          <p className="shrink-0 font-bold text-ink/70">{`Hole ${entry.holeNumber}`}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-[18px] border border-ink/10 bg-canvas px-3 py-2 text-sm font-semibold text-ink/65">
+              No skins recorded.
+            </p>
+          )}
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
         title="Pot Summary"
         subtitle="Round pots and paid-player summary."
         badge={`${payoutSummary.players.length} paid`}
@@ -693,6 +874,125 @@ export function RoundResults({ data }: { data: ResultsData }) {
 
       <QuotaAuditWarning quotaAudit={data.quotaAudit} />
 
+      {isSkinEditorOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-ink/45 px-3 pb-3 pt-6 sm:items-center sm:justify-center sm:p-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-hidden rounded-[28px] bg-hero shadow-[0_24px_80px_rgba(26,38,59,0.22)]">
+            <div className="space-y-4 px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">All Skins</p>
+                <h3 className="mt-1 text-xl font-semibold text-ink">Edit skins before finalizing</h3>
+                <p className="mt-1 text-sm font-semibold text-ink/65">
+                  Add missed entries or remove incorrect entries. Winners and payouts recalculate after saving.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-[1fr_80px] gap-2">
+                <label className="text-xs font-bold uppercase tracking-[0.14em] text-ink/50">
+                  Player
+                  <select
+                    value={skinEditorPlayerId}
+                    onChange={(event) => setSkinEditorPlayerId(event.target.value)}
+                    className="mt-1 h-11 w-full rounded-2xl border border-sand bg-white px-3 text-sm font-semibold text-ink"
+                  >
+                    {displayEntries.map((entry) => (
+                      <option key={`skin-player-${entry.playerId}`} value={entry.playerId}>
+                        {entry.playerName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-bold uppercase tracking-[0.14em] text-ink/50">
+                  Hole
+                  <select
+                    value={skinEditorHole}
+                    onChange={(event) => setSkinEditorHole(event.target.value)}
+                    className="mt-1 h-11 w-full rounded-2xl border border-sand bg-white px-3 text-sm font-semibold text-ink"
+                  >
+                    {Array.from({ length: 18 }, (_, index) => index + 1).map((holeNumber) => (
+                      <option key={`skin-hole-${holeNumber}`} value={holeNumber}>
+                        {holeNumber}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {goodSkinTypeOrder.map((type) => (
+                  <button
+                    key={`skin-type-${type}`}
+                    type="button"
+                    onClick={() => setSkinEditorType(type)}
+                    className={classNames(
+                      "min-h-11 rounded-2xl border px-2 text-xs font-extrabold",
+                      skinEditorType === type
+                        ? "border-[#7A1E2C] bg-[#7A1E2C] text-white"
+                        : "border-sand bg-white text-ink/70"
+                    )}
+                  >
+                    {type === "ace" ? "HIO" : goodSkinTypeLabels[type]}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={addSkinEntry}
+                disabled={isSavingSkins || !canEditSkins}
+                className="club-btn-primary min-h-12 w-full text-sm disabled:opacity-60"
+              >
+                {isSavingSkins ? "Saving..." : "Add Skin Entry"}
+              </button>
+
+              <div className="max-h-[30vh] space-y-2 overflow-y-auto pr-1">
+                {allSkins.length ? (
+                  allSkins.map((entry) => (
+                    <div
+                      key={`edit-${entry.playerId}-${entry.holeNumber}-${entry.type}`}
+                      className="flex items-center justify-between gap-3 rounded-[18px] bg-white/90 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-extrabold text-ink">{entry.playerName}</p>
+                        <p className="text-xs font-semibold text-ink/60">
+                          {`Hole ${entry.holeNumber} - ${goodSkinTypeLabels[entry.type]}`}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSkinEntry(entry)}
+                        disabled={isSavingSkins || !canEditSkins}
+                        className="shrink-0 rounded-2xl border border-danger/20 bg-white px-3 py-2 text-xs font-extrabold text-danger disabled:opacity-60"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-[18px] bg-white/90 px-3 py-2 text-sm font-semibold text-ink/65">
+                    No skins recorded.
+                  </p>
+                )}
+              </div>
+
+              {skinEditorMessage ? (
+                <p className={classNames("text-sm font-semibold", skinEditorMessage.includes("updated") ? "text-pine" : "text-danger")}>
+                  {skinEditorMessage}
+                </p>
+              ) : null}
+
+              <button
+                type="button"
+                className="min-h-12 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink"
+                disabled={isSavingSkins}
+                onClick={() => setIsSkinEditorOpen(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <Link
         href="/past-games"
         className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-ink/10 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm"
@@ -702,4 +1002,3 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
-

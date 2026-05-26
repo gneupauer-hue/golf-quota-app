@@ -216,7 +216,7 @@ function resolveHistoricalStartQuota(
   return 0;
 }
 
-async function syncRoundComputedState(tx: Tx, roundId: string) {
+export async function syncRoundComputedState(tx: Tx, roundId: string) {
   const round = await tx.round.findUnique({
     where: { id: roundId },
     include: {

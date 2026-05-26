@@ -211,6 +211,20 @@ export function QuickEntryRoundView({
   const playerConfirmRow = summaryRows.find((row) => row.playerId === playerConfirmId) ?? null;
   const allPlayersComplete = summaryRows.length > 0 && summaryRows.every((row) => isPlayerComplete(row));
   const totalCompletedCount = summaryRows.filter((row) => isPlayerComplete(row)).length;
+  const allSkinReviewEntries = summaryRows
+    .flatMap((row) =>
+      row.goodSkinEntries.map((entry) => ({
+        ...entry,
+        playerId: row.playerId,
+        playerName: row.playerName
+      }))
+    )
+    .sort(
+      (left, right) =>
+        left.type.localeCompare(right.type) ||
+        left.holeNumber - right.holeNumber ||
+        left.playerName.localeCompare(right.playerName)
+    );
 
   useEffect(() => {
     setCompletedPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
@@ -665,6 +679,23 @@ export function QuickEntryRoundView({
                 </div>
               </div>
               <div className="max-h-[42vh] space-y-2 overflow-y-auto pr-1">
+                <div className="rounded-[22px] bg-white/90 px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-ink/50">All Skins</p>
+                  {allSkinReviewEntries.length ? (
+                    <div className="mt-2 space-y-1">
+                      {allSkinReviewEntries.map((entry) => (
+                        <p
+                          key={`final-skin-${entry.playerId}-${entry.holeNumber}-${entry.type}`}
+                          className="text-sm font-semibold text-ink/75"
+                        >
+                          {`${entry.playerName} - Hole ${entry.holeNumber} - ${goodSkinTypeLabels[entry.type]}`}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm font-semibold text-ink/60">No skins recorded.</p>
+                  )}
+                </div>
                 {summaryRows.map((row) => (
                   <div key={`final-${row.playerId}`} className="rounded-[22px] bg-white/90 px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
