@@ -549,6 +549,25 @@ function buildTwoPlayerTeamGroupings(teamCodes: TeamCode[]) {
   return groupings;
 }
 
+function getTeamAssignmentsCanonicalKey(assignments: Array<{ playerId: string; team: TeamCode | null }>) {
+  const playersByTeam = new Map<string, string[]>();
+
+  for (const assignment of assignments) {
+    if (!assignment.team) {
+      continue;
+    }
+
+    const playerIds = playersByTeam.get(assignment.team) ?? [];
+    playerIds.push(assignment.playerId);
+    playersByTeam.set(assignment.team, playerIds);
+  }
+
+  return Array.from(playersByTeam.values())
+    .map((playerIds) => [...playerIds].sort().join("+"))
+    .sort()
+    .join("|");
+}
+
 type ScoringGroup = {
   key: string;
   label: string;
@@ -803,6 +822,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const [setupTeamCount, setSetupTeamCount] = useState<number | null>(null);
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
   const [teamBuildVariant, setTeamBuildVariant] = useState(0);
+  const [shownTeamBuildKeys, setShownTeamBuildKeys] = useState<string[]>([]);
   const [scoringGroupBuildVariant, setScoringGroupBuildVariant] = useState(0);
   const [shownScoringGroupKeys, setShownScoringGroupKeys] = useState<string[]>([]);
   const [isSetupTeamEditMode, setIsSetupTeamEditMode] = useState(false);
@@ -1411,6 +1431,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     ]);
     setSearch("");
     setTeamBuildVariant(0);
+    setShownTeamBuildKeys([]);
+    setShownScoringGroupKeys([]);
   }
 
   function autoBuildMatchQuotaTeams(requireDifferent = false) {
@@ -1456,27 +1478,61 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     try {
       const teamCodes = teamOptions.slice(0, selectedMatchFormat.teamCount) as TeamCode[];
       const capacities = capacitiesToMap(teamCodes, selectedMatchFormat.capacities);
-      const currentAssignments = new Map(rows.map((row) => [row.playerId, row.team ?? null]));
+      const currentTeamKey = getTeamAssignmentsCanonicalKey(
+        rows.map((row) => ({ playerId: row.playerId, team: row.team }))
+      );
+      const alreadyShownKeys = new Set(shownTeamBuildKeys);
+      if (currentTeamKey) {
+        alreadyShownKeys.add(currentTeamKey);
+      }
       let selectedAssignments: Map<string, TeamCode> | null = null;
       let chosenVariant = teamBuildVariant;
-      const maxVariants = Math.max(8, teamCodes.length * 6);
+      let selectedTeamKey = "";
+      let allCombinationsShown = false;
+      let fallbackSelection: {
+        teamByPlayerId: Map<string, TeamCode>;
+        variant: number;
+        key: string;
+      } | null = null;
+      const maxVariants = Math.max(96, setupPlayers.length * teamCodes.length * 12);
 
       for (let attempt = 0; attempt < maxVariants; attempt += 1) {
-        const variant = requireDifferent ? teamBuildVariant + attempt + 1 : teamBuildVariant + attempt;
+        const variant = teamBuildVariant + attempt + 1;
         const assignments = buildBalancedTeams(setupPlayers, teamCodes, capacities, {
           variant,
           partnerCounts: partnerHistory
         });
         const teamByPlayerId = new Map(assignments.map((assignment) => [assignment.playerId, assignment.team]));
-        const differs = rows.some(
-          (row) => (teamByPlayerId.get(row.playerId) ?? null) !== (currentAssignments.get(row.playerId) ?? null)
+        const teamKey = getTeamAssignmentsCanonicalKey(
+          assignments.map((assignment) => ({
+            playerId: assignment.playerId,
+            team: assignment.team
+          }))
         );
 
-        if (!requireDifferent || differs) {
-          selectedAssignments = teamByPlayerId;
-          chosenVariant = variant;
-          break;
+        if (!fallbackSelection) {
+          fallbackSelection = {
+            teamByPlayerId,
+            variant,
+            key: teamKey
+          };
         }
+
+        if (alreadyShownKeys.has(teamKey)) {
+          continue;
+        }
+
+        selectedAssignments = teamByPlayerId;
+        chosenVariant = variant;
+        selectedTeamKey = teamKey;
+        break;
+      }
+
+      if (!selectedAssignments && fallbackSelection) {
+        selectedAssignments = fallbackSelection.teamByPlayerId;
+        chosenVariant = fallbackSelection.variant;
+        selectedTeamKey = fallbackSelection.key;
+        allCombinationsShown = true;
       }
 
       if (!selectedAssignments) {
@@ -1501,9 +1557,19 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         }))
       );
       setShownScoringGroupKeys([]);
+      if (selectedTeamKey) {
+        setShownTeamBuildKeys((current) => {
+          const next = new Set(current);
+          if (currentTeamKey) next.add(currentTeamKey);
+          next.add(selectedTeamKey);
+          return Array.from(next);
+        });
+      }
       setTeamBuildVariant(chosenVariant);
       setMessage(
-        requireDifferent
+        allCombinationsShown
+          ? "All team combinations have been shown."
+          : requireDifferent || currentTeamKey
           ? "Teams rebuilt with a new random arrangement."
           : "Teams randomized. Review the teams below before starting the round."
       );
@@ -1556,6 +1622,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     }
 
     const player = playersById.get(playerId);
+    setShownTeamBuildKeys([]);
     setShownScoringGroupKeys([]);
     setSearch("");
     setMessage(`${player?.name ?? "Player"} added to ${getSetupTeamLabel(destinationTeam)}.`);
