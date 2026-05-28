@@ -327,14 +327,27 @@ function calculateAssignmentSpread(
   return teamBalanceSpread(hydrateTeamState(assignments, players, teamCodes));
 }
 
-function buildRandomTwoManTeams(
+function getTeamRepeatCount(playerIds: string[], partnerCounts: Record<string, number>) {
+  let total = 0;
+
+  for (let leftIndex = 0; leftIndex < playerIds.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < playerIds.length; rightIndex += 1) {
+      total += partnerCounts[getPartnerPairKey(playerIds[leftIndex], playerIds[rightIndex])] ?? 0;
+    }
+  }
+
+  return total;
+}
+
+function buildRandomTeamsByCapacity(
   players: SetupPlayer[],
   teamCodes: TeamCode[],
+  teamCapacities: Map<TeamCode, number>,
   partnerCounts: Record<string, number>,
   variant = 0
 ) {
   const conflictMap = buildConflictMap(players);
-  const candidateCount = Math.max(80, players.length * 24);
+  const candidateCount = Math.max(120, players.length * teamCodes.length * 18);
   let bestAssignments: TeamAssignment[] | null = null;
   let bestScore: {
     repeatCount: number;
@@ -348,25 +361,27 @@ function buildRandomTwoManTeams(
     const assignments: TeamAssignment[] = [];
     let repeatCount = 0;
     let conflictCount = 0;
+    let cursor = 0;
 
-    for (let index = 0; index < teamCodes.length; index += 1) {
-      const left = shuffled[index * 2];
-      const right = shuffled[index * 2 + 1];
+    for (const team of teamCodes) {
+      const capacity = teamCapacities.get(team) ?? 0;
+      const teamPlayers = shuffled.slice(cursor, cursor + capacity);
+      cursor += capacity;
 
-      if (!left || !right) {
+      if (teamPlayers.length !== capacity) {
         break;
       }
 
-      repeatCount += partnerCounts[getPartnerPairKey(left.playerId, right.playerId)] ?? 0;
-
-      if (hasConflict(left.playerId, [right.playerId], conflictMap)) {
-        conflictCount += 1;
-      }
-
-      assignments.push(
-        { playerId: left.playerId, team: teamCodes[index] },
-        { playerId: right.playerId, team: teamCodes[index] }
+      const teamPlayerIds = teamPlayers.map((player) => player.playerId);
+      repeatCount += getTeamRepeatCount(teamPlayerIds, partnerCounts);
+      conflictCount += teamConflictCount(
+        new Map([[team, { totalQuota: 0, playerIds: teamPlayerIds }]]),
+        conflictMap
       );
+
+      for (const player of teamPlayers) {
+        assignments.push({ playerId: player.playerId, team });
+      }
     }
 
     if (assignments.length !== players.length) {
@@ -388,11 +403,11 @@ function buildRandomTwoManTeams(
       (score.repeatCount === bestScore.repeatCount && score.conflictCount < bestScore.conflictCount) ||
       (score.repeatCount === bestScore.repeatCount &&
         score.conflictCount === bestScore.conflictCount &&
-        score.spread < bestScore.spread) ||
+        score.randomTieBreaker < bestScore.randomTieBreaker) ||
       (score.repeatCount === bestScore.repeatCount &&
         score.conflictCount === bestScore.conflictCount &&
-        score.spread === bestScore.spread &&
-        score.randomTieBreaker < bestScore.randomTieBreaker)
+        score.randomTieBreaker === bestScore.randomTieBreaker &&
+        score.spread < bestScore.spread)
     ) {
       bestAssignments = assignments;
       bestScore = score;
@@ -400,7 +415,7 @@ function buildRandomTwoManTeams(
   }
 
   if (!bestAssignments) {
-    throw new Error("Could not build valid 2-man teams for this round.");
+    throw new Error("Could not build valid teams for this round.");
   }
 
   return bestAssignments;
@@ -532,135 +547,13 @@ export function buildBalancedTeams(
   }
 ): TeamAssignment[] {
   const variant = options?.variant ?? 0;
-  const isTwoManFormat =
-    teamCodes.length > 0 && teamCodes.every((team) => (teamCapacities.get(team) ?? 0) === 2);
-
-  if (isTwoManFormat) {
-    return buildRandomTwoManTeams(players, teamCodes, options?.partnerCounts ?? {}, variant);
-  }
-
-  const sortedPlayers = [...players].sort(
-    (a, b) =>
-      b.quota - a.quota ||
-      (variant % 2 === 0
-        ? a.playerName.localeCompare(b.playerName)
-        : b.playerName.localeCompare(a.playerName))
-  );
-  const snakeSequence = buildSnakeSequence(teamCodes, teamCapacities, variant);
-  const conflictMap = buildConflictMap(sortedPlayers);
-  const teamState = createTeamState(teamCodes);
-  const assignments: TeamAssignment[] = [];
-  const fallbackAssignments = buildCapacitySafeAssignments(players, teamCodes, teamCapacities, variant);
-  logTeamBuilder("info", "[team-builder] initial-capacities", {
+  return buildRandomTeamsByCapacity(
+    players,
     teamCodes,
-    capacities: teamCodes.map((team) => ({
-      team,
-      capacity: teamCapacities.get(team) ?? 0
-    }))
-  });
-
-  sortedPlayers.forEach((player, index) => {
-    const preferredTeam = snakeSequence[index];
-    const teamsWithCapacity = teamCodes.filter(
-      (team) => teamState.get(team)!.playerIds.length < (teamCapacities.get(team) ?? 0)
-    );
-    const fallbackTeams = teamsWithCapacity
-      .filter((team) => team !== preferredTeam)
-      .sort((left, right) => {
-        const leftState = teamState.get(left)!;
-        const rightState = teamState.get(right)!;
-        if (leftState.playerIds.length !== rightState.playerIds.length) {
-          return leftState.playerIds.length - rightState.playerIds.length;
-        }
-        return leftState.totalQuota - rightState.totalQuota;
-      });
-    const candidateTeams = [
-      ...(teamsWithCapacity.includes(preferredTeam) ? [preferredTeam] : []),
-      ...fallbackTeams
-    ];
-
-    if (!candidateTeams.length) {
-      throw new Error("Could not assign players into valid team sizes.");
-    }
-
-    let chosenTeam = candidateTeams.find((team) => {
-      const state = teamState.get(team)!;
-      return !hasConflict(player.playerId, state.playerIds, conflictMap);
-    });
-
-    if (!chosenTeam) {
-      chosenTeam = candidateTeams[0];
-    }
-
-    const state = teamState.get(chosenTeam)!;
-    state.playerIds.push(player.playerId);
-    state.totalQuota += player.quota;
-    assignments.push({
-      playerId: player.playerId,
-      team: chosenTeam
-    });
-  });
-
-  const initialValidation = validateTeamAssignments(assignments, teamCodes, teamCapacities);
-  if (!initialValidation.valid) {
-    const fallbackValidation = validateTeamAssignments(fallbackAssignments, teamCodes, teamCapacities);
-    if (!fallbackValidation.valid) {
-      throw new Error("Could not build evenly sized teams for this round.");
-    }
-    logTeamBuilder("warn", "[team-builder] falling-back-to-default-assignment", {
-      reason: "initial-assignment-invalid",
-      sizes: teamCodes.map((team) => ({
-        team,
-        size: fallbackValidation.sizes.get(team) ?? 0,
-        capacity: teamCapacities.get(team) ?? 0
-      }))
-    });
-    return fallbackAssignments;
-  }
-  logTeamBuilder("info", "[team-builder] initial-valid-teams", {
-    sizes: teamCodes.map((team) => ({
-      team,
-      size: initialValidation.sizes.get(team) ?? 0,
-      capacity: teamCapacities.get(team) ?? 0
-    }))
-  });
-  const baseAssignments = assignments.map((assignment) => ({ ...assignment }));
-
-  try {
-    const optimizedAssignments = optimizeAssignments(
-      baseAssignments.map((assignment) => ({ ...assignment })),
-      sortedPlayers,
-      teamCodes,
-      conflictMap,
-      teamCapacities
-    );
-    const validation = validateTeamAssignments(optimizedAssignments, teamCodes, teamCapacities);
-
-    if (!validation.valid) {
-      logTeamBuilder("warn", "[team-builder] optimization-invalid-using-default", {
-        sizes: teamCodes.map((team) => ({
-          team,
-          optimizedSize: validation.sizes.get(team) ?? 0,
-          capacity: teamCapacities.get(team) ?? 0
-        }))
-      });
-      return baseAssignments;
-    }
-    logTeamBuilder("info", "[team-builder] final-valid-teams", {
-      sizes: teamCodes.map((team) => ({
-        team,
-        size: validation.sizes.get(team) ?? 0,
-        capacity: teamCapacities.get(team) ?? 0
-      }))
-    });
-
-    return optimizedAssignments;
-  } catch (error) {
-    logTeamBuilder("warn", "[team-builder] optimization-failed-using-default", {
-      error: error instanceof Error ? error.message : "Unknown optimization error"
-    });
-    return baseAssignments;
-  }
+    teamCapacities,
+    options?.partnerCounts ?? {},
+    variant
+  );
 }
 
 export function evaluateTeamFormat(players: SetupPlayer[], format: TeamFormat) {

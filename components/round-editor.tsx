@@ -1685,7 +1685,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         ? changed
           ? "Foursomes rebuilt."
           : "Groups are already set."
-        : "Balanced foursomes built for Individual Quota + Skins."
+        : "Foursomes built for Individual Quota + Skins."
     );
   }
   function removePlayer(playerId: string) {
@@ -3123,7 +3123,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
                         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 3</p>
                         <h3 className="mt-1 text-lg font-semibold">Build teams</h3>
                         <p className="mt-1 text-sm text-ink/65">
-                          Randomly mixes teams while trying to avoid repeat partners.
+                          Randomly mixes teams while trying to avoid repeat teammates.
                         </p>
                         {selectedMatchFormat ? (
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-pine">
