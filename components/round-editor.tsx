@@ -90,6 +90,7 @@ type EditorProps = {
     entries: EditorEntry[];
   };
   players: PlayerOption[];
+  partnerHistory: Record<string, number>;
   quotaSnapshot: Record<string, number>;
   groups: Array<{
     groupNumber: number;
@@ -729,7 +730,7 @@ function buildIndividualScoringGroups(
 
   return normalizeIndividualGroupOrder(groups.filter((group) => group.playerIds.length > 0));
 }
-export function RoundEditor({ round, players, quotaSnapshot, groups: initialGroups }: EditorProps) {
+export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, groups: initialGroups }: EditorProps) {
   const router = useRouter();
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
   const [isTestRound] = useState(Boolean(round.isTestRound));
@@ -1406,7 +1407,10 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
 
       for (let attempt = 0; attempt < maxVariants; attempt += 1) {
         const variant = requireDifferent ? teamBuildVariant + attempt + 1 : teamBuildVariant + attempt;
-        const assignments = buildBalancedTeams(setupPlayers, teamCodes, capacities, { variant });
+        const assignments = buildBalancedTeams(setupPlayers, teamCodes, capacities, {
+          variant,
+          partnerCounts: partnerHistory
+        });
         const teamByPlayerId = new Map(assignments.map((assignment) => [assignment.playerId, assignment.team]));
         const differs = rows.some(
           (row) => (teamByPlayerId.get(row.playerId) ?? null) !== (currentAssignments.get(row.playerId) ?? null)
@@ -1420,7 +1424,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       }
 
       if (!selectedAssignments) {
-        setMessage("No alternate balanced rebuild was found for this format.");
+        setMessage("No alternate random team build was found for this format.");
         return;
       }
 
@@ -1439,12 +1443,12 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       setTeamBuildVariant(chosenVariant);
       setMessage(
         requireDifferent
-          ? "Teams rebuilt with a new balanced arrangement."
-          : "Teams built automatically. Review the balance below before starting the round."
+          ? "Teams rebuilt with a new random arrangement."
+          : "Teams randomized. Review the teams below before starting the round."
       );
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Could not auto-build balanced teams."
+        error instanceof Error ? error.message : "Could not build random teams."
       );
     }
   }
@@ -1605,7 +1609,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       rebuilding
         ? changed
           ? "Foursomes rebuilt."
-          : "Groups are already balanced."
+          : "Groups are already set."
         : "Playing groups assigned. Live scoring will stay scoped to these foursomes."
     );
   }
@@ -1680,7 +1684,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
       rebuilding
         ? changed
           ? "Foursomes rebuilt."
-          : "Groups are already balanced."
+          : "Groups are already set."
         : "Balanced foursomes built for Individual Quota + Skins."
     );
   }
@@ -3119,7 +3123,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 3</p>
                         <h3 className="mt-1 text-lg font-semibold">Build teams</h3>
                         <p className="mt-1 text-sm text-ink/65">
-                          Auto-build balanced teams from player quotas, then review the totals.
+                          Randomly mixes teams while trying to avoid repeat partners.
                         </p>
                         {selectedMatchFormat ? (
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-pine">
@@ -3141,7 +3145,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         className="min-h-12 flex-1 rounded-full bg-pine px-4 text-sm font-semibold text-white disabled:opacity-60"
                         onClick={() => autoBuildMatchQuotaTeams(false)}
                       >
-                        Auto-Build Balanced Teams
+                        Build Random Teams
                       </button>
                       <button
                         type="button"
@@ -3334,7 +3338,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Step 2</p>
                         <h3 className="mt-1 text-lg font-semibold">Build foursomes</h3>
                         <p className="mt-1 text-sm text-ink/65">
-                          No team match. Build balanced foursomes for score entry using player quotas.
+                          No team match. Build foursomes for score entry.
                         </p>
                       </div>
                       {hasAssignedScoringGroups ? (
@@ -3397,7 +3401,7 @@ export function RoundEditor({ round, players, quotaSnapshot, groups: initialGrou
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/60">
-                        Add players, then build balanced foursomes.
+                        Add players, then build foursomes.
                       </div>
                     )}
                   </SectionCard>

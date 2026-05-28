@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildBalancedTeams,
   capacitiesToMap,
+  getPartnerPairKey,
   getTeamFormats,
   validateTeamAssignments
 } from "@/lib/round-setup";
@@ -62,6 +63,21 @@ function getAssignmentSizes(assignments: ReturnType<typeof buildBalancedTeams>, 
   return teamCodes.map((team) => assignments.filter((assignment) => assignment.team === team).length);
 }
 
+function getTeamPairKeys(assignments: ReturnType<typeof buildBalancedTeams>) {
+  const byTeam = new Map<TeamCode, string[]>();
+
+  for (const assignment of assignments) {
+    const playerIds = byTeam.get(assignment.team) ?? [];
+    playerIds.push(assignment.playerId);
+    byTeam.set(assignment.team, playerIds);
+  }
+
+  return Array.from(byTeam.values())
+    .filter((playerIds) => playerIds.length === 2)
+    .map(([left, right]) => getPartnerPairKey(left, right))
+    .sort();
+}
+
 for (const [playerCount, expectedCapacities] of expectedFormats) {
   test(`getTeamFormats returns supported Match formats for ${playerCount} players`, () => {
     const formats = getTeamFormats(playerCount);
@@ -116,4 +132,51 @@ test("unsupported Match counts do not invent team formats", () => {
   for (const playerCount of [5, 17, 18]) {
     assert.deepEqual(getTeamFormats(playerCount), []);
   }
+});
+
+test("2-man team builder avoids repeat partners when alternatives exist", () => {
+  const players = Array.from({ length: 8 }, (_, index) => ({
+    playerId: `p${index + 1}`,
+    playerName: `Player ${index + 1}`,
+    quota: 30 - index,
+    conflictIds: []
+  }));
+  const teamCodes = teamOptions.slice(0, 4) as TeamCode[];
+  const capacityMap = capacitiesToMap(teamCodes, [2, 2, 2, 2]);
+  const repeatedPairs = [
+    getPartnerPairKey("p1", "p2"),
+    getPartnerPairKey("p3", "p4"),
+    getPartnerPairKey("p5", "p6"),
+    getPartnerPairKey("p7", "p8")
+  ];
+  const partnerCounts = Object.fromEntries(repeatedPairs.map((key) => [key, 4]));
+
+  const assignments = buildBalancedTeams(players, teamCodes, capacityMap, {
+    partnerCounts,
+    variant: 3
+  });
+  const pairKeys = getTeamPairKeys(assignments);
+
+  assert.equal(validateTeamAssignments(assignments, teamCodes, capacityMap).valid, true);
+  assert.equal(pairKeys.some((key) => repeatedPairs.includes(key)), false);
+});
+
+test("2-man team rebuild variants can produce different valid pairings", () => {
+  const players = Array.from({ length: 8 }, (_, index) => ({
+    playerId: `p${index + 1}`,
+    playerName: `Player ${index + 1}`,
+    quota: 30 - index,
+    conflictIds: []
+  }));
+  const teamCodes = teamOptions.slice(0, 4) as TeamCode[];
+  const capacityMap = capacitiesToMap(teamCodes, [2, 2, 2, 2]);
+  const signatures = new Set<string>();
+
+  for (let variant = 0; variant < 8; variant += 1) {
+    const assignments = buildBalancedTeams(players, teamCodes, capacityMap, { variant });
+    assert.equal(validateTeamAssignments(assignments, teamCodes, capacityMap).valid, true);
+    signatures.add(getTeamPairKeys(assignments).join("/"));
+  }
+
+  assert.ok(signatures.size > 1);
 });

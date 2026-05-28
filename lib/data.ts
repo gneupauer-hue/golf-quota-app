@@ -16,6 +16,7 @@ import {
   type TeamCode
 } from "@/lib/quota";
 import { getQuotaSnapshotBeforeRound } from "@/lib/round-service";
+import { getPartnerPairKey } from "@/lib/round-setup";
 import { getSeasonConfig, getSeasonStartDate } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { formatDisplayDate } from "@/lib/utils";
@@ -757,7 +758,7 @@ export async function getLeaderboardPageData() {
 
 export async function getRoundEditorData(roundId: string) {
   noStore();
-  const [round, players] = await Promise.all([
+  const [round, players, completedTeamRounds] = await Promise.all([
     (prisma as any).round.findUnique({
       where: { id: roundId },
       include: {
@@ -776,7 +777,24 @@ export async function getRoundEditorData(roundId: string) {
         }
       }
     }),
-    getPlayersForSelection()
+    getPlayersForSelection(),
+    (prisma as any).round.findMany({
+      where: {
+        completedAt: {
+          not: null
+        },
+        canceledAt: null,
+        isTestRound: false
+      },
+      select: {
+        entries: {
+          select: {
+            playerId: true,
+            team: true
+          }
+        }
+      }
+    })
   ]);
 
   if (!round) {
@@ -814,6 +832,30 @@ export async function getRoundEditorData(roundId: string) {
   });
 
   const settlement = getRoundSettlementState(round);
+  const partnerHistory: Record<string, number> = {};
+
+  for (const completedRound of completedTeamRounds as Array<{ entries: Array<{ playerId: string; team: string | null }> }>) {
+    const playersByTeam = new Map<string, string[]>();
+
+    for (const entry of completedRound.entries) {
+      if (!entry.team) {
+        continue;
+      }
+
+      const teamPlayers = playersByTeam.get(entry.team) ?? [];
+      teamPlayers.push(entry.playerId);
+      playersByTeam.set(entry.team, teamPlayers);
+    }
+
+    for (const teamPlayerIds of playersByTeam.values()) {
+      for (let leftIndex = 0; leftIndex < teamPlayerIds.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < teamPlayerIds.length; rightIndex += 1) {
+          const key = getPartnerPairKey(teamPlayerIds[leftIndex], teamPlayerIds[rightIndex]);
+          partnerHistory[key] = (partnerHistory[key] ?? 0) + 1;
+        }
+      }
+    }
+  }
 
   return {
     round: {
@@ -835,6 +877,7 @@ export async function getRoundEditorData(roundId: string) {
       entries: calculatedEntries
     },
     players,
+    partnerHistory,
     quotaSnapshot,
     teamStandings,
     liveLeaders,

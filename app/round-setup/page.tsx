@@ -47,6 +47,7 @@ export default async function RoundSetupPage() {
     <RoundEditor
       round={data.round}
       players={data.players}
+      partnerHistory={data.partnerHistory}
       quotaSnapshot={data.quotaSnapshot}
       groups={data.groups as Array<{ groupNumber: number; teeTime: string; players: string[] }>}
     />

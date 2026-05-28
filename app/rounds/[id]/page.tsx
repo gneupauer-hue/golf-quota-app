@@ -28,6 +28,7 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
     <RoundEditor
       round={data.round}
       players={data.players}
+      partnerHistory={data.partnerHistory}
       quotaSnapshot={data.quotaSnapshot}
       groups={data.groups as Array<{ groupNumber: number; teeTime: string; players: string[] }>}
     />

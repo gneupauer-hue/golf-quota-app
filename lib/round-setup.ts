@@ -45,6 +45,30 @@ function logTeamBuilder(level: "info" | "warn", message: string, details: unknow
   console[level](message, details);
 }
 
+export function getPartnerPairKey(leftPlayerId: string, rightPlayerId: string) {
+  return [leftPlayerId, rightPlayerId].sort().join("|");
+}
+
+function createSeededRandom(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function shufflePlayers(players: SetupPlayer[], variant: number, attempt: number) {
+  const rng = createSeededRandom((variant + 1) * 2654435761 + attempt * 1013904223);
+  const shuffled = [...players];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(rng() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}
+
 export function getTeamFormatKey(format: Pick<TeamFormat, "teamCount" | "capacities">) {
   return `${format.teamCount}:${format.capacities.join("-")}`;
 }
@@ -303,6 +327,85 @@ function calculateAssignmentSpread(
   return teamBalanceSpread(hydrateTeamState(assignments, players, teamCodes));
 }
 
+function buildRandomTwoManTeams(
+  players: SetupPlayer[],
+  teamCodes: TeamCode[],
+  partnerCounts: Record<string, number>,
+  variant = 0
+) {
+  const conflictMap = buildConflictMap(players);
+  const candidateCount = Math.max(80, players.length * 24);
+  let bestAssignments: TeamAssignment[] | null = null;
+  let bestScore: {
+    repeatCount: number;
+    conflictCount: number;
+    spread: number;
+    randomTieBreaker: number;
+  } | null = null;
+
+  for (let attempt = 0; attempt < candidateCount; attempt += 1) {
+    const shuffled = shufflePlayers(players, variant, attempt);
+    const assignments: TeamAssignment[] = [];
+    let repeatCount = 0;
+    let conflictCount = 0;
+
+    for (let index = 0; index < teamCodes.length; index += 1) {
+      const left = shuffled[index * 2];
+      const right = shuffled[index * 2 + 1];
+
+      if (!left || !right) {
+        break;
+      }
+
+      repeatCount += partnerCounts[getPartnerPairKey(left.playerId, right.playerId)] ?? 0;
+
+      if (hasConflict(left.playerId, [right.playerId], conflictMap)) {
+        conflictCount += 1;
+      }
+
+      assignments.push(
+        { playerId: left.playerId, team: teamCodes[index] },
+        { playerId: right.playerId, team: teamCodes[index] }
+      );
+    }
+
+    if (assignments.length !== players.length) {
+      continue;
+    }
+
+    const spread = calculateAssignmentSpread(assignments, players, teamCodes);
+    const randomTieBreaker = createSeededRandom((variant + 7) * 1103515245 + attempt)();
+    const score = {
+      repeatCount,
+      conflictCount,
+      spread,
+      randomTieBreaker
+    };
+
+    if (
+      !bestScore ||
+      score.repeatCount < bestScore.repeatCount ||
+      (score.repeatCount === bestScore.repeatCount && score.conflictCount < bestScore.conflictCount) ||
+      (score.repeatCount === bestScore.repeatCount &&
+        score.conflictCount === bestScore.conflictCount &&
+        score.spread < bestScore.spread) ||
+      (score.repeatCount === bestScore.repeatCount &&
+        score.conflictCount === bestScore.conflictCount &&
+        score.spread === bestScore.spread &&
+        score.randomTieBreaker < bestScore.randomTieBreaker)
+    ) {
+      bestAssignments = assignments;
+      bestScore = score;
+    }
+  }
+
+  if (!bestAssignments) {
+    throw new Error("Could not build valid 2-man teams for this round.");
+  }
+
+  return bestAssignments;
+}
+
 function buildCapacitySafeAssignments(
   players: SetupPlayer[],
   teamCodes: TeamCode[],
@@ -425,9 +528,17 @@ export function buildBalancedTeams(
   teamCapacities: Map<TeamCode, number>,
   options?: {
     variant?: number;
+    partnerCounts?: Record<string, number>;
   }
 ): TeamAssignment[] {
   const variant = options?.variant ?? 0;
+  const isTwoManFormat =
+    teamCodes.length > 0 && teamCodes.every((team) => (teamCapacities.get(team) ?? 0) === 2);
+
+  if (isTwoManFormat) {
+    return buildRandomTwoManTeams(players, teamCodes, options?.partnerCounts ?? {}, variant);
+  }
+
   const sortedPlayers = [...players].sort(
     (a, b) =>
       b.quota - a.quota ||
