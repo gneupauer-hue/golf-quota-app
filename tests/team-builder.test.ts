@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildBalancedTeams,
+  buildPartnerHistoryFromRoundEntries,
   capacitiesToMap,
   getPartnerPairKey,
   getTeamFormats,
@@ -162,6 +163,31 @@ test("unsupported Match counts do not invent team formats", () => {
   for (const playerCount of [5, 17, 18]) {
     assert.deepEqual(getTeamFormats(playerCount), []);
   }
+});
+
+test("partner history counts stable player ID teammate pairs from completed round entries", () => {
+  const history = buildPartnerHistoryFromRoundEntries([
+    {
+      entries: [
+        { playerId: "gary-id", team: "A" },
+        { playerId: "rob-id", team: "A" },
+        { playerId: "john-id", team: "B" }
+      ]
+    },
+    {
+      entries: [
+        { playerId: "rob-id", team: "A" },
+        { playerId: "gary-id", team: "A" },
+        { playerId: "john-id", team: "A" },
+        { playerId: "skip-no-team", team: null }
+      ]
+    }
+  ]);
+
+  assert.equal(history[getPartnerPairKey("gary-id", "rob-id")], 2);
+  assert.equal(history[getPartnerPairKey("gary-id", "john-id")], 1);
+  assert.equal(history[getPartnerPairKey("rob-id", "john-id")], 1);
+  assert.equal(history[getPartnerPairKey("gary-id", "skip-no-team")] ?? 0, 0);
 });
 
 test("2-man team builder avoids repeat partners when alternatives exist", () => {

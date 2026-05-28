@@ -49,6 +49,37 @@ export function getPartnerPairKey(leftPlayerId: string, rightPlayerId: string) {
   return [leftPlayerId, rightPlayerId].sort().join("|");
 }
 
+export function buildPartnerHistoryFromRoundEntries(
+  rounds: Array<{ entries: Array<{ playerId: string; team: string | null }> }>
+) {
+  const partnerHistory: Record<string, number> = {};
+
+  for (const round of rounds) {
+    const playersByTeam = new Map<string, string[]>();
+
+    for (const entry of round.entries) {
+      if (!entry.playerId || !entry.team) {
+        continue;
+      }
+
+      const teamPlayers = playersByTeam.get(entry.team) ?? [];
+      teamPlayers.push(entry.playerId);
+      playersByTeam.set(entry.team, teamPlayers);
+    }
+
+    for (const teamPlayerIds of playersByTeam.values()) {
+      for (let leftIndex = 0; leftIndex < teamPlayerIds.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < teamPlayerIds.length; rightIndex += 1) {
+          const key = getPartnerPairKey(teamPlayerIds[leftIndex], teamPlayerIds[rightIndex]);
+          partnerHistory[key] = (partnerHistory[key] ?? 0) + 1;
+        }
+      }
+    }
+  }
+
+  return partnerHistory;
+}
+
 function createSeededRandom(seed: number) {
   let state = seed >>> 0;
   return () => {
