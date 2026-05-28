@@ -513,6 +513,42 @@ function rotateItems<T>(items: T[], offset: number) {
   return [...items.slice(normalizedOffset), ...items.slice(0, normalizedOffset)];
 }
 
+function getScoringGroupsCanonicalKey(groups: Array<Pick<ScoringGroup, "teams">>) {
+  return groups
+    .map((group) => [...group.teams].sort().join("+"))
+    .sort()
+    .join("|");
+}
+
+function buildTwoPlayerTeamGroupings(teamCodes: TeamCode[]) {
+  const sortedTeams = [...teamCodes].sort();
+  const groupings: TeamCode[][][] = [];
+
+  function visit(remainingTeams: TeamCode[], groups: TeamCode[][]) {
+    if (!remainingTeams.length) {
+      groupings.push(groups);
+      return;
+    }
+
+    const [firstTeam, ...restTeams] = remainingTeams;
+
+    if (remainingTeams.length % 2 === 1) {
+      visit(restTeams, [...groups, [firstTeam]]);
+    }
+
+    for (let index = 0; index < restTeams.length; index += 1) {
+      const pairedTeam = restTeams[index];
+      visit(
+        restTeams.filter((_, restIndex) => restIndex !== index),
+        [...groups, [firstTeam, pairedTeam]]
+      );
+    }
+  }
+
+  visit(sortedTeams, []);
+  return groupings;
+}
+
 type ScoringGroup = {
   key: string;
   label: string;
@@ -597,6 +633,25 @@ function buildScoringGroups(
     if (groupsFromSetup.length > 0) {
       return groupsFromSetup;
     }
+  }
+
+  if (
+    options.ignoreExistingGroups &&
+    orderedTeams.length > 1 &&
+    orderedTeams.every((team) => team.players.length === 2)
+  ) {
+    const teamsByCode = new Map(orderedTeams.map((team) => [team.team, team]));
+    const groupings = buildTwoPlayerTeamGroupings(orderedTeams.map((team) => team.team));
+    const selectedGrouping = groupings[variant % Math.max(1, groupings.length)] ?? [];
+
+    return selectedGrouping.map((groupTeams, index) => ({
+      key: `derived-${index + 1}`,
+      label: `Group ${index + 1}`,
+      groupNumber: index + 1,
+      teeTime: null,
+      teams: groupTeams,
+      playerNames: groupTeams.flatMap((teamCode) => teamsByCode.get(teamCode)?.players ?? [])
+    }));
   }
 
   const derivedGroups: ScoringGroup[] = [];
@@ -749,6 +804,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
   const [teamBuildVariant, setTeamBuildVariant] = useState(0);
   const [scoringGroupBuildVariant, setScoringGroupBuildVariant] = useState(0);
+  const [shownScoringGroupKeys, setShownScoringGroupKeys] = useState<string[]>([]);
   const [isSetupTeamEditMode, setIsSetupTeamEditMode] = useState(false);
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
@@ -1431,15 +1487,20 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       setRows((current) =>
         current.map((row) => ({
           ...row,
-          team: selectedAssignments.get(row.playerId) ?? null
+          team: selectedAssignments.get(row.playerId) ?? null,
+          groupNumber: null,
+          teeTime: null
         }))
       );
       setSavedRows((current) =>
         current.map((row) => ({
           ...row,
-          team: selectedAssignments.get(row.playerId) ?? null
+          team: selectedAssignments.get(row.playerId) ?? null,
+          groupNumber: null,
+          teeTime: null
         }))
       );
+      setShownScoringGroupKeys([]);
       setTeamBuildVariant(chosenVariant);
       setMessage(
         requireDifferent
@@ -1471,7 +1532,9 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
 
       setRows((current) =>
         current.map((row) =>
-          row.playerId === playerId ? { ...row, team: destinationTeam } : row
+          row.playerId === playerId
+            ? { ...row, team: destinationTeam, groupNumber: null, teeTime: null }
+            : row
         )
       );
     } else {
@@ -1493,6 +1556,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     }
 
     const player = playersById.get(playerId);
+    setShownScoringGroupKeys([]);
     setSearch("");
     setMessage(`${player?.name ?? "Player"} added to ${getSetupTeamLabel(destinationTeam)}.`);
   }
@@ -1542,10 +1606,25 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
 
     const rebuilding = hasAssignedScoringGroups;
     const currentSignature = getScoringGroupSignature(rows);
+    const currentGroupKey = setupScoringGroupsPreview.length
+      ? getScoringGroupsCanonicalKey(setupScoringGroupsPreview)
+      : null;
+    const alreadyShownKeys = new Set(shownScoringGroupKeys);
+    if (rebuilding && currentGroupKey) {
+      alreadyShownKeys.add(currentGroupKey);
+    }
     let selectedRows: RowState[] | null = null;
     let selectedGroups: ScoringGroup[] = [];
     let selectedVariant = scoringGroupBuildVariant;
-    const maxVariants = Math.max(8, setupTeamCodes.length * 4);
+    let selectedGroupKey = "";
+    let allCombinationsShown = false;
+    let fallbackSelection: {
+      rows: RowState[];
+      groups: ScoringGroup[];
+      variant: number;
+      key: string;
+    } | null = null;
+    const maxVariants = Math.max(64, setupTeamCodes.length * setupTeamCodes.length * 8);
 
     for (let attempt = 0; attempt < maxVariants; attempt += 1) {
       const variant = rebuilding ? scoringGroupBuildVariant + attempt + 1 : scoringGroupBuildVariant + attempt;
@@ -1563,6 +1642,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       if (!previewGroups.length) {
         continue;
       }
+
+      const candidateGroupKey = getScoringGroupsCanonicalKey(previewGroups);
 
       const groupNumberByTeam = new Map<TeamCode, number | null>();
       const teeTimeByTeam = new Map<TeamCode, string | null>();
@@ -1586,13 +1667,35 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         teeTime: row.team ? teeTimeByTeam.get(row.team) ?? null : null
       }));
 
+      if (!fallbackSelection) {
+        fallbackSelection = {
+          rows: nextRows,
+          groups: previewGroups,
+          variant,
+          key: candidateGroupKey
+        };
+      }
+
+      if (rebuilding && alreadyShownKeys.has(candidateGroupKey)) {
+        continue;
+      }
+
       selectedRows = nextRows;
       selectedGroups = previewGroups;
       selectedVariant = variant;
+      selectedGroupKey = candidateGroupKey;
 
       if (!rebuilding || getScoringGroupSignature(nextRows) !== currentSignature) {
         break;
       }
+    }
+
+    if ((!selectedRows || !selectedGroups.length) && rebuilding && fallbackSelection) {
+      selectedRows = fallbackSelection.rows;
+      selectedGroups = fallbackSelection.groups;
+      selectedVariant = fallbackSelection.variant;
+      selectedGroupKey = fallbackSelection.key;
+      allCombinationsShown = true;
     }
 
     if (!selectedRows || !selectedGroups.length) {
@@ -1605,8 +1708,18 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     setSavedRows(selectedRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
     setSelectedScoringGroupKey(selectedGroups[0]?.key ?? null);
     setScoringGroupBuildVariant(selectedVariant);
+    if (selectedGroupKey) {
+      setShownScoringGroupKeys((current) => {
+        const next = new Set(current);
+        if (currentGroupKey) next.add(currentGroupKey);
+        next.add(selectedGroupKey);
+        return Array.from(next);
+      });
+    }
     setMessage(
-      rebuilding
+      allCombinationsShown
+        ? "All combinations have been shown."
+        : rebuilding
         ? changed
           ? "Foursomes rebuilt."
           : "Groups are already set."
