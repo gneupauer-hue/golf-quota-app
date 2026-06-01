@@ -9,6 +9,7 @@ import { recomputeHistoricalState, syncRoundComputedState } from "@/lib/round-se
 
 const LATEST_ROUND_ONLY_MESSAGE =
   "Only the most recent finalized round can be edited right now to protect quota history.";
+const FINALIZED_SCORE_EDIT_PASSWORD = "irem";
 
 const goodSkinTypeScores: Record<GoodSkinType, number> = {
   birdie: 4,
@@ -115,9 +116,14 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const corrections = Array.isArray(body.entries) ? body.entries : null;
+    const adminPassword = String(body.adminPassword ?? "");
 
     if (!corrections) {
       throw new HttpError("Round corrections must include player entries.");
+    }
+
+    if (adminPassword !== FINALIZED_SCORE_EDIT_PASSWORD) {
+      throw new HttpError("Incorrect password", 403);
     }
 
     await prisma.$transaction(async (tx) => {

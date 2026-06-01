@@ -351,6 +351,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
   const [isRoundEditOpen, setIsRoundEditOpen] = useState(false);
   const [roundEditRows, setRoundEditRows] = useState<RoundCorrectionRow[]>([]);
   const [roundEditMessage, setRoundEditMessage] = useState<string | null>(null);
+  const [roundEditPassword, setRoundEditPassword] = useState("");
   const [isSavingRoundCorrections, setIsSavingRoundCorrections] = useState(false);
   const isIndividualQuotaSkins = data.round.roundMode === "SKINS_ONLY";
   const isTestRound = Boolean(data.round.isTestRound);
@@ -541,6 +542,13 @@ export function RoundResults({ data }: { data: ResultsData }) {
       return;
     }
 
+    const password = window.prompt("Enter admin password to edit finalized scores.");
+
+    if (password !== "irem") {
+      setRoundEditMessage("Incorrect password");
+      return;
+    }
+
     const confirmed = window.confirm(
       "Editing a finalized round will recalculate results, payouts, and quota history."
     );
@@ -561,6 +569,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
         activeSkinType: null
       }))
     );
+    setRoundEditPassword(password);
     setIsRoundEditOpen(true);
   }
 
@@ -634,7 +643,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
             frontNine: row.frontNineText,
             backNine: isIndividualQuotaSkins ? null : row.backNineText,
             goodSkinEntries: row.goodSkinEntries
-          }))
+          })),
+          adminPassword: roundEditPassword
         })
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
