@@ -24,12 +24,15 @@ type ResultsData = {
     roundName: string;
     roundDate: Date | string;
     roundMode: "MATCH_QUOTA" | "SKINS_ONLY";
+    scoringEntryMode?: "QUICK" | "DETAILED";
     isTestRound?: boolean;
     isPayoutLocked: boolean;
     paidPlayerIds: string[];
     notes: string | null;
     createdAt?: Date | string | null;
     completedAt: Date | string | null;
+    canEditFinalizedRound?: boolean;
+    finalizedEditBlockedReason?: string | null;
   };
   entries: Array<{
     id: string;
@@ -142,6 +145,14 @@ type AllSkinEntry = {
   typeLabel: string;
 };
 
+type RoundCorrectionRow = {
+  playerId: string;
+  playerName: string;
+  frontNineText: string;
+  backNineText: string;
+  skinText: string;
+};
+
 const goodSkinTypeOrder: GoodSkinType[] = ["birdie", "eagle", "ace"];
 
 const allSkinGroupTitles: Record<GoodSkinType, string> = {
@@ -190,6 +201,17 @@ function getGoodSkinTypeClasses(label: string) {
   if (label === "Eagle") return "bg-[#4A0F1A] text-white";
   if (label === "Birdie") return "bg-[#FBF7F0] text-pine";
   return "bg-[#FBF7F0] text-pine";
+}
+
+function formatSkinEntryToken(entry: GoodSkinEntry) {
+  return `${entry.holeNumber}:${entry.type}`;
+}
+
+function parseSkinEntryText(value: string) {
+  return value
+    .split(/[,\n]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
 }
 
 function formatOrdinal(value: number) {
@@ -325,9 +347,14 @@ export function RoundResults({ data }: { data: ResultsData }) {
   const [skinEditorType, setSkinEditorType] = useState<GoodSkinType>("birdie");
   const [skinEditorMessage, setSkinEditorMessage] = useState<string | null>(null);
   const [isSavingSkins, setIsSavingSkins] = useState(false);
+  const [isRoundEditOpen, setIsRoundEditOpen] = useState(false);
+  const [roundEditRows, setRoundEditRows] = useState<RoundCorrectionRow[]>([]);
+  const [roundEditMessage, setRoundEditMessage] = useState<string | null>(null);
+  const [isSavingRoundCorrections, setIsSavingRoundCorrections] = useState(false);
   const isIndividualQuotaSkins = data.round.roundMode === "SKINS_ONLY";
   const isTestRound = Boolean(data.round.isTestRound);
   const canEditSkins = !data.round.completedAt;
+  const canEditFinalizedRound = Boolean(data.round.canEditFinalizedRound);
   const displayEntries = data.entries.map((entry) => ({
     ...entry,
     goodSkinEntries: skinOverridesByPlayerId[entry.playerId] ?? entry.goodSkinEntries
@@ -502,6 +529,81 @@ export function RoundResults({ data }: { data: ResultsData }) {
     );
   }
 
+  function openRoundEditMode() {
+    setRoundEditMessage(null);
+
+    if (!canEditFinalizedRound) {
+      setRoundEditMessage(
+        data.round.finalizedEditBlockedReason ??
+          "Only the most recent finalized round can be edited right now to protect quota history."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Editing a finalized round will recalculate results, payouts, and quota history."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setRoundEditRows(
+      displayEntries.map((entry) => ({
+        playerId: entry.playerId,
+        playerName: entry.playerName,
+        frontNineText: String(isIndividualQuotaSkins ? entry.totalPoints : entry.frontNine),
+        backNineText: String(isIndividualQuotaSkins ? "" : entry.backNine),
+        skinText: entry.goodSkinEntries.map(formatSkinEntryToken).join(", ")
+      }))
+    );
+    setIsRoundEditOpen(true);
+  }
+
+  function updateRoundEditRow(playerId: string, field: keyof Omit<RoundCorrectionRow, "playerId" | "playerName">, value: string) {
+    setRoundEditRows((current) =>
+      current.map((row) => (row.playerId === playerId ? { ...row, [field]: value } : row))
+    );
+  }
+
+  async function saveRoundCorrections() {
+    if (isSavingRoundCorrections) {
+      return;
+    }
+
+    setIsSavingRoundCorrections(true);
+    setRoundEditMessage(null);
+
+    try {
+      const response = await fetch(`/api/rounds/${data.round.id}/corrections`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entries: roundEditRows.map((row) => ({
+            playerId: row.playerId,
+            frontNine: row.frontNineText,
+            backNine: isIndividualQuotaSkins ? null : row.backNineText,
+            goodSkinEntries: parseSkinEntryText(row.skinText)
+          }))
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Could not save round corrections.");
+      }
+
+      setRoundEditMessage("Round corrections saved. Results and quota history recalculated.");
+      setIsRoundEditOpen(false);
+      setSkinOverridesByPlayerId({});
+      router.refresh();
+    } catch (error) {
+      setRoundEditMessage(error instanceof Error ? error.message : "Could not save round corrections.");
+    } finally {
+      setIsSavingRoundCorrections(false);
+    }
+  }
+
   return (
     <div className="space-y-4 pb-8">
       <PageTitle
@@ -514,6 +616,36 @@ export function RoundResults({ data }: { data: ResultsData }) {
       >
         ← See All Results
       </Link>
+
+      <SectionCard className="border-[#7A1E2C]/20 bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#7A1E2C]">
+              Finalized Round Corrections
+            </p>
+            <p className="mt-1 text-sm font-semibold text-ink/65">
+              Edit only when a finalized score or skin was entered incorrectly.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openRoundEditMode}
+            className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#7A1E2C] px-4 py-2 text-sm font-extrabold text-white shadow-sm"
+          >
+            Edit Round
+          </button>
+        </div>
+        {roundEditMessage ? (
+          <p
+            className={classNames(
+              "mt-3 rounded-2xl px-3 py-2 text-sm font-semibold",
+              roundEditMessage.includes("saved") ? "bg-[#ECFDF3] text-pine" : "bg-[#FEE2E2] text-[#991B1B]"
+            )}
+          >
+            {roundEditMessage}
+          </p>
+        ) : null}
+      </SectionCard>
 
       {isTestRound ? (
         <SectionCard className="border-[#7A1E2C]/30 bg-[#FBF7F0]">
@@ -916,6 +1048,92 @@ export function RoundResults({ data }: { data: ResultsData }) {
       </CollapsibleSection>
 
       <QuotaAuditWarning quotaAudit={data.quotaAudit} />
+
+      {isRoundEditOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-ink/45 px-3 pb-3 pt-6 sm:items-center sm:justify-center sm:p-4">
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] bg-hero shadow-[0_24px_80px_rgba(26,38,59,0.22)]">
+            <div className="space-y-4 px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Edit Round</p>
+                <h3 className="mt-1 text-xl font-semibold text-ink">Correct finalized scores</h3>
+                <p className="mt-1 rounded-2xl bg-[#FEE2E2] px-3 py-2 text-sm font-semibold text-[#991B1B]">
+                  Editing a finalized round will recalculate results, payouts, and quota history.
+                </p>
+              </div>
+
+              <div className="max-h-[58vh] space-y-2 overflow-y-auto pr-1">
+                {roundEditRows.map((row) => (
+                  <div key={`round-edit-${row.playerId}`} className="rounded-[18px] border border-ink/10 bg-white/90 px-3 py-3">
+                    <p className="truncate text-sm font-extrabold text-ink">{row.playerName}</p>
+                    <div className={classNames("mt-2 grid gap-2", isIndividualQuotaSkins ? "grid-cols-1" : "grid-cols-2")}>
+                      <label className="text-xs font-bold uppercase tracking-[0.14em] text-ink/50">
+                        {isIndividualQuotaSkins ? "Total" : "Front"}
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={row.frontNineText}
+                          onChange={(event) => updateRoundEditRow(row.playerId, "frontNineText", event.target.value)}
+                          className="mt-1 h-11 w-full rounded-2xl border border-sand bg-white px-3 text-sm font-extrabold text-ink"
+                        />
+                      </label>
+                      {!isIndividualQuotaSkins ? (
+                        <label className="text-xs font-bold uppercase tracking-[0.14em] text-ink/50">
+                          Back
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={row.backNineText}
+                            onChange={(event) => updateRoundEditRow(row.playerId, "backNineText", event.target.value)}
+                            className="mt-1 h-11 w-full rounded-2xl border border-sand bg-white px-3 text-sm font-extrabold text-ink"
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                    <label className="mt-2 block text-xs font-bold uppercase tracking-[0.14em] text-ink/50">
+                      Skins
+                      <input
+                        type="text"
+                        value={row.skinText}
+                        onChange={(event) => updateRoundEditRow(row.playerId, "skinText", event.target.value)}
+                        placeholder="4:birdie, 11:eagle, 17:ace"
+                        className="mt-1 h-11 w-full rounded-2xl border border-sand bg-white px-3 text-sm font-semibold text-ink"
+                      />
+                    </label>
+                    <p className="mt-1 text-[11px] font-semibold text-ink/55">
+                      Use hole:type, like 4:birdie, 11:eagle, or 17:ace.
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {roundEditMessage ? (
+                <p className={classNames("text-sm font-semibold", roundEditMessage.includes("saved") ? "text-pine" : "text-danger")}>
+                  {roundEditMessage}
+                </p>
+              ) : null}
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink"
+                  disabled={isSavingRoundCorrections}
+                  onClick={() => setIsRoundEditOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveRoundCorrections}
+                  disabled={isSavingRoundCorrections}
+                  className="club-btn-primary min-h-12 text-sm disabled:opacity-60"
+                >
+                  {isSavingRoundCorrections ? "Saving..." : "Save Corrections"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isSkinEditorOpen ? (
         <div className="fixed inset-0 z-50 flex items-end bg-ink/45 px-3 pb-3 pt-6 sm:items-center sm:justify-center sm:p-4">

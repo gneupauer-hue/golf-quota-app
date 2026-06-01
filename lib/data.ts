@@ -988,6 +988,8 @@ export async function getArchivedSideMatchesData() {
 
 export async function getRoundResultsData(roundId: string) {
   const seasonStartDate = await getSeasonStartDate(prisma);
+  const finalizedRoundEditBlockedReason =
+    "Only the most recent finalized round can be edited right now to protect quota history.";
 
   const round = await (prisma as any).round.findUnique({
     where: { id: roundId },
@@ -1015,6 +1017,24 @@ export async function getRoundResultsData(roundId: string) {
   if (!round) {
     return null;
   }
+
+  const latestEditableRound = round.isTestRound
+    ? null
+    : await (prisma as any).round.findFirst({
+        where: {
+          completedAt: {
+            not: null
+          },
+          canceledAt: null,
+          isTestRound: false
+        },
+        orderBy: [{ completedAt: "desc" }, { roundDate: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true
+        }
+      });
+  const canEditFinalizedRound =
+    Boolean(round.completedAt) && (Boolean(round.isTestRound) || latestEditableRound?.id === round.id);
 
   const scoringEntryMode = normalizeScoringEntryMode(round.scoringEntryMode);
 
@@ -1125,7 +1145,11 @@ export async function getRoundResultsData(roundId: string) {
       buyInPaidPlayerIds: settlement.buyInPaidPlayerIds,
       paidPlayerIds: settlement.paidPlayerIds,
       notes: round.notes,
-      completedAt: round.completedAt
+      createdAt: round.createdAt,
+      completedAt: round.completedAt,
+      canEditFinalizedRound,
+      finalizedEditBlockedReason:
+        round.completedAt && !canEditFinalizedRound ? finalizedRoundEditBlockedReason : null
     },
     entries,
     teamStandings: calculateTeamStandings(entries),
