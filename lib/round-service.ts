@@ -405,6 +405,71 @@ function buildBaselineQuotaMap(players: PlayerQuotaFallback[]) {
   return new Map(players.map((player) => [player.id, getSafeBaselineQuota(player)]));
 }
 
+function getIncompleteScoreMessages(round: {
+  roundMode: string;
+  scoringEntryMode?: string | null;
+  entries: Array<{
+    player?: { name: string } | null;
+    quickFrontNine?: number | null;
+    quickBackNine?: number | null;
+    frontSubmittedAt?: Date | null;
+    backSubmittedAt?: Date | null;
+  }>;
+}) {
+  const scoringEntryMode = normalizeScoringEntryMode(round.scoringEntryMode);
+  const missingScores: string[] = [];
+  const incompleteScores: string[] = [];
+  const isIndividualQuotaSkins = round.roundMode === "SKINS_ONLY";
+
+  for (const entry of round.entries) {
+    const playerName = entry.player?.name ?? "Unknown Player";
+
+    if (scoringEntryMode === "QUICK") {
+      if (isIndividualQuotaSkins) {
+        if (entry.quickFrontNine == null) {
+          missingScores.push(playerName);
+        } else if (!entry.frontSubmittedAt || !entry.backSubmittedAt) {
+          incompleteScores.push(`${playerName} needs Save`);
+        }
+        continue;
+      }
+
+      if (entry.quickFrontNine == null && entry.quickBackNine == null) {
+        missingScores.push(playerName);
+      } else if (entry.quickFrontNine == null) {
+        incompleteScores.push(`${playerName} needs Front 9`);
+      } else if (entry.quickBackNine == null) {
+        incompleteScores.push(`${playerName} needs Back 9`);
+      } else if (!entry.frontSubmittedAt || !entry.backSubmittedAt) {
+        incompleteScores.push(`${playerName} needs Save`);
+      }
+      continue;
+    }
+
+    if (!entry.frontSubmittedAt && !entry.backSubmittedAt) {
+      missingScores.push(playerName);
+    } else if (!entry.frontSubmittedAt) {
+      incompleteScores.push(`${playerName} needs Front 9`);
+    } else if (!entry.backSubmittedAt) {
+      incompleteScores.push(`${playerName} needs Back 9`);
+    }
+  }
+
+  return { missingScores, incompleteScores };
+}
+
+function throwIfRoundScoresIncomplete(round: Parameters<typeof getIncompleteScoreMessages>[0]) {
+  const { missingScores, incompleteScores } = getIncompleteScoreMessages(round);
+
+  if (missingScores.length) {
+    throw new Error(`Missing scores: ${missingScores.join(", ")}`);
+  }
+
+  if (incompleteScores.length) {
+    throw new Error(`Incomplete score: ${incompleteScores.join(", ")}`);
+  }
+}
+
 async function buildStoredQuotaValidationSummary(tx: Tx) {
   const seasonStartDate = await getSeasonStartDate(tx);
 
@@ -513,10 +578,9 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
   }
 
   const readOnly = Boolean(round.completedAt);
-  const pendingBackNine = round.entries.filter((entry) => !entry.backSubmittedAt).length;
 
-  if (!readOnly && pendingBackNine > 0) {
-    throw new Error("All players must submit their back nine before completing the round.");
+  if (!readOnly) {
+    throwIfRoundScoresIncomplete(round);
   }
 
   const quotaMap = await getQuotaSnapshotBeforeRound(tx, roundId);
@@ -570,11 +634,16 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
 export async function finalizeRound(tx: Tx, roundId: string) {
   const round = await tx.round.findUnique({
     where: { id: roundId },
-    select: {
-      id: true,
-      completedAt: true,
-      canceledAt: true,
-      isTestRound: true
+    include: {
+      entries: {
+        include: {
+          player: {
+            select: {
+              name: true
+            }
+          }
+        }
+      }
     }
   });
 
@@ -590,16 +659,7 @@ export async function finalizeRound(tx: Tx, roundId: string) {
     throw new Error("This round has already been posted.");
   }
 
-  const pendingBackNine = await tx.roundEntry.count({
-    where: {
-      roundId,
-      backSubmittedAt: null
-    }
-  });
-
-  if (pendingBackNine > 0) {
-    throw new Error("All players must submit their back nine before completing the round.");
-  }
+  throwIfRoundScoresIncomplete(round);
 
   const preview = await getRoundCompletionPreview(tx, roundId);
 

@@ -999,6 +999,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
           quickFrontNine: row.quickFrontNine,
           quickBackNine: row.quickBackNine,
           birdieHolesText: row.birdieHolesText,
+          frontSubmittedAt: row.frontSubmittedAt,
+          backSubmittedAt: row.backSubmittedAt,
           totalPoints: calculated.totalPoints,
           plusMinus: calculated.plusMinus,
           nextQuota: calculated.nextQuota
@@ -1014,11 +1016,51 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         quickFrontNine: number | null;
         quickBackNine: number | null;
         birdieHolesText: string;
+        frontSubmittedAt: string | null;
+        backSubmittedAt: string | null;
         totalPoints: number;
         plusMinus: number;
         nextQuota: number;
       }>;
   }, [calculatedRows, rows]);
+
+  function getQuickEntryCompletionMessage() {
+    const missingScores: string[] = [];
+    const incompleteScores: string[] = [];
+
+    for (const row of rows) {
+      const playerName = roundPlayerNamesById.get(row.playerId) ?? "Unknown Player";
+
+      if (isSkinsOnly) {
+        if (row.quickFrontNine == null) {
+          missingScores.push(playerName);
+        } else if (!row.frontSubmittedAt || !row.backSubmittedAt) {
+          incompleteScores.push(`${playerName} needs Save`);
+        }
+        continue;
+      }
+
+      if (row.quickFrontNine == null && row.quickBackNine == null) {
+        missingScores.push(playerName);
+      } else if (row.quickFrontNine == null) {
+        incompleteScores.push(`${playerName} needs Front 9`);
+      } else if (row.quickBackNine == null) {
+        incompleteScores.push(`${playerName} needs Back 9`);
+      } else if (!row.frontSubmittedAt || !row.backSubmittedAt) {
+        incompleteScores.push(`${playerName} needs Save`);
+      }
+    }
+
+    if (missingScores.length) {
+      return `Missing scores: ${missingScores.join(", ")}`;
+    }
+
+    if (incompleteScores.length) {
+      return `Incomplete score: ${incompleteScores.join(", ")}`;
+    }
+
+    return "";
+  }
 
   const setupValidation = useMemo(() => {
     if (isSkinsOnly) {
@@ -1915,19 +1957,24 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   }
 
   function syncQuickEntrySubmissionState(row: RowState) {
-    if (row.quickFrontNine == null) {
-      return {
-        ...row,
-        frontSubmittedAt: null,
-        backSubmittedAt: null
-      };
-    }
-
-    const frontSubmittedAt = row.frontSubmittedAt ?? new Date().toISOString();
     return {
       ...row,
-      frontSubmittedAt,
-      backSubmittedAt: row.quickBackNine == null ? null : row.backSubmittedAt ?? frontSubmittedAt
+      frontSubmittedAt: null,
+      backSubmittedAt: null
+    };
+  }
+
+  function markQuickEntryRowSubmitted(row: RowState) {
+    if (row.quickFrontNine == null || (!isSkinsOnly && row.quickBackNine == null)) {
+      return row;
+    }
+
+    const submittedAt = new Date().toISOString();
+    return {
+      ...row,
+      quickBackNine: isSkinsOnly ? row.quickBackNine ?? 0 : row.quickBackNine,
+      frontSubmittedAt: row.frontSubmittedAt ?? submittedAt,
+      backSubmittedAt: row.backSubmittedAt ?? submittedAt
     };
   }
 
@@ -2337,7 +2384,10 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     startTransition(async () => {
       try {
         setSaving("Saving...");
-        const rowsToSave = playerId ? rows.filter((row) => row.playerId === playerId) : rows;
+        const rowsForSave = isQuickEntryMode && playerId
+          ? rows.map((row) => (row.playerId === playerId ? markQuickEntryRowSubmitted(row) : row))
+          : rows;
+        const rowsToSave = playerId ? rowsForSave.filter((row) => row.playerId === playerId) : rowsForSave;
         if (playerId && !rowsToSave.length) {
           throw new Error("Could not find this player in the current round. Refresh and try again.");
         }
@@ -2352,9 +2402,15 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
           false,
           Boolean(playerId)
         );
+        if (playerId) {
+          setRows((current) => {
+            const savedByPlayerId = new Map(rowsToSave.map((row) => [row.playerId, row]));
+            return current.map((row) => savedByPlayerId.get(row.playerId) ?? row);
+          });
+        }
         setSavedRows((current) => {
           if (!playerId) {
-            return rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
+            return rowsForSave.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
           }
 
           const savedByPlayerId = new Map(rowsToSave.map((row) => [row.playerId, row]));
@@ -2386,7 +2442,14 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       return;
     }
 
-    if (!allBackSubmitted) {
+    const quickEntryCompletionMessage = isQuickEntryMode ? getQuickEntryCompletionMessage() : "";
+    if (quickEntryCompletionMessage) {
+      setMessage(quickEntryCompletionMessage);
+      setSaveFailed(quickEntryCompletionMessage);
+      return;
+    }
+
+    if (!isQuickEntryMode && !allBackSubmitted) {
       setMessage("Every team must submit final scores before you can archive this round.");
       return;
     }

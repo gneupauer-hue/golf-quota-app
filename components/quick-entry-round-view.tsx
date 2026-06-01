@@ -29,6 +29,8 @@ type QuickEntryRow = {
   quickFrontNine: number | null;
   quickBackNine: number | null;
   birdieHolesText: string;
+  frontSubmittedAt: string | null;
+  backSubmittedAt: string | null;
   totalPoints: number;
   plusMinus: number;
   nextQuota: number;
@@ -95,8 +97,8 @@ function getChangeBadgeClasses(value: number) {
 
 function hasSavedScore(row: SummaryRow, isIndividualQuotaSkins: boolean) {
   return isIndividualQuotaSkins
-    ? row.quickFrontNine != null
-    : row.quickFrontNine != null && row.quickBackNine != null;
+    ? Boolean(row.frontSubmittedAt && row.backSubmittedAt)
+    : Boolean(row.frontSubmittedAt && row.backSubmittedAt);
 }
 
 function getGroupKey(row: Pick<SummaryRow, "groupNumber">) {
@@ -148,6 +150,7 @@ export function QuickEntryRoundView({
   const [playerConfirmId, setPlayerConfirmId] = useState<string | null>(null);
   const [isFinalConfirmOpen, setIsFinalConfirmOpen] = useState(false);
   const [hasFinalSubmitStarted, setHasFinalSubmitStarted] = useState(false);
+  const [finalValidationMessage, setFinalValidationMessage] = useState<string | null>(null);
   const [activeSkinTypeByPlayerId, setActiveSkinTypeByPlayerId] = useState<Record<string, GoodSkinType | null>>({});
   const [skinValidationByPlayerId, setSkinValidationByPlayerId] = useState<Record<string, string | null>>({});
 
@@ -167,7 +170,7 @@ export function QuickEntryRoundView({
   const completedSet = useMemo(() => new Set(completedPlayerIds), [completedPlayerIds]);
   const editingSet = useMemo(() => new Set(editingPlayerIds), [editingPlayerIds]);
   const isPlayerComplete = (row: SummaryRow) =>
-    !editingSet.has(row.playerId) && completedSet.has(row.playerId);
+    !editingSet.has(row.playerId) && hasSavedScore(row, isIndividualQuotaSkins);
 
   const entryGroups = useMemo<EntryGroup[]>(() => {
     const groups = new Map<string, Omit<EntryGroup, "completedCount" | "isComplete">>();
@@ -211,6 +214,41 @@ export function QuickEntryRoundView({
   const playerConfirmRow = summaryRows.find((row) => row.playerId === playerConfirmId) ?? null;
   const allPlayersComplete = summaryRows.length > 0 && summaryRows.every((row) => isPlayerComplete(row));
   const totalCompletedCount = summaryRows.filter((row) => isPlayerComplete(row)).length;
+  const incompleteStatusMessage = useMemo(() => {
+    const missingScores: string[] = [];
+    const incompleteScores: string[] = [];
+
+    for (const row of summaryRows) {
+      if (isIndividualQuotaSkins) {
+        if (row.quickFrontNine == null) {
+          missingScores.push(row.playerName);
+        } else if (!isPlayerComplete(row)) {
+          incompleteScores.push(`${row.playerName} needs Save`);
+        }
+        continue;
+      }
+
+      if (row.quickFrontNine == null && row.quickBackNine == null) {
+        missingScores.push(row.playerName);
+      } else if (row.quickFrontNine == null) {
+        incompleteScores.push(`${row.playerName} needs Front 9`);
+      } else if (row.quickBackNine == null) {
+        incompleteScores.push(`${row.playerName} needs Back 9`);
+      } else if (!isPlayerComplete(row)) {
+        incompleteScores.push(`${row.playerName} needs Save`);
+      }
+    }
+
+    if (missingScores.length) {
+      return `Missing scores: ${missingScores.join(", ")}`;
+    }
+
+    if (incompleteScores.length) {
+      return `Incomplete score: ${incompleteScores.join(", ")}`;
+    }
+
+    return "";
+  }, [isIndividualQuotaSkins, summaryRows, completedSet, editingSet]);
   const allSkinReviewEntries = summaryRows
     .flatMap((row) =>
       row.goodSkinEntries.map((entry) => ({
@@ -227,11 +265,19 @@ export function QuickEntryRoundView({
     );
 
   useEffect(() => {
-    setCompletedPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
+    const persistedCompletedIds = summaryRows
+      .filter((row) => hasSavedScore(row, isIndividualQuotaSkins))
+      .map((row) => row.playerId);
+    setCompletedPlayerIds((current) => [
+      ...new Set([
+        ...current.filter((playerId) => rowIds.includes(playerId)),
+        ...persistedCompletedIds
+      ])
+    ]);
     setEditingPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
     setActiveSkinTypeByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
     setSkinValidationByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
-  }, [rowIds]);
+  }, [isIndividualQuotaSkins, rowIds, summaryRows]);
 
   useEffect(() => {
     if (selectedGroupKey && !entryGroups.some((group) => group.key === selectedGroupKey)) {
@@ -361,7 +407,48 @@ export function QuickEntryRoundView({
   }
 
   function handleFinalSubmit() {
-    if (!allPlayersComplete || isArchiving || hasFinalSubmitStarted) return;
+    if (isArchiving || hasFinalSubmitStarted) return;
+
+    const missingScores: string[] = [];
+    const incompleteScores: string[] = [];
+
+    for (const row of summaryRows) {
+      if (isIndividualQuotaSkins) {
+        if (row.quickFrontNine == null) {
+          missingScores.push(row.playerName);
+        } else if (!row.frontSubmittedAt || !row.backSubmittedAt) {
+          incompleteScores.push(`${row.playerName} needs Save`);
+        }
+        continue;
+      }
+
+      if (row.quickFrontNine == null && row.quickBackNine == null) {
+        missingScores.push(row.playerName);
+      } else if (row.quickFrontNine == null) {
+        incompleteScores.push(`${row.playerName} needs Front 9`);
+      } else if (row.quickBackNine == null) {
+        incompleteScores.push(`${row.playerName} needs Back 9`);
+      } else if (!row.frontSubmittedAt || !row.backSubmittedAt) {
+        incompleteScores.push(`${row.playerName} needs Save`);
+      }
+    }
+
+    if (missingScores.length) {
+      setFinalValidationMessage(`Missing scores: ${missingScores.join(", ")}`);
+      return;
+    }
+
+    if (incompleteScores.length) {
+      setFinalValidationMessage(`Incomplete score: ${incompleteScores.join(", ")}`);
+      return;
+    }
+
+    if (!allPlayersComplete) {
+      setFinalValidationMessage("Save every player score before finalizing.");
+      return;
+    }
+
+    setFinalValidationMessage(null);
     setIsFinalConfirmOpen(true);
   }
 
@@ -625,6 +712,16 @@ export function QuickEntryRoundView({
           >
             Finalize Round
           </button>
+        ) : null}
+        {!allPlayersComplete && incompleteStatusMessage ? (
+          <p className="rounded-2xl bg-canvas px-4 py-3 text-sm font-semibold text-ink/70">
+            {incompleteStatusMessage}
+          </p>
+        ) : null}
+        {finalValidationMessage ? (
+          <p className="rounded-2xl bg-[#FCE5E2] px-4 py-3 text-sm font-semibold text-danger">
+            {finalValidationMessage}
+          </p>
         ) : null}
       </div>
 
