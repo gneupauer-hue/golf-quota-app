@@ -35,8 +35,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const name = String(body.name ?? "").trim();
     const quota = Number(body.quota);
-    const isRegular = Boolean(body.isRegular);
-    const isActive = Boolean(body.isActive);
     const conflictIds = Array.isArray(body.conflictIds)
       ? body.conflictIds.map((value: unknown) => String(value))
       : [];
@@ -56,8 +54,8 @@ export async function POST(request: Request) {
           quota,
           currentQuota: quota,
           startingQuota: quota,
-          isRegular,
-          isActive
+          isRegular: true,
+          isActive: true
         }
       });
 

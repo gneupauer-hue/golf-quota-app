@@ -943,34 +943,6 @@ function handleRepairButtonPress() {
                   />
                 </label>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    className={classNames(
-                      "min-h-12 rounded-2xl border px-4 text-sm font-semibold",
-                      form.isRegular
-                        ? "border-pine bg-pine text-white"
-                        : "border-mist bg-card text-ink"
-                    )}
-                    onClick={() => setForm((current) => ({ ...current, isRegular: !current.isRegular }))}
-                  >
-                    {form.isRegular ? "Roster" : "Guest"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className={classNames(
-                      "min-h-12 rounded-2xl border px-4 text-sm font-semibold",
-                      form.isActive
-                        ? "border-pine bg-pine text-white"
-                        : "border-mist bg-card text-ink"
-                    )}
-                    onClick={() => setForm((current) => ({ ...current, isActive: !current.isActive }))}
-                  >
-                    {form.isActive ? "Active" : "Inactive"}
-                  </button>
-                </div>
-
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-ink">Avoid pairing with</p>
                   <div className="max-h-56 space-y-2 overflow-y-auto rounded-2xl border border-mist bg-card p-3">
