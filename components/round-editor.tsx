@@ -898,7 +898,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         return a.name.localeCompare(b.name);
       })
       .filter((player) => {
-        if (selectedIds.has(player.id) || !player.isActive || isLocked) return false;
+        if (selectedIds.has(player.id) || isLocked) return false;
         return !query || player.name.toLowerCase().includes(query);
       });
   }, [isLocked, players, search, selectedIds]);
@@ -912,7 +912,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         return a.name.localeCompare(b.name);
       })
       .filter((player) => {
-        if (!player.isActive || isLocked) return false;
+        if (isLocked) return false;
         if (assignedSetupPlayerIds.has(player.id)) return false;
         return !query || player.name.toLowerCase().includes(query);
       });
