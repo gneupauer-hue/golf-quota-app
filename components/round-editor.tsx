@@ -826,6 +826,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const [scoringGroupBuildVariant, setScoringGroupBuildVariant] = useState(0);
   const [shownScoringGroupKeys, setShownScoringGroupKeys] = useState<string[]>([]);
   const [isSetupTeamEditMode, setIsSetupTeamEditMode] = useState(false);
+  const [isSetupGroupEditMode, setIsSetupGroupEditMode] = useState(false);
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
@@ -1062,6 +1063,53 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     return "";
   }
 
+  function getSetupGroupValidation(sourceRows: RowState[]) {
+    if (isSkinsOnly || !selectedMatchFormat || !setupTeamCodes.length) {
+      return { valid: true, reason: "" };
+    }
+
+    const playerNameById = new Map(calculatedRows.map((row) => [row.playerId, row.playerName]));
+    const expectedGroups = buildScoringGroups(
+      sourceRows.map((row) => ({ ...row, groupNumber: null, teeTime: null })),
+      teamStandings,
+      playerNameById,
+      [],
+      { ignoreExistingGroups: true }
+    );
+    const expectedGroupCount = expectedGroups.length;
+
+    if (!expectedGroupCount) {
+      return { valid: false, reason: "Each group needs the correct number of teams." };
+    }
+
+    const groupTeams = new Map<number, TeamCode[]>();
+    const groupPlayerCounts = new Map<number, number>();
+
+    for (const team of setupTeamCodes) {
+      const teamRows = sourceRows.filter((row) => row.team === team);
+      const groupNumber = teamRows.find((row) => row.groupNumber != null)?.groupNumber ?? null;
+
+      if (teamRows.length === 0 || groupNumber == null || groupNumber < 1 || groupNumber > expectedGroupCount) {
+        return { valid: false, reason: "Each group needs the correct number of teams." };
+      }
+
+      const teams = groupTeams.get(groupNumber) ?? [];
+      teams.push(team);
+      groupTeams.set(groupNumber, teams);
+      groupPlayerCounts.set(groupNumber, (groupPlayerCounts.get(groupNumber) ?? 0) + teamRows.length);
+    }
+
+    for (let groupNumber = 1; groupNumber <= expectedGroupCount; groupNumber += 1) {
+      const teams = groupTeams.get(groupNumber) ?? [];
+      const playerCount = groupPlayerCounts.get(groupNumber) ?? 0;
+      if (teams.length === 0 || playerCount > 4) {
+        return { valid: false, reason: "Each group needs the correct number of teams." };
+      }
+    }
+
+    return { valid: true, reason: "" };
+  }
+
   const setupValidation = useMemo(() => {
     if (isSkinsOnly) {
       if (!rows.length) {
@@ -1121,8 +1169,17 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       }
     }
 
+    if (rows.some((row) => row.team != null && row.groupNumber == null)) {
+      return { valid: false, reason: "Each group needs the correct number of teams." };
+    }
+
+    const groupValidation = getSetupGroupValidation(rows);
+    if (!groupValidation.valid) {
+      return groupValidation;
+    }
+
     return { valid: true, reason: "" };
-  }, [availableMatchFormats.length, isSkinsOnly, matchSetupPlayerCount, rows, selectedMatchFormat, setupTeamCodes, setupTeamCount]);
+  }, [availableMatchFormats.length, calculatedRows, isSkinsOnly, matchSetupPlayerCount, rows, selectedMatchFormat, setupTeamCodes, setupTeamCount, teamStandings]);
 
   const setupTeams = useMemo(() => {
     return setupTeamCodes.map((team) => {
@@ -1171,6 +1228,38 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
           ),
     [calculatedRows, initialGroups, isSkinsOnly, rows, teamStandings]
   );
+  const manualSetupGroupSlots = useMemo(() => {
+    if (isSkinsOnly || !rows.length || !teamStandings.length) {
+      return [];
+    }
+
+    return buildScoringGroups(
+      rows.map((row) => ({ ...row, groupNumber: null, teeTime: null })),
+      teamStandings,
+      new Map(calculatedRows.map((row) => [row.playerId, row.playerName])),
+      [],
+      { ignoreExistingGroups: true }
+    ).map((group, index) => ({
+      groupNumber: group.groupNumber ?? index + 1,
+      label: `Group ${index + 1}`
+    }));
+  }, [calculatedRows, isSkinsOnly, rows, teamStandings]);
+  const manualSetupTeamsByGroup = useMemo(() => {
+    const teamsByGroup = new Map<number, TeamCode[]>();
+
+    for (const team of setupTeamCodes) {
+      const groupNumber = rows.find((row) => row.team === team && row.groupNumber != null)?.groupNumber ?? null;
+      if (groupNumber == null) {
+        continue;
+      }
+
+      const teams = teamsByGroup.get(groupNumber) ?? [];
+      teams.push(team);
+      teamsByGroup.set(groupNumber, teams);
+    }
+
+    return teamsByGroup;
+  }, [rows, setupTeamCodes]);
   const hasAutoBuiltTeams =
     !isSkinsOnly &&
     selectedMatchFormat != null &&
@@ -1475,6 +1564,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     setTeamBuildVariant(0);
     setShownTeamBuildKeys([]);
     setShownScoringGroupKeys([]);
+    setIsSetupGroupEditMode(false);
   }
 
   function autoBuildMatchQuotaTeams(requireDifferent = false) {
@@ -1599,6 +1689,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         }))
       );
       setShownScoringGroupKeys([]);
+      setIsSetupGroupEditMode(false);
       if (selectedTeamKey) {
         setShownTeamBuildKeys((current) => {
           const next = new Set(current);
@@ -1666,6 +1757,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     const player = playersById.get(playerId);
     setShownTeamBuildKeys([]);
     setShownScoringGroupKeys([]);
+    setIsSetupGroupEditMode(false);
     setSearch("");
     setMessage(`${player?.name ?? "Player"} added to ${getSetupTeamLabel(destinationTeam)}.`);
   }
@@ -1817,6 +1909,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     setSavedRows(selectedRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
     setSelectedScoringGroupKey(selectedGroups[0]?.key ?? null);
     setScoringGroupBuildVariant(selectedVariant);
+    setIsSetupGroupEditMode(false);
     if (selectedGroupKey) {
       setShownScoringGroupKeys((current) => {
         const next = new Set(current);
@@ -1834,6 +1927,54 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
           : "Groups are already set."
         : "Playing groups assigned. Live scoring will stay scoped to these foursomes."
     );
+  }
+
+  function startManualGroupEditing() {
+    if (isSkinsOnly) {
+      return;
+    }
+
+    if (!hasAutoBuiltTeams) {
+      setMessage("Build teams before assigning playing groups.");
+      return;
+    }
+
+    setIsSetupGroupEditMode(true);
+    setMessage("");
+  }
+
+  function assignSetupTeamToGroup(team: TeamCode, groupNumber: number) {
+    if (!isSetupGroupEditMode || isSkinsOnly) {
+      return;
+    }
+
+    if (!manualSetupGroupSlots.some((group) => group.groupNumber === groupNumber)) {
+      setMessage("Each group needs the correct number of teams.");
+      return;
+    }
+
+    const nextRows = rows.map((row) =>
+      row.team === team
+        ? { ...row, groupNumber, teeTime: null }
+        : row
+    );
+
+    setRows(nextRows);
+    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+    setSelectedScoringGroupKey(`group-${groupNumber}`);
+    setShownScoringGroupKeys([]);
+    setMessage(`${getSetupTeamLabel(team)} assigned to Group ${groupNumber}.`);
+  }
+
+  function finishManualGroupEditing() {
+    const groupValidation = getSetupGroupValidation(rows);
+    if (!groupValidation.valid) {
+      setMessage(groupValidation.reason || "Each group needs the correct number of teams.");
+      return;
+    }
+
+    setIsSetupGroupEditMode(false);
+    setMessage("Manual playing groups saved.");
   }
 
   function autoAssignIndividualScoringGroups() {
@@ -3476,7 +3617,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
                           </span>
                         ) : null}
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-3">
                         <button
                           type="button"
                           disabled={!hasAutoBuiltTeams}
@@ -3484,6 +3625,14 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
                           onClick={autoAssignScoringGroups}
                         >
                           {hasAssignedScoringGroups ? "Rebuild Foursomes" : "Build Foursomes"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!hasAutoBuiltTeams || manualSetupGroupSlots.length === 0}
+                          className="min-h-12 rounded-full bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-60"
+                          onClick={startManualGroupEditing}
+                        >
+                          Manually Build Groups
                         </button>
                         <button
                           type="button"
@@ -3496,6 +3645,88 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
                       </div>
                       {toast === "Copied to clipboard" ? (
                         <p className="rounded-2xl bg-[#FBF7F0] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
+                      ) : null}
+                      {isSetupGroupEditMode ? (
+                        <div className="space-y-3 rounded-2xl border border-ink/10 bg-canvas px-4 py-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-ink">Manual group assignment</p>
+                              <p className="mt-1 text-xs text-ink/60">Assign each team to the group it should play with.</p>
+                            </div>
+                            <button
+                              type="button"
+                              className="min-h-10 rounded-full bg-pine px-4 text-xs font-semibold text-white"
+                              onClick={finishManualGroupEditing}
+                            >
+                              Done Editing
+                            </button>
+                          </div>
+
+                          <div className="grid gap-2">
+                            {setupTeamCodes.map((team) => {
+                              const teamRows = rows.filter((row) => row.team === team);
+                              const currentGroupNumber = teamRows.find((row) => row.groupNumber != null)?.groupNumber ?? null;
+                              const totalQuota = teamRows.reduce((sum, row) => {
+                                const player = playersById.get(row.playerId);
+                                return sum + (player ? quotaSnapshot[row.playerId] ?? player.quota : 0);
+                              }, 0);
+
+                              return (
+                                <div key={`manual-group-team-${team}`} className="rounded-2xl bg-card px-3 py-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-ink">
+                                        {`${getSetupTeamLabel(team)} (${totalQuota})`}
+                                      </p>
+                                      <p className="mt-0.5 truncate text-xs text-ink/55">
+                                        {teamRows
+                                          .map((row) => playersById.get(row.playerId)?.name ?? "Unknown Player")
+                                          .join(" + ")}
+                                      </p>
+                                    </div>
+                                    <span className="shrink-0 rounded-full bg-canvas px-2.5 py-1 text-xs font-semibold text-ink/60">
+                                      {currentGroupNumber == null ? "Unassigned" : `Group ${currentGroupNumber}`}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {manualSetupGroupSlots.map((group) => {
+                                      const selected = currentGroupNumber === group.groupNumber;
+                                      return (
+                                        <button
+                                          key={`manual-group-team-${team}-${group.groupNumber}`}
+                                          type="button"
+                                          className={classNames(
+                                            "min-h-9 rounded-full px-3 text-xs font-semibold",
+                                            selected ? "bg-pine text-white" : "bg-canvas text-ink/75"
+                                          )}
+                                          onClick={() => assignSetupTeamToGroup(team, group.groupNumber)}
+                                        >
+                                          {group.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {manualSetupGroupSlots.map((group) => {
+                              const teams = manualSetupTeamsByGroup.get(group.groupNumber) ?? [];
+                              return (
+                                <div key={`manual-group-summary-${group.groupNumber}`} className="rounded-2xl bg-card px-3 py-2">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">{group.label}</p>
+                                  <p className="mt-1 text-sm font-semibold text-ink">
+                                    {teams.length
+                                      ? teams.map((team) => getSetupTeamLabel(team)).join(" + ")
+                                      : "No teams assigned"}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       ) : null}
                       {setupScoringGroupsPreview.length ? (
                         <div className="grid gap-3">
