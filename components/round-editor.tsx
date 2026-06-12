@@ -1068,6 +1068,30 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       return { valid: true, reason: "" };
     }
 
+    const isThreeTeamTripleFormat =
+      selectedMatchFormat.teamCount === 3 &&
+      selectedMatchFormat.capacities.length === 3 &&
+      selectedMatchFormat.capacities.every((capacity) => capacity === 3);
+
+    if (isThreeTeamTripleFormat) {
+      const assignedGroupNumbers = new Set<number>();
+
+      for (const team of setupTeamCodes) {
+        const teamRows = sourceRows.filter((row) => row.team === team);
+        const groupNumber = teamRows.find((row) => row.groupNumber != null)?.groupNumber ?? null;
+
+        if (teamRows.length !== 3 || groupNumber == null || groupNumber < 1 || groupNumber > 3) {
+          return { valid: false, reason: "Each group needs the correct number of teams." };
+        }
+
+        assignedGroupNumbers.add(groupNumber);
+      }
+
+      return assignedGroupNumbers.size === 3
+        ? { valid: true, reason: "" }
+        : { valid: false, reason: "Each group needs the correct number of teams." };
+    }
+
     const playerNameById = new Map(calculatedRows.map((row) => [row.playerId, row.playerName]));
     const expectedGroups = buildScoringGroups(
       sourceRows.map((row) => ({ ...row, groupNumber: null, teeTime: null })),
@@ -3279,7 +3303,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   }
 
   return (
-    <div className="space-y-3 pb-48">
+    <div className="space-y-3 pb-[18rem]">
       {!isLocked ? (
         <PageTitle
           title={round.completedAt ? "Round Review" : "Round Setup"}
