@@ -1076,9 +1076,10 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     if (isThreeTeamTripleFormat) {
       const assignedGroupNumbers = new Set<number>();
 
-      for (const team of setupTeamCodes) {
+      for (const [teamIndex, team] of setupTeamCodes.entries()) {
         const teamRows = sourceRows.filter((row) => row.team === team);
-        const groupNumber = teamRows.find((row) => row.groupNumber != null)?.groupNumber ?? null;
+        const groupNumber =
+          teamRows.find((row) => row.groupNumber != null)?.groupNumber ?? teamIndex + 1;
 
         if (teamRows.length !== 3 || groupNumber == null || groupNumber < 1 || groupNumber > 3) {
           return { valid: false, reason: "Each group needs the correct number of teams." };
@@ -1193,13 +1194,18 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       }
     }
 
-    if (rows.some((row) => row.team != null && row.groupNumber == null)) {
-      return { valid: false, reason: "Each group needs the correct number of teams." };
-    }
-
     const groupValidation = getSetupGroupValidation(rows);
     if (!groupValidation.valid) {
       return groupValidation;
+    }
+
+    const isThreeTeamTripleFormat =
+      selectedMatchFormat.teamCount === 3 &&
+      selectedMatchFormat.capacities.length === 3 &&
+      selectedMatchFormat.capacities.every((capacity) => capacity === 3);
+
+    if (!isThreeTeamTripleFormat && rows.some((row) => row.team != null && row.groupNumber == null)) {
+      return { valid: false, reason: "Each group needs the correct number of teams." };
     }
 
     return { valid: true, reason: "" };
@@ -2445,7 +2451,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       }))
     );
     setTeamBuildVariant(0);
-    setMessage(`Assigned player to ${getSetupTeamLabel(destinationTeam)}.`);
+    setMessage(`Assigned player to ${getSetupTeamLabel(destinationTeam)}. Rebuild playing groups before starting.`);
   }
   function clearSetupPlayerAssignment(playerId: string) {
     const sourceRow = rows.find((row) => row.playerId === playerId);
