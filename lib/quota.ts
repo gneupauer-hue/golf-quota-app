@@ -158,6 +158,7 @@ export type SideGameResults = {
     payout: number;
     playerNames: string[];
   }>;
+  individualPayoutRemainder: number;
   cashers: Array<{
     playerId: string;
     playerName: string;
@@ -274,6 +275,8 @@ export type FinalPayoutSummary = {
   perSkin: number;
   totalSkinsPaid: number;
   skinsLeftover: number;
+  indyLeftover: number;
+  bartenderTip: number;
 };
 
 export type PayoutAudit = {
@@ -291,6 +294,7 @@ export type PayoutAudit = {
   overallPaidOut: number;
   goodSkinsAwarded: number;
   perSkinValue: number;
+  indyLeftover: number;
   leftover: number;
   checks: Array<{
     label: string;
@@ -972,6 +976,7 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
   const payouts: SideGameResults["individualPayouts"] = [];
   const rankings: SideGameResults["individualRankings"] = [];
   const payoutByPlace = new Map<number, { place: number; payout: number; playerNames: string[] }>();
+  let payoutRemainder = 0;
 
   for (const group of rankedGroups) {
     for (const row of group.rows) {
@@ -991,16 +996,15 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
     }
 
     const coveredPayouts = payoutTable.slice(group.startPlace - 1, Math.min(group.endPlace, placesPaid));
-    const splitPayouts = coveredPayouts.length
-      ? splitCurrencyAcrossShareCount(
-          coveredPayouts.reduce((sum, amount) => sum + amount, 0),
-          group.rows.length
-        )
-      : [];
-    const fallbackSplitPayout = splitPayouts[0] ?? 0;
+    const coveredPayoutTotal = coveredPayouts.reduce((sum, amount) => sum + amount, 0);
+    const splitPayout = coveredPayouts.length
+      ? floorWholeDollar(coveredPayoutTotal / group.rows.length)
+      : 0;
+    payoutRemainder = roundCurrency(
+      payoutRemainder + Math.max(0, coveredPayoutTotal - splitPayout * group.rows.length)
+    );
 
-    for (const [rowIndex, row] of group.rows.entries()) {
-      const playerPayout = splitPayouts[rowIndex] ?? 0;
+    for (const row of group.rows) {
       payouts.push({
         playerId: row.playerId,
         playerName: row.playerName,
@@ -1009,7 +1013,7 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
         totalPoints: row.totalPoints,
         tied: group.rows.length > 1,
         placeLabel: formatPlaceLabel(group.startPlace, Math.min(group.endPlace, placesPaid)),
-        payout: playerPayout
+        payout: splitPayout
       });
 
       const coveredPlaces = Array.from(
@@ -1019,10 +1023,10 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
       for (const place of coveredPlaces) {
         const current = payoutByPlace.get(place) ?? {
           place,
-          payout: fallbackSplitPayout,
+          payout: splitPayout,
           playerNames: []
         };
-        current.payout = fallbackSplitPayout;
+        current.payout = splitPayout;
         current.playerNames.push(row.playerName);
         payoutByPlace.set(place, current);
       }
@@ -1033,7 +1037,8 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
     placesPaid,
     rankings,
     payouts,
-    payoutByPlace: Array.from(payoutByPlace.values()).sort((a, b) => a.place - b.place)
+    payoutByPlace: Array.from(payoutByPlace.values()).sort((a, b) => a.place - b.place),
+    payoutRemainder
   };
 }
 
@@ -1221,7 +1226,7 @@ export function calculateGoodSkins(rows: CalculatedRoundRow[]): SkinsResult {
 export function calculateSideGameResults(rows: CalculatedRoundRow[]): SideGameResults {
   const liveLeaders = calculateLiveLeaders(rows);
   const indyPot = getIndividualPotTotal(rows.length);
-  const { placesPaid, rankings, payouts, payoutByPlace } = calculateIndividualPayouts(rows);
+  const { placesPaid, rankings, payouts, payoutByPlace, payoutRemainder } = calculateIndividualPayouts(rows);
   const skins = calculateGoodSkins(rows);
   const teamPot = rows.length * 20;
   const frontPot = rows.length * 5;
@@ -1253,6 +1258,7 @@ export function calculateSideGameResults(rows: CalculatedRoundRow[]): SideGameRe
     individualRankings: rankings,
     individualPayouts: payouts,
     payoutByPlace,
+    individualPayoutRemainder: payoutRemainder,
     cashers: payouts.map((player) => ({
       playerId: player.playerId,
       playerName: player.playerName,
@@ -1861,7 +1867,9 @@ export function calculateFinalPayoutSummary(
     skinsWon: sideGames.skins.totalSkinSharesWon,
     perSkin: sideGames.skins.valuePerSkin,
     totalSkinsPaid: sideGames.skins.totalDistributed,
-    skinsLeftover: sideGames.skins.leftover
+    skinsLeftover: sideGames.skins.leftover,
+    indyLeftover: sideGames.individualPayoutRemainder,
+    bartenderTip: roundCurrency(sideGames.individualPayoutRemainder + sideGames.skins.leftover)
   };
 }
 
@@ -1882,15 +1890,17 @@ export function calculatePayoutAudit(
   const indyPaid = roundCurrency(payoutSummary.players.reduce((sum, player) => sum + player.indy, 0));
   const skinsPaid = roundCurrency(payoutSummary.players.reduce((sum, player) => sum + player.skins, 0));
   const overallPaidOut = roundCurrency(frontPaid + backPaid + totalMatchPaid + indyPaid + skinsPaid);
-  const leftover = sideGames.skins.leftover;
+  const indyLeftover = sideGames.individualPayoutRemainder;
+  const leftover = roundCurrency(indyLeftover + sideGames.skins.leftover);
 
   if (
-    !isCurrencyMatch(indyPaid, sideGames.overallPot.indyPot) ||
+    !isCurrencyMatch(indyPaid + indyLeftover, sideGames.overallPot.indyPot) ||
     !isCurrencyMatch(overallPaidOut + leftover, expectedOverallPot)
   ) {
     console.warn("Payout audit reconciliation mismatch", {
       indyPot: sideGames.overallPot.indyPot,
       indyPaid,
+      indyLeftover,
       overallPot: expectedOverallPot,
       overallPaidOut,
       leftover
@@ -1914,14 +1924,14 @@ export function calculatePayoutAudit(
       difference: roundCurrency(totalMatchPaid - expectedTotalMatchPot)
     },
     {
-      label: "Indy Paid = Indy Pot",
-      passed: roundCurrency(indyPaid) === roundCurrency(sideGames.overallPot.indyPot),
-      difference: roundCurrency(indyPaid - sideGames.overallPot.indyPot)
+      label: "Indy Paid + Bartender Tip = Indy Pot",
+      passed: roundCurrency(indyPaid + indyLeftover) === roundCurrency(sideGames.overallPot.indyPot),
+      difference: roundCurrency(indyPaid + indyLeftover - sideGames.overallPot.indyPot)
     },
     {
       label: "Skins Paid + Bartender Tip = Skins Pot",
-      passed: roundCurrency(skinsPaid + leftover) === roundCurrency(sideGames.skins.totalPot),
-      difference: roundCurrency(skinsPaid + leftover - sideGames.skins.totalPot)
+      passed: roundCurrency(skinsPaid + sideGames.skins.leftover) === roundCurrency(sideGames.skins.totalPot),
+      difference: roundCurrency(skinsPaid + sideGames.skins.leftover - sideGames.skins.totalPot)
     },
     {
       label: "Overall Paid + Bartender Tip = Overall Pot",
@@ -1946,11 +1956,14 @@ export function calculatePayoutAudit(
     overallPaidOut,
     goodSkinsAwarded: sideGames.skins.totalSkinSharesWon,
     perSkinValue: sideGames.skins.valuePerSkin,
+    indyLeftover,
     leftover,
     checks,
     passed: checks.every((check) => check.passed)
   };
 }
+
+
 
 
 

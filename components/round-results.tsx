@@ -362,16 +362,17 @@ export function RoundResults({ data }: { data: ResultsData }) {
     ...entry,
     goodSkinEntries: skinOverridesByPlayerId[entry.playerId] ?? entry.goodSkinEntries
   }));
+  const currentSideGames = calculateSideGameResults(data.entries);
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
   const payoutAudit = calculatePayoutAudit(data.entries, data.round.roundMode);
-  const currentSkins = calculateSideGameResults(data.entries).skins;
+  const currentSkins = currentSideGames.skins;
   const displayRoundDate = getRoundDisplayDate({
     roundName: data.round.roundName,
     roundDate: data.round.roundDate,
     completedAt: data.round.completedAt,
     createdAt: data.round.createdAt
   });
-  const indyCashers = data.money.individualPayouts.filter((player) => player.payout > 0);
+  const indyCashers = currentSideGames.individualPayouts.filter((player) => player.payout > 0);
   const indyRankings = buildIndyRankings(
     data.entries.map((entry) => ({
       playerId: entry.playerId,
@@ -382,7 +383,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
     }))
   );
   const indyPayoutsByPlayerId = new Map(
-    data.money.individualPayouts.map((player) => [player.playerId, player.payout])
+    currentSideGames.individualPayouts.map((player) => [player.playerId, player.payout])
   );
   const indyWinnerIds = new Set(indyCashers.map((player) => player.playerId));
   const goodSkins = currentSkins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
@@ -791,11 +792,11 @@ export function RoundResults({ data }: { data: ResultsData }) {
           <p className="text-sm text-ink/65">No payouts were earned in this round.</p>
         )}
 
-        {payoutSummary.skinsLeftover > 0 ? (
+        {payoutSummary.bartenderTip > 0 ? (
           <div className="mt-2 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5">
             <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Bartender Tip</p>
             <p className="mt-1 text-base font-semibold text-ink">
-              {formatCurrency(payoutSummary.skinsLeftover)}
+              {formatCurrency(payoutSummary.bartenderTip)}
             </p>
           </div>
         ) : null}
@@ -1019,7 +1020,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
           <ResultStatCard
             title="Indy Pot"
             value={formatCurrency(data.money.overallPot.indyPot)}
-            detail={`${data.money.overallPot.placesPaid} places paid`}
+            detail={`${data.money.overallPot.placesPaid} places paid${payoutSummary.indyLeftover > 0 ? ` - ${formatCurrency(payoutSummary.indyLeftover)} tip` : ""}`}
           />
           <ResultStatCard
             title="Skins Pot"
@@ -1405,3 +1406,4 @@ export function RoundResults({ data }: { data: ResultsData }) {
     </div>
   );
 }
+

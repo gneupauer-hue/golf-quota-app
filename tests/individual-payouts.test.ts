@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateSideGameResults, splitCurrencyAcrossShareCount, type CalculatedRoundRow } from "@/lib/quota";
+import { calculateSideGameResults, type CalculatedRoundRow } from "@/lib/quota";
 
 const expectedPayouts = new Map<number, number[]>([
   [4, [20]],
@@ -121,30 +121,37 @@ test("two players tied for second split second and third individual quota payout
 
   assert.deepEqual(payouts, [
     { playerName: "Player 1", rank: 1, payout: 55, placeLabel: "1" },
-    { playerName: "Player 2", rank: 2, payout: 17.5, placeLabel: "2-3" },
-    { playerName: "Player 3", rank: 2, payout: 17.5, placeLabel: "2-3" }
+    { playerName: "Player 2", rank: 2, payout: 17, placeLabel: "2-3" },
+    { playerName: "Player 3", rank: 2, payout: 17, placeLabel: "2-3" }
   ]);
 });
 
-test("currency splits distribute leftover pennies without changing the pot total", () => {
-  const shares = splitCurrencyAcrossShareCount(35, 3);
+test("individual quota tied payouts use whole dollars and carry leftover to tip", () => {
+  const results = calculateSideGameResults(buildRowsWithResults([2, 1, 1, 0, -1, -2, -3, -4, -5]));
 
-  assert.deepEqual(shares, [11.67, 11.67, 11.66]);
+  assert.deepEqual(
+    results.individualPayouts.map((player) => player.payout),
+    [55, 17, 17]
+  );
+  assert.equal(results.individualPayoutRemainder, 1);
   assert.equal(
-    Math.round(shares.reduce((sum, share) => sum + share, 0) * 100),
-    3500
+    results.individualPayouts.reduce((sum, player) => sum + player.payout, 0) + results.individualPayoutRemainder,
+    results.overallPot.indyPot
   );
 });
 
-test("individual quota tied payouts reconcile exactly when cents are uneven", () => {
+test("uneven three-way individual quota ties floor to whole dollars", () => {
   const results = calculateSideGameResults(buildRowsWithResults([5, 4, 4, 4, 0, -1, -2, -3, -4, -5, -6, -7, -8]));
   const tiedPayouts = results.individualPayouts
     .filter((player) => player.rank === 2)
     .map((player) => player.payout);
 
-  assert.deepEqual(tiedPayouts, [21.67, 21.67, 21.66]);
+  assert.deepEqual(tiedPayouts, [21, 21, 21]);
+  assert.equal(results.individualPayoutRemainder, 2);
+  assert.equal(results.individualPayouts.every((player) => Number.isInteger(player.payout)), true);
   assert.equal(
-    Math.round(results.individualPayouts.reduce((sum, player) => sum + player.payout, 0) * 100),
-    13000
+    results.individualPayouts.reduce((sum, player) => sum + player.payout, 0) + results.individualPayoutRemainder,
+    results.overallPot.indyPot
   );
 });
+
