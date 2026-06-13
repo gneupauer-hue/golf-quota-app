@@ -87,3 +87,24 @@ test("scorecard skins let a hole-in-one beat eagle and birdie on the same hole",
   assert.equal(hole?.skinAwarded, true);
   assert.equal(hole?.winnerName, "Chad");
 });
+
+test("scorecard skins pay whole dollars and send remainder to bartender tip", () => {
+  const result = skinsFor([
+    row("p1", "Player 1", [skin(1, 4)]),
+    row("p2", "Player 2", [skin(2, 4)]),
+    row("p3", "Player 3", [skin(3, 4)]),
+    row("p4", "Player 4", [skin(4, 4)]),
+    row("p5", "Player 5", [skin(5, 4)]),
+    row("p6", "Player 6", [skin(6, 4)]),
+    row("p7", "Player 7", [skin(7, 4)]),
+    row("p8", "Player 8", [skin(8, 4)]),
+    row("p9", "Player 9")
+  ]);
+
+  assert.equal(result.totalPot, 90);
+  assert.equal(result.totalSkinSharesWon, 8);
+  assert.equal(result.valuePerSkin, 11);
+  assert.equal(result.totalDistributed, 88);
+  assert.equal(result.leftover, 2);
+  assert.equal(result.winners.every((winner) => Number.isInteger(winner.payout)), true);
+});

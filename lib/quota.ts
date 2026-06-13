@@ -1919,12 +1919,12 @@ export function calculatePayoutAudit(
       difference: roundCurrency(indyPaid - sideGames.overallPot.indyPot)
     },
     {
-      label: "Skins Paid + Leftover = Skins Pot",
+      label: "Skins Paid + Bartender Tip = Skins Pot",
       passed: roundCurrency(skinsPaid + leftover) === roundCurrency(sideGames.skins.totalPot),
       difference: roundCurrency(skinsPaid + leftover - sideGames.skins.totalPot)
     },
     {
-      label: "Overall Paid + Leftover = Overall Pot",
+      label: "Overall Paid + Bartender Tip = Overall Pot",
       passed:
         roundCurrency(overallPaidOut + leftover) === roundCurrency(expectedOverallPot),
       difference: roundCurrency(overallPaidOut + leftover - expectedOverallPot)

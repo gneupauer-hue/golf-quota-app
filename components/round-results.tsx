@@ -9,6 +9,7 @@ import type { QuotaValidationSummary } from "@/lib/quota-history";
 import {
   calculatePayoutAudit,
   calculateFinalPayoutSummary,
+  calculateSideGameResults,
   formatPayoutAuditStatus,
   formatPlusMinus,
   goodSkinTypeLabels,
@@ -363,6 +364,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
   }));
   const payoutSummary = calculateFinalPayoutSummary(data.entries, data.round.roundMode);
   const payoutAudit = calculatePayoutAudit(data.entries, data.round.roundMode);
+  const currentSkins = calculateSideGameResults(data.entries).skins;
   const displayRoundDate = getRoundDisplayDate({
     roundName: data.round.roundName,
     roundDate: data.round.roundDate,
@@ -383,7 +385,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
     data.money.individualPayouts.map((player) => [player.playerId, player.payout])
   );
   const indyWinnerIds = new Set(indyCashers.map((player) => player.playerId));
-  const goodSkins = data.money.skins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
+  const goodSkins = currentSkins.holes.filter((hole) => hole.skinAwarded && hole.winnerName);
   const typedAllSkins = displayEntries
     .flatMap((entry) =>
       entry.goodSkinEntries.map((skinEntry) => ({
@@ -791,9 +793,9 @@ export function RoundResults({ data }: { data: ResultsData }) {
 
         {payoutSummary.skinsLeftover > 0 ? (
           <div className="mt-2 rounded-[22px] border border-ink/10 bg-canvas px-4 py-3.5">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Leftover</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Bartender Tip</p>
             <p className="mt-1 text-base font-semibold text-ink">
-              {`${formatCurrency(payoutSummary.skinsLeftover)} discretionary / possible bartender tip`}
+              {formatCurrency(payoutSummary.skinsLeftover)}
             </p>
           </div>
         ) : null}
@@ -1023,8 +1025,8 @@ export function RoundResults({ data }: { data: ResultsData }) {
             title="Skins Pot"
             value={formatCurrency(data.money.overallPot.skinsPot)}
             detail={
-              data.money.skins.totalSkinSharesWon
-                ? `${data.money.skins.totalSkinSharesWon} awarded`
+              currentSkins.totalSkinSharesWon
+                ? `${currentSkins.totalSkinSharesWon} awarded`
                 : "No skins won"
             }
           />
@@ -1043,13 +1045,13 @@ export function RoundResults({ data }: { data: ResultsData }) {
       <CollapsibleSection
         title="Skins Pot"
         subtitle="Awarded skins, paid total, and leftover."
-        badge={`${data.money.skins.totalSkinSharesWon} awarded`}
+        badge={`${currentSkins.totalSkinSharesWon} awarded`}
       >
         <div className="grid grid-cols-2 gap-2.5">
-          <ResultStatCard title="Skins Pot" value={formatCurrency(data.money.skins.totalPot)} />
-          <ResultStatCard title="Per Skin" value={formatCurrency(data.money.skins.valuePerSkin)} />
-          <ResultStatCard title="Total Paid" value={formatCurrency(data.money.skins.totalDistributed)} />
-          <ResultStatCard title="Leftover" value={formatCurrency(data.money.skins.leftover)} />
+          <ResultStatCard title="Skins Pot" value={formatCurrency(currentSkins.totalPot)} />
+          <ResultStatCard title="Per Skin" value={formatCurrency(currentSkins.valuePerSkin)} />
+          <ResultStatCard title="Total Paid" value={formatCurrency(currentSkins.totalDistributed)} />
+          <ResultStatCard title="Bartender Tip" value={formatCurrency(currentSkins.leftover)} />
         </div>
       </CollapsibleSection>
 
@@ -1075,7 +1077,7 @@ export function RoundResults({ data }: { data: ResultsData }) {
           <ResultStatCard title="Good Skins Awarded" value={`${payoutAudit.goodSkinsAwarded}`} />
           <ResultStatCard title="Per Skin Value" value={formatCurrency(payoutAudit.perSkinValue)} />
           <ResultStatCard title="Total Skins Paid" value={formatCurrency(payoutAudit.skinsPaid)} />
-          <ResultStatCard title="Leftover" value={formatCurrency(payoutAudit.leftover)} />
+          <ResultStatCard title="Bartender Tip" value={formatCurrency(payoutAudit.leftover)} />
         </div>
 
         <div className="mt-2.5 grid grid-cols-2 gap-2.5">
