@@ -882,7 +882,7 @@ function splitCurrencyAcrossKeys(total: number, keys: string[]) {
   return allocations;
 }
 
-function splitCurrencyAcrossShareCount(total: number, shareCount: number) {
+export function splitCurrencyAcrossShareCount(total: number, shareCount: number) {
   if (shareCount <= 0 || total <= 0) {
     return [];
   }
@@ -991,11 +991,16 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
     }
 
     const coveredPayouts = payoutTable.slice(group.startPlace - 1, Math.min(group.endPlace, placesPaid));
-    const splitPayout = coveredPayouts.length
-      ? roundCurrency(coveredPayouts.reduce((sum, amount) => sum + amount, 0) / group.rows.length)
-      : 0;
+    const splitPayouts = coveredPayouts.length
+      ? splitCurrencyAcrossShareCount(
+          coveredPayouts.reduce((sum, amount) => sum + amount, 0),
+          group.rows.length
+        )
+      : [];
+    const fallbackSplitPayout = splitPayouts[0] ?? 0;
 
-    for (const row of group.rows) {
+    for (const [rowIndex, row] of group.rows.entries()) {
+      const playerPayout = splitPayouts[rowIndex] ?? 0;
       payouts.push({
         playerId: row.playerId,
         playerName: row.playerName,
@@ -1004,7 +1009,7 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
         totalPoints: row.totalPoints,
         tied: group.rows.length > 1,
         placeLabel: formatPlaceLabel(group.startPlace, Math.min(group.endPlace, placesPaid)),
-        payout: splitPayout
+        payout: playerPayout
       });
 
       const coveredPlaces = Array.from(
@@ -1014,10 +1019,10 @@ function calculateIndividualPayouts(rows: CalculatedRoundRow[]) {
       for (const place of coveredPlaces) {
         const current = payoutByPlace.get(place) ?? {
           place,
-          payout: splitPayout,
+          payout: fallbackSplitPayout,
           playerNames: []
         };
-        current.payout = splitPayout;
+        current.payout = fallbackSplitPayout;
         current.playerNames.push(row.playerName);
         payoutByPlace.set(place, current);
       }

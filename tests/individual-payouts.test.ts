@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateSideGameResults, type CalculatedRoundRow } from "@/lib/quota";
+import { calculateSideGameResults, splitCurrencyAcrossShareCount, type CalculatedRoundRow } from "@/lib/quota";
 
 const expectedPayouts = new Map<number, number[]>([
   [4, [20]],
@@ -124,4 +124,27 @@ test("two players tied for second split second and third individual quota payout
     { playerName: "Player 2", rank: 2, payout: 17.5, placeLabel: "2-3" },
     { playerName: "Player 3", rank: 2, payout: 17.5, placeLabel: "2-3" }
   ]);
+});
+
+test("currency splits distribute leftover pennies without changing the pot total", () => {
+  const shares = splitCurrencyAcrossShareCount(35, 3);
+
+  assert.deepEqual(shares, [11.67, 11.67, 11.66]);
+  assert.equal(
+    Math.round(shares.reduce((sum, share) => sum + share, 0) * 100),
+    3500
+  );
+});
+
+test("individual quota tied payouts reconcile exactly when cents are uneven", () => {
+  const results = calculateSideGameResults(buildRowsWithResults([5, 4, 4, 4, 0, -1, -2, -3, -4, -5, -6, -7, -8]));
+  const tiedPayouts = results.individualPayouts
+    .filter((player) => player.rank === 2)
+    .map((player) => player.payout);
+
+  assert.deepEqual(tiedPayouts, [21.67, 21.67, 21.66]);
+  assert.equal(
+    Math.round(results.individualPayouts.reduce((sum, player) => sum + player.payout, 0) * 100),
+    13000
+  );
 });
