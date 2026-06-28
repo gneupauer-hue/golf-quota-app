@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finalizeRound, getRoundCompletionPreview } from "@/lib/round-service";
+import { formatRoundPostingPreflightError, validateRoundPostingPreflight } from "@/lib/round-preflight";
 
 export async function GET(
   _request: Request,
@@ -38,6 +39,28 @@ export async function POST(
   const { id } = await params;
 
   try {
+    const preflight = await prisma.$transaction(async (tx) => {
+      return validateRoundPostingPreflight(tx, id);
+    });
+
+    if (!preflight.ok) {
+      return NextResponse.json(
+        {
+          error: formatRoundPostingPreflightError(preflight) ?? "Round cannot be posted yet.",
+          issues: preflight.errors,
+          warnings: preflight.warnings,
+          summary: preflight.summary
+        },
+        { status: 400 }
+      );
+    }
+
+    console.info("[round-complete] preflight passed", {
+      roundId: id,
+      summary: preflight.summary,
+      backupSnapshot: preflight.backupSnapshot
+    });
+
     const finalizedRound = await prisma.$transaction(async (tx) => {
       await finalizeRound(tx, id);
 
