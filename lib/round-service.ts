@@ -606,11 +606,14 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
     }))
     .sort((left, right) => left.playerName.localeCompare(right.playerName));
 
+  const previewCompletedAt = round.completedAt ?? new Date();
+  const previewRoundDate = readOnly ? round.roundDate : previewCompletedAt;
+
   const validation = await buildQuotaValidationSummary(tx, {
     roundId: round.id,
     roundName: round.roundName,
-    roundDate: round.roundDate,
-    completedAt: round.completedAt,
+    roundDate: previewRoundDate,
+    completedAt: previewCompletedAt,
     createdAt: round.createdAt,
     readOnly,
     previewRows
@@ -1210,6 +1213,8 @@ export async function createOrReplaceRoundEntries(
     await syncRoundComputedState(tx, input.roundId);
   }
 }
+
+
 
 
 

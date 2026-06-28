@@ -1,4 +1,4 @@
-﻿import { revalidatePath } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finalizeRound, getRoundCompletionPreview } from "@/lib/round-service";
@@ -7,9 +7,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
+  const { id } = await params;
 
+  try {
     const preview = await prisma.$transaction(async (tx) => {
       return getRoundCompletionPreview(tx, id);
     });
@@ -23,6 +23,7 @@ export async function GET(
       rows: preview.rows
     });
   } catch (error) {
+    console.error("[round-complete] preview failed", { roundId: id, error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not load quota adjustments." },
       { status: 500 }
@@ -34,9 +35,9 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
+  const { id } = await params;
 
+  try {
     const finalizedRound = await prisma.$transaction(async (tx) => {
       await finalizeRound(tx, id);
 
@@ -67,11 +68,10 @@ export async function POST(
       completedAt: finalizedRound.completedAt.toISOString()
     });
   } catch (error) {
+    console.error("[round-complete] finalize failed", { roundId: id, error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not complete round." },
       { status: 500 }
     );
   }
 }
-
-

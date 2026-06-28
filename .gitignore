@@ -5,3 +5,6 @@ prisma/dev.db-journal
 .env
 .env.local
 dist
+.vercel
+.env*
+round-backups/
