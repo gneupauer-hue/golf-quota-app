@@ -4,10 +4,20 @@ import { QuickRoundLauncher } from "@/components/quick-round-launcher";
 import { RefreshAppButton } from "@/components/refresh-app-button";
 import { SectionCard } from "@/components/section-card";
 import { getHomePageData } from "@/lib/data";
+import { ENABLE_SEASON_STATS } from "@/lib/season-stats";
 
 export const dynamic = "force-dynamic";
 
 const actions = [
+  ...(ENABLE_SEASON_STATS
+    ? [
+        {
+          href: "/season-stats",
+          title: "Season Stats",
+          description: "View read-only 2026 money, skins, and quota leaderboards."
+        }
+      ]
+    : []),
   {
     href: "/current-round",
     title: "Current Round",

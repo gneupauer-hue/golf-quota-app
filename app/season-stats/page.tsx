@@ -1,9 +1,16 @@
 import { PageTitle } from "@/components/page-title";
+import { SeasonStatsView } from "@/components/season-stats-view";
 import { SectionCard } from "@/components/section-card";
+import { ENABLE_SEASON_STATS, getExperimentalSeasonStatsData } from "@/lib/season-stats";
 
 export const dynamic = "force-dynamic";
 
-export default function SeasonStatsPage() {
+export default async function SeasonStatsPage() {
+  if (ENABLE_SEASON_STATS) {
+    const data = await getExperimentalSeasonStatsData();
+    return <SeasonStatsView data={data} />;
+  }
+
   return (
     <div className="space-y-3">
       <PageTitle
