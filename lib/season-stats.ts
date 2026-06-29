@@ -12,6 +12,7 @@ import {
 import { getSeasonConfig } from "@/lib/season";
 
 export const ENABLE_SEASON_STATS = true;
+export const SEASON_STATS_MIN_RATE_ROUNDS = 3;
 
 export type SeasonStatsEntryInput = {
   playerId: string;
@@ -40,14 +41,21 @@ export type SeasonStatsRoundInput = {
 export type SeasonStatsPlayerRow = {
   playerId: string;
   playerName: string;
+  roundsPlayed: number;
   moneyWon: number;
+  moneyPerRound: number;
   birdies: number;
+  birdiesPerRound: number;
   eagles: number;
   hios: number;
   paidSkins: number;
+  paidSkinsPerRound: number;
   indyWins: number;
   indyCashes: number;
+  indyCashRate: number;
   teamEvents: number;
+  teamCashRounds: number;
+  teamCashRate: number;
 };
 
 export type SeasonStatsData = {
@@ -70,6 +78,14 @@ export type SeasonStatsData = {
     paidSkins: SeasonStatsPlayerRow[];
     individualQuota: SeasonStatsPlayerRow[];
     teamEvents: SeasonStatsPlayerRow[];
+    roundsPlayed: SeasonStatsPlayerRow[];
+  };
+  rateLeaderboards: {
+    moneyPerRound: SeasonStatsPlayerRow[];
+    birdiesPerRound: SeasonStatsPlayerRow[];
+    paidSkinsPerRound: SeasonStatsPlayerRow[];
+    indyCashRate: SeasonStatsPlayerRow[];
+    teamCashRate: SeasonStatsPlayerRow[];
   };
 };
 
@@ -85,14 +101,21 @@ function createEmptyPlayer(playerId: string, playerName: string): SeasonStatsPla
   return {
     playerId,
     playerName,
+    roundsPlayed: 0,
     moneyWon: 0,
+    moneyPerRound: 0,
     birdies: 0,
+    birdiesPerRound: 0,
     eagles: 0,
     hios: 0,
     paidSkins: 0,
+    paidSkinsPerRound: 0,
     indyWins: 0,
     indyCashes: 0,
-    teamEvents: 0
+    indyCashRate: 0,
+    teamEvents: 0,
+    teamCashRounds: 0,
+    teamCashRate: 0
   };
 }
 
@@ -131,6 +154,16 @@ function sortLeaderboard(
       return left.playerName.localeCompare(right.playerName);
     })
     .slice(0, 10);
+}
+
+function sortRateLeaderboard(
+  rows: SeasonStatsPlayerRow[],
+  selector: (row: SeasonStatsPlayerRow) => number
+) {
+  return sortLeaderboard(
+    rows.filter((row) => row.roundsPlayed >= SEASON_STATS_MIN_RATE_ROUNDS),
+    selector
+  );
 }
 
 export function calculateSeasonStatsFromRounds(
@@ -200,17 +233,21 @@ export function calculateSeasonStatsFromRounds(
       const stats = getOrCreatePlayer(statsByPlayer, row.playerId, row.playerName);
       const payout = payoutByPlayer.get(row.playerId);
       const indyPayout = indyPayoutByPlayer.get(row.playerId);
+      const teamEventCount =
+        Number((payout?.front ?? 0) > 0) +
+        Number((payout?.back ?? 0) > 0) +
+        Number((payout?.total ?? 0) > 0);
       const recordedSkins = parseGoodSkinEntriesInput(
         round.entries.find((entry) => entry.playerId === row.playerId)?.birdieHolesCsv ?? ""
       );
 
+      stats.roundsPlayed += 1;
       stats.moneyWon += payout?.projectedTotal ?? 0;
       stats.paidSkins += paidSkinsByPlayer.get(row.playerId) ?? 0;
       stats.indyCashes += Number((indyPayout?.payout ?? 0) > 0);
       stats.indyWins += Number((indyPayout?.payout ?? 0) > 0 && indyPayout?.rank === 1);
-      stats.teamEvents += Number((payout?.front ?? 0) > 0);
-      stats.teamEvents += Number((payout?.back ?? 0) > 0);
-      stats.teamEvents += Number((payout?.total ?? 0) > 0);
+      stats.teamEvents += teamEventCount;
+      stats.teamCashRounds += Number(teamEventCount > 0);
 
       for (const skin of recordedSkins) {
         if (skin.type === "eagle") {
@@ -224,10 +261,18 @@ export function calculateSeasonStatsFromRounds(
     }
   }
 
-  const players = Array.from(statsByPlayer.values()).map((row) => ({
-    ...row,
-    moneyWon: Math.floor(row.moneyWon)
-  })).sort((left, right) => {
+  const players = Array.from(statsByPlayer.values()).map((row) => {
+    const roundsPlayed = Math.max(0, row.roundsPlayed);
+    return {
+      ...row,
+      moneyWon: Math.floor(row.moneyWon),
+      moneyPerRound: roundsPlayed > 0 ? row.moneyWon / roundsPlayed : 0,
+      birdiesPerRound: roundsPlayed > 0 ? row.birdies / roundsPlayed : 0,
+      paidSkinsPerRound: roundsPlayed > 0 ? row.paidSkins / roundsPlayed : 0,
+      indyCashRate: roundsPlayed > 0 ? row.indyCashes / roundsPlayed : 0,
+      teamCashRate: roundsPlayed > 0 ? row.teamCashRounds / roundsPlayed : 0
+    };
+  }).sort((left, right) => {
     if (right.moneyWon !== left.moneyWon) {
       return right.moneyWon - left.moneyWon;
     }
@@ -242,6 +287,12 @@ export function calculateSeasonStatsFromRounds(
   const paidSkins = sortLeaderboard(players, (row) => row.paidSkins);
   const individualQuota = sortLeaderboard(players, (row) => row.indyCashes);
   const teamEvents = sortLeaderboard(players, (row) => row.teamEvents);
+  const roundsPlayed = sortLeaderboard(players, (row) => row.roundsPlayed);
+  const moneyPerRound = sortRateLeaderboard(players, (row) => row.moneyPerRound);
+  const birdiesPerRound = sortRateLeaderboard(players, (row) => row.birdiesPerRound);
+  const paidSkinsPerRound = sortRateLeaderboard(players, (row) => row.paidSkinsPerRound);
+  const indyCashRate = sortRateLeaderboard(players, (row) => row.indyCashRate);
+  const teamCashRate = sortRateLeaderboard(players, (row) => row.teamCashRate);
 
   return {
     seasonYear,
@@ -262,7 +313,15 @@ export function calculateSeasonStatsFromRounds(
       hios,
       paidSkins,
       individualQuota,
-      teamEvents
+      teamEvents,
+      roundsPlayed
+    },
+    rateLeaderboards: {
+      moneyPerRound,
+      birdiesPerRound,
+      paidSkinsPerRound,
+      indyCashRate,
+      teamCashRate
     }
   };
 }

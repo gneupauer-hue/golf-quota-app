@@ -53,6 +53,21 @@ function stats(rounds: SeasonStatsRoundInput[]) {
   });
 }
 
+function datedRound(
+  roundNumber: number,
+  entries: SeasonStatsEntryInput[],
+  overrides: Partial<SeasonStatsRoundInput> = {}
+) {
+  const date = new Date(`2026-06-${10 + roundNumber}T20:00:00.000Z`);
+  return round(entries, {
+    id: `round-${roundNumber}`,
+    roundName: `Round ${roundNumber}`,
+    roundDate: date,
+    completedAt: date,
+    ...overrides
+  });
+}
+
 test("season stats exclude test rounds and unfinalized rounds", () => {
   const data = stats([
     round([entry(1)]),
@@ -77,6 +92,18 @@ test("season stats count birdies, eagles, and hole-in-ones from recorded skin en
   assert.equal(player?.birdies, 1);
   assert.equal(player?.eagles, 1);
   assert.equal(player?.hios, 1);
+});
+
+test("season stats count rounds played per player", () => {
+  const data = stats([
+    datedRound(1, [entry(1), entry(2)]),
+    datedRound(2, [entry(1)]),
+    datedRound(3, [entry(1), entry(3)])
+  ]);
+
+  assert.equal(data.players.find((row) => row.playerId === "p1")?.roundsPlayed, 3);
+  assert.equal(data.players.find((row) => row.playerId === "p2")?.roundsPlayed, 1);
+  assert.equal(data.leaderboards.roundsPlayed[0]?.playerId, "p1");
 });
 
 test("season stats count only winning paid skins, not canceled skin attempts", () => {
@@ -157,4 +184,96 @@ test("season stats keep bartender tip out of player money totals", () => {
 
   assert.equal(data.bartenderTip, 2);
   assert.equal(totalPlayerMoney, 218);
+});
+
+test("season stats calculate money and activity per-round rates", () => {
+  const data = stats([
+    datedRound(
+      1,
+      [
+        entry(1, { quickFrontNine: 24, quickBackNine: 24, birdieHolesCsv: "1:birdie" }),
+        entry(2, { quickFrontNine: 15, quickBackNine: 15 }),
+        entry(3, { quickFrontNine: 14, quickBackNine: 14 }),
+        entry(4, { quickFrontNine: 13, quickBackNine: 13 })
+      ],
+      { roundMode: "SKINS_ONLY" }
+    ),
+    datedRound(
+      2,
+      [
+        entry(1, { quickFrontNine: 24, quickBackNine: 24, birdieHolesCsv: "2:birdie" }),
+        entry(2, { quickFrontNine: 15, quickBackNine: 15 }),
+        entry(3, { quickFrontNine: 14, quickBackNine: 14 }),
+        entry(4, { quickFrontNine: 13, quickBackNine: 13 })
+      ],
+      { roundMode: "SKINS_ONLY" }
+    ),
+    datedRound(
+      3,
+      [
+        entry(1, { quickFrontNine: 24, quickBackNine: 24, birdieHolesCsv: "3:birdie" }),
+        entry(2, { quickFrontNine: 15, quickBackNine: 15 }),
+        entry(3, { quickFrontNine: 14, quickBackNine: 14 }),
+        entry(4, { quickFrontNine: 13, quickBackNine: 13 })
+      ],
+      { roundMode: "SKINS_ONLY" }
+    )
+  ]);
+
+  const player = data.players.find((row) => row.playerId === "p1");
+  assert.equal(player?.roundsPlayed, 3);
+  assert.equal(player?.birdiesPerRound, 1);
+  assert.equal(player?.paidSkinsPerRound, 1);
+  assert.equal(player?.indyCashRate, 1);
+  assert.equal(data.rateLeaderboards.moneyPerRound[0]?.playerId, "p1");
+});
+
+test("season stats calculate team cash rate separately from team event totals", () => {
+  const winningTeamRound = (roundNumber: number) =>
+    datedRound(roundNumber, [
+      entry(1, { team: "A", quickFrontNine: 20, quickBackNine: 20 }),
+      entry(2, { team: "A", quickFrontNine: 20, quickBackNine: 20 }),
+      entry(3, { team: "B", quickFrontNine: 10, quickBackNine: 10 }),
+      entry(4, { team: "B", quickFrontNine: 10, quickBackNine: 10 })
+    ]);
+  const losingTeamRound = datedRound(3, [
+    entry(1, { team: "A", quickFrontNine: 10, quickBackNine: 10 }),
+    entry(2, { team: "A", quickFrontNine: 10, quickBackNine: 10 }),
+    entry(3, { team: "B", quickFrontNine: 20, quickBackNine: 20 }),
+    entry(4, { team: "B", quickFrontNine: 20, quickBackNine: 20 })
+  ]);
+  const data = stats([winningTeamRound(1), winningTeamRound(2), losingTeamRound]);
+  const player = data.players.find((row) => row.playerId === "p1");
+
+  assert.equal(player?.teamEvents, 6);
+  assert.equal(player?.teamCashRounds, 2);
+  assert.equal(player?.teamCashRate, 2 / 3);
+});
+
+test("season stats exclude players under 3 rounds from rate boards but keep raw totals", () => {
+  const data = stats([
+    datedRound(1, [
+      entry(1, { quickFrontNine: 24, quickBackNine: 24 }),
+      entry(2, { quickFrontNine: 15, quickBackNine: 15 }),
+      entry(3, { quickFrontNine: 14, quickBackNine: 14 }),
+      entry(4, { quickFrontNine: 13, quickBackNine: 13 }),
+      entry(9, { quickFrontNine: 40, quickBackNine: 40, birdieHolesCsv: "1:birdie" })
+    ], { roundMode: "SKINS_ONLY" }),
+    datedRound(2, [
+      entry(1, { quickFrontNine: 24, quickBackNine: 24 }),
+      entry(2, { quickFrontNine: 15, quickBackNine: 15 }),
+      entry(3, { quickFrontNine: 14, quickBackNine: 14 }),
+      entry(4, { quickFrontNine: 13, quickBackNine: 13 })
+    ], { roundMode: "SKINS_ONLY" }),
+    datedRound(3, [
+      entry(1, { quickFrontNine: 24, quickBackNine: 24 }),
+      entry(2, { quickFrontNine: 15, quickBackNine: 15 }),
+      entry(3, { quickFrontNine: 14, quickBackNine: 14 }),
+      entry(4, { quickFrontNine: 13, quickBackNine: 13 })
+    ], { roundMode: "SKINS_ONLY" })
+  ]);
+
+  assert.equal(data.players.find((row) => row.playerId === "p9")?.roundsPlayed, 1);
+  assert.equal(data.leaderboards.moneyWon.some((row) => row.playerId === "p9"), true);
+  assert.equal(data.rateLeaderboards.moneyPerRound.some((row) => row.playerId === "p9"), false);
 });
