@@ -1,14 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { classNames, formatDisplayDate } from "@/lib/utils";
-import type { SeasonStatsSort } from "@/lib/data";
 
 type SeasonStatsData = {
   seasonStartDate: Date;
-  sortBy: SeasonStatsSort;
   summary: {
     moneyLeader: SeasonStatRow | null;
     mostImproved: SeasonStatRow | null;
@@ -40,13 +37,6 @@ type SeasonStatRow = {
   indyWins: number;
   teamWins: number;
 };
-
-const sortOptions: Array<{ value: SeasonStatsSort; label: string }> = [
-  { value: "net", label: "Net" },
-  { value: "improved", label: "Most Improved" },
-  { value: "rounds", label: "Rounds Played" },
-  { value: "quota", label: "Quota" }
-];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -131,33 +121,6 @@ export function SeasonStats({ data }: { data: SeasonStatsData }) {
           </SectionCard>
         ))}
       </div>
-
-      <SectionCard className="space-y-3 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Sort
-            </p>
-            <p className="mt-1 text-sm text-ink/65">
-              Reorder the season table by the stat you care about most.
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {sortOptions.map((option) => (
-            <Link
-              key={option.value}
-              href={`/season-stats?sort=${option.value}`}
-              className={classNames(
-                "flex min-h-12 items-center justify-center rounded-2xl px-3 text-sm font-semibold",
-                data.sortBy === option.value ? "bg-pine text-canvas" : "bg-canvas text-ink"
-              )}
-            >
-              {option.label}
-            </Link>
-          ))}
-        </div>
-      </SectionCard>
 
       <SectionCard className="space-y-3 p-4">
         <div>

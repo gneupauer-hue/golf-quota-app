@@ -80,20 +80,6 @@ test("season stats exclude test rounds and unfinalized rounds", () => {
   assert.equal(data.players[0]?.playerName, "Player 1");
 });
 
-test("season stats count birdies, eagles, and hole-in-ones from recorded skin entries", () => {
-  const data = stats([
-    round([
-      entry(1, { birdieHolesCsv: "4:birdie,11:eagle,17:ace" }),
-      entry(2)
-    ])
-  ]);
-
-  const player = data.players.find((row) => row.playerId === "p1");
-  assert.equal(player?.birdies, 1);
-  assert.equal(player?.eagles, 1);
-  assert.equal(player?.hios, 1);
-});
-
 test("season stats count rounds played per player", () => {
   const data = stats([
     datedRound(1, [entry(1), entry(2)]),
@@ -106,28 +92,7 @@ test("season stats count rounds played per player", () => {
   assert.equal(data.leaderboards.roundsPlayed[0]?.playerId, "p1");
 });
 
-test("season stats count only winning paid skins, not canceled skin attempts", () => {
-  const data = stats([
-    round(
-      [
-        entry(1, { birdieHolesCsv: "1:birdie" }),
-        entry(2, { birdieHolesCsv: "1:birdie" }),
-        entry(3, { birdieHolesCsv: "2:birdie" }),
-        entry(4)
-      ],
-      { roundMode: "SKINS_ONLY" }
-    )
-  ]);
-
-  assert.equal(data.players.find((row) => row.playerId === "p1")?.birdies, 1);
-  assert.equal(data.players.find((row) => row.playerId === "p2")?.birdies, 1);
-  assert.equal(data.players.find((row) => row.playerId === "p3")?.birdies, 1);
-  assert.equal(data.players.find((row) => row.playerId === "p1")?.paidSkins, 0);
-  assert.equal(data.players.find((row) => row.playerId === "p2")?.paidSkins, 0);
-  assert.equal(data.players.find((row) => row.playerId === "p3")?.paidSkins, 1);
-});
-
-test("season stats count front, back, and total team payouts as team events", () => {
+test("season stats count front, back, and total team wins plus team cash rounds", () => {
   const data = stats([
     round([
       entry(1, { team: "A", quickFrontNine: 20, quickBackNine: 20 }),
@@ -137,9 +102,12 @@ test("season stats count front, back, and total team payouts as team events", ()
     ])
   ]);
 
-  assert.equal(data.players.find((row) => row.playerId === "p1")?.teamEvents, 3);
-  assert.equal(data.players.find((row) => row.playerId === "p2")?.teamEvents, 3);
-  assert.equal(data.players.find((row) => row.playerId === "p3")?.teamEvents, 0);
+  assert.equal(data.players.find((row) => row.playerId === "p1")?.teamWins, 3);
+  assert.equal(data.players.find((row) => row.playerId === "p1")?.teamCashes, 1);
+  assert.equal(data.players.find((row) => row.playerId === "p2")?.teamWins, 3);
+  assert.equal(data.players.find((row) => row.playerId === "p3")?.teamWins, 0);
+  assert.equal(data.leaderboards.teamWins[0]?.playerId, "p1");
+  assert.equal(data.leaderboards.teamCashes[0]?.playerId, "p1");
 });
 
 test("season stats count individual quota wins and cashes", () => {
@@ -186,7 +154,7 @@ test("season stats keep bartender tip out of player money totals", () => {
   assert.equal(totalPlayerMoney, 218);
 });
 
-test("season stats calculate money and activity per-round rates", () => {
+test("season stats calculate money and cash per-round rates", () => {
   const data = stats([
     datedRound(
       1,
@@ -222,13 +190,12 @@ test("season stats calculate money and activity per-round rates", () => {
 
   const player = data.players.find((row) => row.playerId === "p1");
   assert.equal(player?.roundsPlayed, 3);
-  assert.equal(player?.birdiesPerRound, 1);
-  assert.equal(player?.paidSkinsPerRound, 1);
   assert.equal(player?.indyCashRate, 1);
   assert.equal(data.rateLeaderboards.moneyPerRound[0]?.playerId, "p1");
+  assert.equal(data.rateLeaderboards.indyCashRate[0]?.playerId, "p1");
 });
 
-test("season stats calculate team cash rate separately from team event totals", () => {
+test("season stats calculate team cash rate separately from team win totals", () => {
   const winningTeamRound = (roundNumber: number) =>
     datedRound(roundNumber, [
       entry(1, { team: "A", quickFrontNine: 20, quickBackNine: 20 }),
@@ -245,9 +212,10 @@ test("season stats calculate team cash rate separately from team event totals", 
   const data = stats([winningTeamRound(1), winningTeamRound(2), losingTeamRound]);
   const player = data.players.find((row) => row.playerId === "p1");
 
-  assert.equal(player?.teamEvents, 6);
-  assert.equal(player?.teamCashRounds, 2);
+  assert.equal(player?.teamWins, 6);
+  assert.equal(player?.teamCashes, 2);
   assert.equal(player?.teamCashRate, 2 / 3);
+  assert.equal(data.rateLeaderboards.teamCashRate[0]?.playerId, "p1");
 });
 
 test("season stats exclude players under 3 rounds from rate boards but keep raw totals", () => {
