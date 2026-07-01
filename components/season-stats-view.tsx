@@ -14,6 +14,10 @@ function formatMoneyRate(value: number) {
   return `$${value.toFixed(2)} / round`;
 }
 
+function formatNumberRate(value: number, label: string) {
+  return `${value.toFixed(1)} ${label} / round`;
+}
+
 function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
 }
@@ -94,65 +98,87 @@ export function SeasonStatsView({ data }: { data: SeasonStatsData }) {
         <h3 className="text-xl font-bold text-maroon">Season Leaders</h3>
         <div className="grid grid-cols-2 gap-2">
           <LeaderCard label="Money Leader" row={data.leaders.money} value={(row) => formatMoney(row.moneyWon)} />
-          <LeaderCard label="Indy Leader" row={data.leaders.indy} value={(row) => `${row.indyWins} wins`} />
-          <LeaderCard label="Team Leader" row={data.leaders.team} value={(row) => `${row.teamWins} wins`} />
-          <LeaderCard
-            label="Rounds Leader"
-            row={data.leaderboards.roundsPlayed[0] ?? null}
-            value={(row) => `${row.roundsPlayed} rounds`}
-          />
+          <LeaderCard label="Birdie Leader" row={data.leaders.birdies} value={(row) => `${row.birdies}`} />
+          <LeaderCard label="Skins Leader" row={data.leaders.skins} value={(row) => `${row.paidSkins}`} />
+          <LeaderCard label="Indy Leader" row={data.leaders.indy} value={(row) => `${row.indyWins}/${row.indyCashes}`} />
         </div>
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-xl font-bold text-maroon">Top 10 Leaderboards</h3>
+        <h3 className="text-xl font-bold text-maroon">Total Stats</h3>
         <LeaderboardSection
           title="Money Won"
           rows={data.leaderboards.moneyWon}
           value={(row) => formatMoney(row.moneyWon)}
         />
         <LeaderboardSection
-          title="Indy Wins"
-          rows={data.leaderboards.indyWins}
-          value={(row) => `${row.indyWins}`}
+          title="Birdies"
+          rows={data.leaderboards.birdies}
+          value={(row) => `${row.birdies}`}
         />
         <LeaderboardSection
-          title="Indy Cashes"
-          rows={data.leaderboards.indyCashes}
-          value={(row) => `${row.indyCashes}`}
+          title="Eagles"
+          rows={data.leaderboards.eagles}
+          value={(row) => `${row.eagles}`}
         />
         <LeaderboardSection
-          title="Team Wins"
-          rows={data.leaderboards.teamWins}
-          value={(row) => `${row.teamWins}`}
+          title="Hole-in-Ones"
+          rows={data.leaderboards.hios}
+          value={(row) => `${row.hios}`}
         />
         <LeaderboardSection
-          title="Team Cashes"
-          rows={data.leaderboards.teamCashes}
-          value={(row) => `${row.teamCashes}`}
+          title="Paid Skins"
+          rows={data.leaderboards.paidSkins}
+          value={(row) => `${row.paidSkins}`}
         />
         <LeaderboardSection
-          title="Rounds Played"
-          rows={data.leaderboards.roundsPlayed}
-          value={(row) => `${row.roundsPlayed}`}
+          title="Individual Quota"
+          rows={data.leaderboards.individualQuota}
+          value={(row) => `${row.indyWins} wins / ${row.indyCashes} cashes`}
         />
+        <LeaderboardSection
+          title="Team Events"
+          rows={data.leaderboards.teamEvents}
+          value={(row) => `${row.teamEvents}`}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-xl font-bold text-maroon">Per-Round Stats</h3>
+        <p className="text-sm font-medium text-ink/65">{rateNote}</p>
         <LeaderboardSection
           title="Money per Round"
           rows={data.rateLeaderboards.moneyPerRound}
           value={(row) => `${formatMoneyRate(row.moneyPerRound)} - ${row.roundsPlayed} rounds`}
-          note={rateNote}
+        />
+        <LeaderboardSection
+          title="Birdies per Round"
+          rows={data.rateLeaderboards.birdiesPerRound}
+          value={(row) => `${formatNumberRate(row.birdiesPerRound, "birdies")} - ${row.roundsPlayed} rounds`}
+        />
+        <LeaderboardSection
+          title="Paid Skins per Round"
+          rows={data.rateLeaderboards.paidSkinsPerRound}
+          value={(row) => `${formatNumberRate(row.paidSkinsPerRound, "skins")} - ${row.roundsPlayed} rounds`}
         />
         <LeaderboardSection
           title="Indy Cash Rate"
           rows={data.rateLeaderboards.indyCashRate}
           value={(row) => `${formatPercent(row.indyCashRate)} - ${row.roundsPlayed} rounds`}
-          note={rateNote}
         />
         <LeaderboardSection
           title="Team Cash Rate"
           rows={data.rateLeaderboards.teamCashRate}
           value={(row) => `${formatPercent(row.teamCashRate)} - ${row.roundsPlayed} rounds`}
-          note={rateNote}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-xl font-bold text-maroon">Rounds Played</h3>
+        <LeaderboardSection
+          title="Rounds Played"
+          rows={data.leaderboards.roundsPlayed}
+          value={(row) => `${row.roundsPlayed}`}
         />
       </div>
     </div>
