@@ -56,12 +56,24 @@ export async function PUT(
     }
 
     await prisma.$transaction(async (tx) => {
+      const finalizedRoundCount = await tx.roundEntry.count({
+        where: {
+          playerId: id,
+          round: {
+            completedAt: { not: null },
+            canceledAt: null,
+            isTestRound: false
+          }
+        }
+      });
+
       await tx.player.update({
         where: { id },
         data: {
           name,
           quota,
           currentQuota: quota,
+          ...(finalizedRoundCount === 0 ? { startingQuota: quota } : {}),
           isRegular,
           isActive
         }

@@ -23,7 +23,17 @@ import { formatDisplayDate } from "@/lib/utils";
 import { baseline_quotas_2026, getBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
 import { rebuildPlayerQuotaHistory, validateAllPlayerQuotas, validatePlayerQuotaHistory, type QuotaValidationSummary } from "@/lib/quota-history";
 
-function getSafeBaselineQuota(player: { name: string; startingQuota?: number | null; currentQuota?: number | null; quota?: number | null }) {
+function getSafeBaselineQuota(player: {
+  name: string;
+  startingQuota?: number | null;
+  currentQuota?: number | null;
+  quota?: number | null;
+  _count?: { roundEntries?: number };
+}) {
+  if (player._count?.roundEntries === 0) {
+    return player.currentQuota ?? player.quota ?? player.startingQuota ?? 0;
+  }
+
   return (
     getBaselineQuota2026(player.name) ??
     player.startingQuota ??
@@ -153,6 +163,19 @@ export async function getPlayersPageData() {
           conflictPlayerId: true
         }
       },
+      _count: {
+        select: {
+          roundEntries: {
+            where: {
+              round: {
+                completedAt: { not: null },
+                canceledAt: null,
+                isTestRound: false
+              }
+            }
+          }
+        }
+      },
       roundEntries: {
         where: {
           round: {
@@ -255,6 +278,19 @@ export async function getCurrentQuotaRows() {
       startingQuota: true,
       isRegular: true,
       isActive: true,
+      _count: {
+        select: {
+          roundEntries: {
+            where: {
+              round: {
+                completedAt: { not: null },
+                canceledAt: null,
+                isTestRound: false
+              }
+            }
+          }
+        }
+      },
       roundEntries: {
         where: {
           round: {
