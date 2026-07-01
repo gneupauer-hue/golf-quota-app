@@ -20,7 +20,8 @@ import { buildPartnerHistoryFromRoundEntries } from "@/lib/round-setup";
 import { getSeasonConfig, getSeasonStartDate } from "@/lib/season";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { formatDisplayDate } from "@/lib/utils";
-import { baseline_quotas_2026, getBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
+import { baseline_quotas_2026 } from "@/lib/baseline-quotas-2026";
+import { resolvePlayerBaselineQuota } from "@/lib/player-quota-state";
 import { rebuildPlayerQuotaHistory, validateAllPlayerQuotas, validatePlayerQuotaHistory, type QuotaValidationSummary } from "@/lib/quota-history";
 
 function getSafeBaselineQuota(player: {
@@ -30,17 +31,7 @@ function getSafeBaselineQuota(player: {
   quota?: number | null;
   _count?: { roundEntries?: number };
 }) {
-  if (player._count?.roundEntries === 0) {
-    return player.currentQuota ?? player.quota ?? player.startingQuota ?? 0;
-  }
-
-  return (
-    getBaselineQuota2026(player.name) ??
-    player.startingQuota ??
-    player.currentQuota ??
-    player.quota ??
-    0
-  );
+  return resolvePlayerBaselineQuota(player);
 }
 
 function normalizeRoundMode(value: string): RoundMode {

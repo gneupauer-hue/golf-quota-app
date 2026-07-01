@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentQuotaRows, getPlayersPageData } from "@/lib/data";
 import { hasValidPlayerEditSession, PLAYER_EDIT_COOKIE } from "@/lib/player-edit-auth";
+import { buildEditedPlayerQuotaFields } from "@/lib/player-quota-state";
 import { prisma } from "@/lib/prisma";
 
 async function syncConflicts(
@@ -71,9 +72,7 @@ export async function PUT(
         where: { id },
         data: {
           name,
-          quota,
-          currentQuota: quota,
-          ...(finalizedRoundCount === 0 ? { startingQuota: quota } : {}),
+          ...buildEditedPlayerQuotaFields(quota, finalizedRoundCount),
           isRegular,
           isActive
         }

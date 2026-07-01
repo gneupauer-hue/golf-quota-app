@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentQuotaRows, getPlayersPageData } from "@/lib/data";
+import { buildNewPlayerQuotaFields } from "@/lib/player-quota-state";
 import { prisma } from "@/lib/prisma";
 
 async function syncConflicts(
@@ -51,9 +52,7 @@ export async function POST(request: Request) {
       const player = await tx.player.create({
         data: {
           name,
-          quota,
-          currentQuota: quota,
-          startingQuota: quota,
+          ...buildNewPlayerQuotaFields(quota),
           isRegular: true,
           isActive: true
         }
