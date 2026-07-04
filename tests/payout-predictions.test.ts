@@ -127,12 +127,12 @@ test("individual quota plus skins payout predictions exclude team money while ke
   assert.equal(payoutPredictions.frontProjectedTotal, 0);
   assert.equal(payoutPredictions.backProjectedTotal, 0);
   assert.equal(payoutPredictions.totalProjectedTotal, 0);
-  assert.equal(payoutPredictions.indyProjectedTotal, 20);
+  assert.equal(payoutPredictions.indyProjectedTotal, 40);
   assert.equal(payoutPredictions.skinsProjectedTotal, 40);
   assert.equal(payoutPredictions.skinsPot, 40);
-  assert.equal(payoutPredictions.moneyCurrentlyInPlay, 60);
-  assert.equal(payoutPredictions.overallPot, 60);
-  assert.equal(payoutPredictions.projectedPayoutTotal, 60);
+  assert.equal(payoutPredictions.moneyCurrentlyInPlay, 80);
+  assert.equal(payoutPredictions.overallPot, 80);
+  assert.equal(payoutPredictions.projectedPayoutTotal, 80);
 });
 
 test("when no good skins are won yet, skins remain unsettled instead of mismatching reconciliation", () => {
@@ -149,7 +149,7 @@ test("when no good skins are won yet, skins remain unsettled instead of mismatch
     includeSkinsPayouts: true
   });
 
-  assert.equal(payoutPredictions.indyProjectedTotal, 20);
+  assert.equal(payoutPredictions.indyProjectedTotal, 40);
   assert.equal(payoutPredictions.skinsProjectedTotal, 0);
   assert.equal(payoutPredictions.skinsPot, 0);
   assert.equal(payoutPredictions.unsettledSkinsValue, 40);
