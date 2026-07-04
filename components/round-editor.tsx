@@ -628,6 +628,14 @@ function normalizeGeneratedScoringGroupOrder(groups: ScoringGroup[]) {
   }));
 }
 
+function sortScoringGroupsByNumber(groups: ScoringGroup[]) {
+  return [...groups].sort((left, right) => {
+    if (left.groupNumber == null && right.groupNumber != null) return 1;
+    if (left.groupNumber != null && right.groupNumber == null) return -1;
+    return (left.groupNumber ?? Number.MAX_SAFE_INTEGER) - (right.groupNumber ?? Number.MAX_SAFE_INTEGER);
+  });
+}
+
 function buildScoringGroups(
   rows: RowState[],
   teamStandings: TeamStanding[],
@@ -671,7 +679,7 @@ function buildScoringGroups(
       explicitGroups.set(key, current);
     }
 
-    return Array.from(explicitGroups.values());
+    return sortScoringGroupsByNumber(Array.from(explicitGroups.values()));
   }
 
   if (!options.ignoreExistingGroups && initialGroups.length > 0) {
@@ -701,7 +709,7 @@ function buildScoringGroups(
       .filter((group) => group.teams.length > 0);
 
     if (groupsFromSetup.length > 0) {
-      return groupsFromSetup;
+      return sortScoringGroupsByNumber(groupsFromSetup);
     }
   }
 
