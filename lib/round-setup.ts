@@ -618,6 +618,47 @@ function buildGroupCapacities(playerCount: number, groupCount: number) {
   return Array.from({ length: groupCount }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
+const defaultGroupOnePlayerName = "Gary Neupauer";
+
+function moveDefaultPlayerGroupFirst(
+  assignments: GroupAssignment[],
+  players: Array<Pick<SetupPlayer, "playerId" | "playerName">>
+) {
+  const defaultPlayer = players.find((player) => player.playerName === defaultGroupOnePlayerName);
+
+  if (!defaultPlayer) {
+    return assignments;
+  }
+
+  const defaultAssignment = assignments.find((assignment) => assignment.playerId === defaultPlayer.playerId);
+
+  if (!defaultAssignment || defaultAssignment.groupNumber === 1) {
+    return assignments;
+  }
+
+  const orderedGroupNumbers = Array.from(new Set(assignments.map((assignment) => assignment.groupNumber)));
+  const nextGroupNumbers = [
+    defaultAssignment.groupNumber,
+    ...orderedGroupNumbers.filter((groupNumber) => groupNumber !== defaultAssignment.groupNumber)
+  ];
+  const groupNumberMap = new Map(nextGroupNumbers.map((groupNumber, index) => [groupNumber, index + 1]));
+  const teeTimesByNewGroup = new Map(
+    nextGroupNumbers.map((groupNumber, index) => [
+      index + 1,
+      assignments.find((assignment) => assignment.groupNumber === groupNumber)?.teeTime ?? null
+    ])
+  );
+
+  return assignments.map((assignment) => {
+    const groupNumber = groupNumberMap.get(assignment.groupNumber) ?? assignment.groupNumber;
+    return {
+      ...assignment,
+      groupNumber,
+      teeTime: teeTimesByNewGroup.get(groupNumber) ?? assignment.teeTime
+    };
+  });
+}
+
 export function buildGroups(
   players: Array<SetupPlayer & { team: TeamCode }>,
   teeTimes: string[]
@@ -671,5 +712,5 @@ export function buildGroups(
     });
   }
 
-  return assignments;
+  return moveDefaultPlayerGroupFirst(assignments, players);
 }

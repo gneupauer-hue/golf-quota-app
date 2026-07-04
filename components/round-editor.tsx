@@ -605,6 +605,29 @@ type ScoringGroup = {
   playerNames: string[];
 };
 
+const defaultGroupOnePlayerName = "Gary Neupauer";
+
+function normalizeGeneratedScoringGroupOrder(groups: ScoringGroup[]) {
+  const defaultGroupIndex = groups.findIndex((group) =>
+    group.playerNames.some((playerName) => playerName === defaultGroupOnePlayerName)
+  );
+
+  if (defaultGroupIndex <= 0) {
+    return groups;
+  }
+
+  return [
+    groups[defaultGroupIndex],
+    ...groups.slice(0, defaultGroupIndex),
+    ...groups.slice(defaultGroupIndex + 1)
+  ].map((group, index) => ({
+    ...group,
+    key: `derived-${index + 1}`,
+    label: `Group ${index + 1}`,
+    groupNumber: index + 1
+  }));
+}
+
 function buildScoringGroups(
   rows: RowState[],
   teamStandings: TeamStanding[],
@@ -691,14 +714,14 @@ function buildScoringGroups(
     const groupings = buildTwoPlayerTeamGroupings(orderedTeams.map((team) => team.team));
     const selectedGrouping = groupings[variant % Math.max(1, groupings.length)] ?? [];
 
-    return selectedGrouping.map((groupTeams, index) => ({
+    return normalizeGeneratedScoringGroupOrder(selectedGrouping.map((groupTeams, index) => ({
       key: `derived-${index + 1}`,
       label: `Group ${index + 1}`,
       groupNumber: index + 1,
       teeTime: null,
       teams: groupTeams,
       playerNames: groupTeams.flatMap((teamCode) => teamsByCode.get(teamCode)?.players ?? [])
-    }));
+    })));
   }
 
   const derivedGroups: ScoringGroup[] = [];
@@ -740,7 +763,7 @@ function buildScoringGroups(
     });
   }
 
-  return derivedGroups;
+  return normalizeGeneratedScoringGroupOrder(derivedGroups);
 }
 
 
@@ -752,14 +775,27 @@ type IndividualScoringGroup = {
   playerNames: string[];
 };
 
-function normalizeIndividualGroupOrder(groups: IndividualScoringGroup[]) {
-  return [...groups]
-    .sort((left, right) => {
-      if (left.playerIds.length !== right.playerIds.length) {
-        return left.playerIds.length - right.playerIds.length;
-      }
-      return left.groupNumber - right.groupNumber;
-    })
+function normalizeIndividualGroupOrder(groups: IndividualScoringGroup[], options: { preferDefaultPlayerFirst?: boolean } = {}) {
+  const orderedGroups = [...groups].sort((left, right) => {
+    if (left.playerIds.length !== right.playerIds.length) {
+      return left.playerIds.length - right.playerIds.length;
+    }
+    return left.groupNumber - right.groupNumber;
+  });
+  const defaultGroupIndex = options.preferDefaultPlayerFirst
+    ? orderedGroups.findIndex((group) =>
+        group.playerNames.some((playerName) => playerName === defaultGroupOnePlayerName)
+      )
+    : -1;
+  const defaultOrderedGroups = defaultGroupIndex > 0
+    ? [
+        orderedGroups[defaultGroupIndex],
+        ...orderedGroups.slice(0, defaultGroupIndex),
+        ...orderedGroups.slice(defaultGroupIndex + 1)
+      ]
+    : orderedGroups;
+
+  return defaultOrderedGroups
     .map((group, index) => ({
       ...group,
       key: `individual-group-${index + 1}`,
@@ -830,7 +866,9 @@ function buildIndividualScoringGroups(
     group.playerNames.push(player?.name ?? "Unknown Player");
   });
 
-  return normalizeIndividualGroupOrder(groups.filter((group) => group.playerIds.length > 0));
+  return normalizeIndividualGroupOrder(groups.filter((group) => group.playerIds.length > 0), {
+    preferDefaultPlayerFirst: true
+  });
 }
 export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, groups: initialGroups }: EditorProps) {
   const router = useRouter();
