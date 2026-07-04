@@ -9,6 +9,7 @@ import {
   formatGoodSkinEntriesInput,
   parseBirdieHolesInput,
   parseGoodSkinEntriesInput,
+  splitQuota,
   type RoundMode,
   type ScoringEntryMode,
   type TeamCode
@@ -1103,7 +1104,8 @@ export async function createOrReplaceRoundEntries(
     where: { roundId: input.roundId },
     select: {
       id: true,
-      playerId: true
+      playerId: true,
+      startQuota: true
     }
   });
 
@@ -1145,6 +1147,8 @@ export async function createOrReplaceRoundEntries(
     });
   }
 
+  const quotaSnapshot = await getQuotaSnapshotBeforeRound(tx, input.roundId);
+
   for (const entry of input.entries) {
     const quickFrontNine = isQuickEntry ? entry.quickFrontNine ?? null : null;
     const quickBackNine = isQuickEntry ? entry.quickBackNine ?? null : null;
@@ -1183,23 +1187,38 @@ export async function createOrReplaceRoundEntries(
       totalPoints
     };
 
+    const startQuota = quotaSnapshot[entry.playerId] ?? 0;
+    const { frontQuota, backQuota } = splitQuota(startQuota);
+
     if (existingEntry) {
       await tx.roundEntry.update({
         where: { id: existingEntry.id },
-        data: baseData
+        data:
+          existingEntry.startQuota === 0
+            ? {
+                ...baseData,
+                startQuota,
+                frontQuota,
+                backQuota,
+                frontPlusMinus: frontNine - frontQuota,
+                backPlusMinus: backNine - backQuota,
+                plusMinus: totalPoints - startQuota,
+                nextQuota: startQuota
+              }
+            : baseData
       });
     } else {
       await tx.roundEntry.create({
         data: {
           roundId: input.roundId,
           playerId: entry.playerId,
-          startQuota: 0,
-          frontQuota: 0,
-          backQuota: 0,
-          frontPlusMinus: 0,
-          backPlusMinus: 0,
-          plusMinus: 0,
-          nextQuota: 0,
+          startQuota,
+          frontQuota,
+          backQuota,
+          frontPlusMinus: frontNine - frontQuota,
+          backPlusMinus: backNine - backQuota,
+          plusMinus: totalPoints - startQuota,
+          nextQuota: startQuota,
           rank: 0,
           ...baseData
         }

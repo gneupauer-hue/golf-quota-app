@@ -307,6 +307,34 @@ function mapEditorEntriesToRows(entries: EditorEntry[]): RowState[] {
   }));
 }
 
+function cloneRows(rows: RowState[]) {
+  return rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
+}
+
+function getSetupAutosaveSignature(input: {
+  rows: RowState[];
+  roundDate: string;
+  roundName: string;
+  gameMode: RoundMode;
+  setupFormatKey: string | null;
+  setupTeamCount: number | null;
+}) {
+  return JSON.stringify({
+    roundDate: input.roundDate,
+    roundName: input.roundName,
+    gameMode: input.gameMode,
+    setupFormatKey: input.setupFormatKey,
+    setupTeamCount: input.setupTeamCount,
+    rows: input.rows
+      .map((row) => ({
+        playerId: row.playerId,
+        team: row.team,
+        groupNumber: row.groupNumber,
+        teeTime: row.teeTime
+      }))
+      .sort((left, right) => left.playerId.localeCompare(right.playerId))
+  });
+}
 function isHoleLockedForRow(row: Pick<RowState, "frontSubmittedAt" | "backSubmittedAt">, holeIndex: number) {
   if (row.backSubmittedAt) {
     return true;
@@ -837,6 +865,12 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const [skinsEntryOpen, setSkinsEntryOpen] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>({ tone: "idle", message: "" });
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [setupAutosaveState, setSetupAutosaveState] = useState<SaveState>({ tone: "idle", message: "" });
+  const [lastSetupAutosavedAt, setLastSetupAutosavedAt] = useState<string | null>(null);
+  const [setupUndoRows, setSetupUndoRows] = useState<RowState[] | null>(null);
+  const setupAutosaveReadyRef = useRef(false);
+  const setupAutosaveSignatureRef = useRef("");
+  const setupAutosaveRowsRef = useRef<RowState[]>(cloneRows(mapEditorEntriesToRows(round.entries)));
   const [refreshState, setRefreshState] = useState<SaveState>({ tone: "idle", message: "" });
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [isScoreEditUnlocked, setIsScoreEditUnlocked] = useState(false);
@@ -1421,9 +1455,25 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     setRows(nextRows);
     setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
     setRoundDate(formatDateInput(round.roundDate));
-    setSetupTeamCount(null);
-    setSetupFormatKey(null);
+    const savedMatchFormat =
+      round.roundMode === "SKINS_ONLY" || round.teamCount == null
+        ? null
+        : getTeamFormats(nextRows.length).find((format) => {
+            if (format.teamCount !== round.teamCount) return false;
+            return format.capacities.every(
+              (capacity, index) =>
+                nextRows.filter((row) => row.team === teamOptions[index]).length === capacity
+            );
+          }) ??
+          getTeamFormats(nextRows.length).find((format) => format.teamCount === round.teamCount) ??
+          null;
+    setSetupTeamCount(savedMatchFormat?.teamCount ?? null);
+    setSetupFormatKey(savedMatchFormat ? getTeamFormatKey(savedMatchFormat) : null);
     setTeamBuildVariant(0);
+    setupAutosaveReadyRef.current = false;
+    setupAutosaveSignatureRef.current = "";
+    setupAutosaveRowsRef.current = cloneRows(nextRows);
+    setSetupUndoRows(null);
     setBuyInPaidPlayerIds(round.buyInPaidPlayerIds ?? []);
     setLockedAt(round.lockedAt);
     setStartedAt(round.startedAt);
@@ -1503,6 +1553,10 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       return;
     }
 
+    if (!setupTeamCodes.length) {
+      return;
+    }
+
     const validTeams = new Set(setupTeamCodes);
     setRows((current) =>
       current.map((row) =>
@@ -1519,6 +1573,86 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     }
   }, [isSkinsOnly]);
 
+  const setupAutosaveSignature = useMemo(
+    () =>
+      getSetupAutosaveSignature({
+        rows,
+        roundDate,
+        roundName: displayRoundName,
+        gameMode,
+        setupFormatKey,
+        setupTeamCount
+      }),
+    [displayRoundName, gameMode, roundDate, rows, setupFormatKey, setupTeamCount]
+  );
+
+  useEffect(() => {
+    if (isLocked || startedAt || round.completedAt) {
+      return;
+    }
+
+    if (!setupAutosaveReadyRef.current) {
+      setupAutosaveReadyRef.current = true;
+      setupAutosaveSignatureRef.current = setupAutosaveSignature;
+      setupAutosaveRowsRef.current = cloneRows(rows);
+      setSetupAutosaveState(
+        rows.length
+          ? { tone: "saved", message: "Setup saved" }
+          : { tone: "idle", message: "" }
+      );
+      return;
+    }
+
+    if (setupAutosaveSignatureRef.current === setupAutosaveSignature) {
+      return;
+    }
+
+    const previousRows = cloneRows(setupAutosaveRowsRef.current);
+    const rowsToSave = cloneRows(rows);
+    const teamCountToSave = setupTeamCount == null ? "" : String(setupTeamCount);
+    const timeout = window.setTimeout(() => {
+      setSetupUndoRows(previousRows.length ? previousRows : null);
+      setSetupAutosaveState({ tone: "saving", message: "Saving setup..." });
+      persistRound(
+        rowsToSave,
+        null,
+        null,
+        teamCountToSave,
+        displayRoundName,
+        roundDate,
+        round.notes,
+        false,
+        false
+      )
+        .then(() => {
+          setupAutosaveSignatureRef.current = setupAutosaveSignature;
+          setupAutosaveRowsRef.current = cloneRows(rowsToSave);
+          setSavedRows(cloneRows(rowsToSave));
+          setSetupAutosaveState({ tone: "saved", message: "Setup saved" });
+          setLastSetupAutosavedAt(new Date().toISOString());
+        })
+        .catch((error) => {
+          setSetupAutosaveState({
+            tone: "failed",
+            message: error instanceof Error ? error.message : "Setup autosave failed"
+          });
+        });
+    }, 650);
+
+    return () => window.clearTimeout(timeout);
+  }, [displayRoundName, isLocked, round.completedAt, round.notes, roundDate, rows, setupAutosaveSignature, setupTeamCount, startedAt]);
+
+  function undoLastSetupChange() {
+    if (!setupUndoRows) {
+      return;
+    }
+
+    const restoredRows = cloneRows(setupUndoRows);
+    setRows(restoredRows);
+    setSetupUndoRows(null);
+    setSetupAutosaveState({ tone: "saving", message: "Restoring setup..." });
+    setMessage("Last setup change undone.");
+  }
   async function persistRound(
       nextRows = rows,
       nextLockedAt = lockedAt,
@@ -3531,6 +3665,24 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
                     )}
                   </SectionCard>
 
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm">
+                    <div className={classNames("rounded-full px-3 py-1.5 text-xs font-semibold", getSaveToneClass(setupAutosaveState.tone))}>
+                      {setupAutosaveState.message || "Setup autosave ready"}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {lastSetupAutosavedAt ? (
+                        <span className="text-xs font-medium text-ink/50">{`Last saved ${formatTimeLabel(lastSetupAutosavedAt)}`}</span>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={!setupUndoRows || Boolean(isLocked || startedAt)}
+                        className="min-h-9 rounded-full bg-card px-3 text-xs font-semibold text-ink disabled:opacity-50"
+                        onClick={undoLastSetupChange}
+                      >
+                        Undo Last Setup Change
+                      </button>
+                    </div>
+                  </div>
                   <SectionCard className="space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
