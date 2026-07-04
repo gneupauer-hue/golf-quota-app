@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildBalancedTeams,
+  buildGroups,
   buildPartnerHistoryFromRoundEntries,
   capacitiesToMap,
   getPartnerPairKey,
@@ -30,7 +31,21 @@ const expectedFormats = new Map<number, number[][]>([
   [13, [[3, 3, 3, 4]]],
   [14, [[2, 2, 2, 2, 2, 2, 2], [3, 3, 4, 4]]],
   [15, [[3, 3, 3, 3, 3]]],
-  [16, [[2, 2, 2, 2, 2, 2, 2, 2], [4, 4, 4, 4]]]
+  [16, [[2, 2, 2, 2, 2, 2, 2, 2], [4, 4, 4, 4]]],
+  [17, [[3, 3, 3, 4, 4]]],
+  [18, [[3, 3, 3, 3, 3, 3]]],
+  [19, [[3, 4, 4, 4, 4]]],
+  [20, [[4, 4, 4, 4, 4]]],
+  [21, [[3, 3, 3, 3, 3, 3, 3]]],
+  [22, [[3, 3, 4, 4, 4, 4]]],
+  [23, [[3, 4, 4, 4, 4, 4]]],
+  [24, [[3, 3, 3, 3, 3, 3, 3, 3], [4, 4, 4, 4, 4, 4]]],
+  [25, [[3, 3, 3, 4, 4, 4, 4]]],
+  [26, [[3, 3, 4, 4, 4, 4, 4]]],
+  [27, [[3, 3, 3, 3, 3, 3, 3, 3, 3]]],
+  [28, [[4, 4, 4, 4, 4, 4, 4]]],
+  [29, [[3, 3, 3, 4, 4, 4, 4, 4]]],
+  [30, [[3, 3, 3, 3, 3, 3, 3, 3, 3, 3]]]
 ]);
 
 const starterPlayers: SetupPlayer[] = [...regularPlayers, ...otherPlayers].map((player, index) => ({
@@ -157,11 +172,64 @@ test("team format labels describe mixed odd-count formats clearly", () => {
   assert.equal(getTeamFormats(9)[0]?.label, "3 teams of 3");
   assert.equal(getTeamFormats(11)[0]?.label, "1 team of 3 + 2 teams of 4");
   assert.equal(getTeamFormats(13)[0]?.label, "3 teams of 3 + 1 team of 4");
+  assert.equal(getTeamFormats(17)[0]?.label, "3 teams of 3 + 2 teams of 4");
+  assert.equal(getTeamFormats(23)[0]?.label, "1 team of 3 + 5 teams of 4");
 });
 
 test("unsupported Match counts do not invent team formats", () => {
-  for (const playerCount of [5, 17, 18]) {
+  for (const playerCount of [5, 31]) {
     assert.deepEqual(getTeamFormats(playerCount), []);
+  }
+});
+
+test("all supported team formats use available team labels and avoid singles or five-man teams", () => {
+  for (const [playerCount, expectedCapacities] of expectedFormats) {
+    for (const capacities of expectedCapacities) {
+      assert.equal(
+        capacities.length <= teamOptions.length,
+        true,
+        `${playerCount} players should not require more team labels than A-J`
+      );
+      assert.equal(
+        capacities.every((capacity) => capacity >= 2 && capacity <= 4),
+        true,
+        `${playerCount} players should use only 2-, 3-, or 4-player teams`
+      );
+    }
+  }
+});
+
+test("supported formats through 30 build playing groups without dropping players", () => {
+  for (let playerCount = 6; playerCount <= 30; playerCount += 1) {
+    const format = getTeamFormats(playerCount)[0];
+    assert.ok(format, `${playerCount} players should have a format`);
+
+    const teamCodes = teamOptions.slice(0, format.teamCount) as TeamCode[];
+    const capacityMap = capacitiesToMap(teamCodes, format.capacities);
+    const players = makeNumberedPlayers(playerCount);
+    const assignments = buildBalancedTeams(players, teamCodes, capacityMap, { variant: playerCount });
+    const groupAssignments = buildGroups(
+      assignments.map((assignment) => ({
+        ...players.find((player) => player.playerId === assignment.playerId)!,
+        team: assignment.team
+      })),
+      Array.from({ length: Math.ceil(playerCount / 4) }, (_, index) => `Group ${index + 1}`)
+    );
+    const assignedPlayerIds = new Set(assignments.map((assignment) => assignment.playerId));
+    const groupedPlayerIds = new Set(groupAssignments.map((assignment) => assignment.playerId));
+    const groupSizes = new Map<number, number>();
+
+    for (const assignment of groupAssignments) {
+      groupSizes.set(assignment.groupNumber, (groupSizes.get(assignment.groupNumber) ?? 0) + 1);
+    }
+
+    assert.equal(assignedPlayerIds.size, playerCount, `${playerCount} players should all be assigned to teams`);
+    assert.equal(groupedPlayerIds.size, playerCount, `${playerCount} players should all be assigned to groups`);
+    assert.equal(
+      Array.from(groupSizes.values()).every((size) => size >= 2 && size <= 4),
+      true,
+      `${playerCount} players should build groups sized 2-4`
+    );
   }
 });
 

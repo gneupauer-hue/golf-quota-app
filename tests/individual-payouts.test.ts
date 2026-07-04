@@ -14,7 +14,21 @@ const expectedPayouts = new Map<number, number[]>([
   [13, [65, 40, 20, 5]],
   [14, [70, 40, 20, 10]],
   [15, [75, 45, 25, 5]],
-  [16, [80, 50, 25, 5]]
+  [16, [80, 50, 25, 5]],
+  [17, [80, 50, 25, 10, 5]],
+  [18, [85, 55, 25, 10, 5]],
+  [19, [90, 60, 25, 10, 5]],
+  [20, [95, 60, 30, 10, 5]],
+  [21, [95, 60, 30, 15, 5, 5]],
+  [22, [100, 65, 30, 15, 5, 5]],
+  [23, [105, 70, 35, 10, 5, 5]],
+  [24, [110, 75, 35, 10, 5, 5]],
+  [25, [110, 75, 35, 15, 5, 5, 5]],
+  [26, [115, 80, 35, 15, 5, 5, 5]],
+  [27, [120, 80, 40, 15, 5, 5, 5]],
+  [28, [120, 85, 45, 15, 5, 5, 5]],
+  [29, [125, 90, 45, 15, 5, 5, 5]],
+  [30, [130, 90, 50, 15, 5, 5, 5]]
 ]);
 
 function buildRows(playerCount: number): CalculatedRoundRow[] {
@@ -84,6 +98,29 @@ test("unsupported player counts do not invent percentage-based individual payout
   assert.equal(results.overallPot.placesPaid, 0);
   assert.deepEqual(results.payoutByPlace, []);
   assert.deepEqual(results.individualPayouts, []);
+});
+
+test("individual payout tables through 30 reconcile to the full indy pot", () => {
+  for (const [playerCount, payouts] of expectedPayouts) {
+    const results = calculateSideGameResults(buildRows(playerCount));
+    if (playerCount >= 6) {
+      assert.equal(
+        payouts.reduce((sum, amount) => sum + amount, 0),
+        playerCount * 10,
+        `${playerCount} player payout table should total the indy pot`
+      );
+    }
+    assert.equal(
+      results.individualPayouts.reduce((sum, player) => sum + player.payout, 0) + results.individualPayoutRemainder,
+      results.overallPot.indyPot,
+      `${playerCount} player payouts should reconcile`
+    );
+    assert.equal(
+      results.individualPayouts.every((player) => Number.isInteger(player.payout)),
+      true,
+      `${playerCount} player payouts should be whole dollars`
+    );
+  }
 });
 
 test("two players tied for first split first and second individual quota payouts", () => {
