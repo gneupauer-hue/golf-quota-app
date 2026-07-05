@@ -135,6 +135,46 @@ test("individual quota plus skins payout predictions exclude team money while ke
   assert.equal(payoutPredictions.projectedPayoutTotal, 80);
 });
 
+test("25-player payout predictions use the approved Version 2 individual quota table", () => {
+  const teams: TeamCode[] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const rows = Array.from({ length: 25 }, (_, index) =>
+    buildRow({
+      id: `p${index + 1}`,
+      name: `Player ${index + 1}`,
+      team: teams[index % teams.length],
+      frontNine: 20,
+      backNine: 35 - index,
+      frontQuota: 15,
+      backQuota: 15
+    })
+  );
+
+  const payoutPredictions = calculatePayoutPredictions(rows, {
+    includeTeamPayouts: false,
+    includeIndividualPayouts: true,
+    includeSkinsPayouts: false
+  });
+  const individualPayouts = payoutPredictions.players
+    .filter((player) => player.indy > 0)
+    .sort((a, b) => Number(a.playerId.slice(1)) - Number(b.playerId.slice(1)));
+
+  assert.deepEqual(
+    individualPayouts.map((player) => player.indy),
+    [90, 55, 35, 25, 20, 15, 10]
+  );
+  assert.equal(payoutPredictions.indyProjectedTotal, 250);
+  assert.equal(payoutPredictions.indyPot, 250);
+  assert.equal(payoutPredictions.projectedPayoutTotal, 250);
+  assert.equal(payoutPredictions.overallPot, 250);
+  assert.equal(payoutPredictions.indyBarRemainder, 0);
+  assert.equal(
+    payoutPredictions.players.some((player) => player.indy === 2 || player.indy === 5),
+    false
+  );
+  assert.equal(payoutPredictions.isBalanced, true);
+  assert.deepEqual(payoutPredictions.mismatchedCategories, []);
+});
+
 test("when no good skins are won yet, skins remain unsettled instead of mismatching reconciliation", () => {
   const rows: CalculatedRoundRow[] = [
     buildRow({ id: "p1", name: "Gary", team: "A", frontNine: 18, backNine: 18, frontQuota: 15, backQuota: 15 }),
