@@ -1754,6 +1754,54 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     }
   }
 
+  function buildScoreEntryPayload(
+    row: RowState,
+    options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
+  ) {
+    return {
+      playerId: row.playerId,
+      holeScores: options.holeIndexes?.map((holeIndex) => ({
+        holeNumber: holeIndex + 1,
+        score: row.holeScores[holeIndex]
+      })),
+      holes: options.includeAllHoles ? row.holeScores : undefined,
+      quickFrontNine: options.includeAllHoles ? row.quickFrontNine : undefined,
+      quickBackNine: options.includeAllHoles ? row.quickBackNine : undefined,
+      birdieHoles: options.includeAllHoles
+        ? parseGoodSkinEntriesInput(row.birdieHolesText).map((entry) => formatGoodSkinEntriesInput([entry]))
+        : undefined,
+      frontSubmittedAt: options.includeAllHoles ? row.frontSubmittedAt : undefined,
+      backSubmittedAt: options.includeAllHoles ? row.backSubmittedAt : undefined
+    };
+  }
+
+  async function persistScoreEntries(
+    nextRows: RowState[],
+    options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
+  ) {
+    const response = await fetch(`/api/rounds/${round.id}/score-entry`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entries: nextRows.map((row) => buildScoreEntryPayload(row, options))
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not save scores.");
+    }
+  }
+
+  function mergeSavedRowState(current: RowState[], saved: RowState[]) {
+    const savedByPlayerId = new Map(saved.map((row) => [row.playerId, row]));
+
+    return current.map((row) => {
+      const savedRow = savedByPlayerId.get(row.playerId);
+      return savedRow ? { ...savedRow, holeScores: [...savedRow.holeScores] } : row;
+    });
+  }
+
   function addPlayer(playerId: string) {
     setRows((current) => [
       ...current,
@@ -2170,7 +2218,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     );
 
     setRows(nextRows);
-    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+    setSavedRows((current) => mergeSavedRowState(current, nextRows));
     setSelectedScoringGroupKey(`group-${groupNumber}`);
     setShownScoringGroupKeys([]);
     setMessage(`${getSetupTeamLabel(team)} assigned to Group ${groupNumber}.`);
@@ -2518,7 +2566,11 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       try {
         setMessage("");
         setSaving(segment === "front" ? "Saving and submitting front nine..." : "Saving and submitting back nine...");
-        await persistRound(nextRows);
+        await persistScoreEntries([playerRow], {
+          holeIndexes: segment === "front"
+            ? Array.from({ length: 9 }, (_, index) => index)
+            : Array.from({ length: 9 }, (_, index) => index + 9)
+        });
         const response = await fetch(`/api/rounds/${round.id}/submit-segment`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2531,7 +2583,9 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         }
 
         setRows(nextRows);
-        setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        setSavedRows((current) =>
+          mergeSavedRowState(current, nextRows.filter((row) => row.playerId === playerId))
+        );
         if (segment === "front") {
           setSaved(result.allFrontSubmitted ? "Front nine submitted. Front result is now ready." : "Front nine submitted.");
           setMessage(
@@ -2598,7 +2652,9 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     );
 
     setRows(nextRows);
-    setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+    setSavedRows((current) =>
+      mergeSavedRowState(current, nextRows.filter((row) => row.team != null && groupTeams.includes(row.team)))
+    );
 
     if (segment === "front") {
       setActiveHoleForGroup(groupTeams, 10);
@@ -2742,17 +2798,21 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         if (playerId && !rowsToSave.length) {
           throw new Error("Could not find this player in the current round. Refresh and try again.");
         }
-        await persistRound(
-          rowsToSave,
-          lockedAt,
-          startedAt,
-          setupTeamCount == null ? "" : String(setupTeamCount),
-          displayRoundName,
-          roundDate,
-          round.notes,
-          false,
-          Boolean(playerId)
-        );
+        if (playerId) {
+          await persistScoreEntries(rowsToSave, { includeAllHoles: true });
+        } else {
+          await persistRound(
+            rowsToSave,
+            lockedAt,
+            startedAt,
+            setupTeamCount == null ? "" : String(setupTeamCount),
+            displayRoundName,
+            roundDate,
+            round.notes,
+            false,
+            false
+          );
+        }
         if (playerId) {
           setRows((current) => {
             const savedByPlayerId = new Map(rowsToSave.map((row) => [row.playerId, row]));
@@ -2809,14 +2869,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       try {
         setMessage("");
         setSaving(isQuickEntryMode ? "Loading latest scores before quota review..." : "Saving round before quota review...");
-        if (isQuickEntryMode) {
-          router.refresh();
-          setLastRefreshedAt(new Date().toISOString());
-        } else {
-          await persistRound();
-          const nextSavedRows = rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
-          setSavedRows(nextSavedRows);
-        }
+        router.refresh();
+        setLastRefreshedAt(new Date().toISOString());
 
         const response = await fetch(`/api/rounds/${round.id}/complete`, {
           method: "GET"
@@ -3248,7 +3302,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       startTransition(async () => {
         try {
           setSaving("Saving hole 18...");
-          await persistRound();
+          await persistScoreEntries(rows, { holeIndexes: [holeIndex] });
           setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
           setSkinsEntryOpen(false);
           setToast("Hole 18 saved");
@@ -3269,7 +3323,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     startTransition(async () => {
       try {
         setSaving(`Saving hole ${holeNumber}...`);
-        await persistRound();
+        await persistScoreEntries(rows, { holeIndexes: [holeIndex] });
         setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setSkinsActiveHole(nextHole);
         setToast("Hole saved");
@@ -3314,8 +3368,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       startTransition(async () => {
         try {
           setSaving("Saving hole 9...");
-          await persistRound(workingRows);
-          setSavedRows(workingRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+          await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex] });
+          setSavedRows((current) => mergeSavedRowState(current, groupStateRows));
           setToast("Hole 9 saved");
           setRows(workingRows);
 
@@ -3348,8 +3402,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       startTransition(async () => {
         try {
           setSaving("Saving hole 18...");
-          await persistRound(workingRows);
-          setSavedRows(workingRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+          await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex] });
+          setSavedRows((current) => mergeSavedRowState(current, groupStateRows));
           setToast("Hole 18 saved");
           setRows(workingRows);
 
@@ -3381,8 +3435,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     startTransition(async () => {
       try {
         setSaving(`Saving hole ${holeNumber}...`);
-        await persistRound(workingRows);
-        setSavedRows(workingRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex] });
+        setSavedRows((current) => mergeSavedRowState(current, groupStateRows));
         setRows(workingRows);
         setActiveHoleForGroup(groupTeams, nextHole);
         setToast("Hole saved");

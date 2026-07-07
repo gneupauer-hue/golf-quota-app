@@ -6,6 +6,7 @@ import {
   calculateTeamStandings,
   hasSequentialHoleEntry,
   holeFieldNames,
+  holeScoreValues,
   formatGoodSkinEntriesInput,
   parseBirdieHolesInput,
   parseGoodSkinEntriesInput,
@@ -50,6 +51,17 @@ type PlayerQuotaFallback = {
   startingQuota?: number | null;
   currentQuota?: number | null;
   quota?: number | null;
+};
+
+export type ScoreEntryPatch = {
+  playerId: string;
+  holeScores?: Array<{ holeNumber: number; score: number | null }>;
+  holes?: Array<number | null>;
+  quickFrontNine?: number | null;
+  quickBackNine?: number | null;
+  birdieHoles?: Array<number | string>;
+  frontSubmittedAt?: Date | null;
+  backSubmittedAt?: Date | null;
 };
 
 function getSafeBaselineQuota(player: PlayerQuotaFallback) {
@@ -281,6 +293,228 @@ export async function syncRoundComputedState(tx: Tx, roundId: string) {
   }
 
   await persistRoundSummaries(tx, roundId, recalculated);
+}
+
+function validateQuickScore(value: number | null | undefined, label: string) {
+  if (value == null) {
+    return;
+  }
+
+  if (!Number.isInteger(value) || value < -9 || value > 54) {
+    throw new Error(`${label} must be a whole-number point total.`);
+  }
+}
+
+function validateHoleScores(holes: Array<number | null>) {
+  if (holes.length !== holeFieldNames.length) {
+    throw new Error("Each score entry needs 18 hole values.");
+  }
+
+  for (const value of holes) {
+    if (value !== null && !holeScoreValues.includes(value as (typeof holeScoreValues)[number])) {
+      throw new Error("Hole values must be one of -1, 0, 1, 2, 4, or 6.");
+    }
+  }
+
+  if (!hasSequentialHoleEntry(holes)) {
+    throw new Error("Hole scores must be entered in order without skipping.");
+  }
+}
+
+function entryHoleScores(entry: Record<HoleFieldName, number | null>) {
+  return holeFieldNames.map((fieldName) => entry[fieldName]);
+}
+
+function applyHoleScorePatches(
+  holes: Array<number | null>,
+  holeScores: Array<{ holeNumber: number; score: number | null }>
+) {
+  const nextHoles = [...holes];
+
+  for (const hole of holeScores) {
+    if (!Number.isInteger(hole.holeNumber) || hole.holeNumber < 1 || hole.holeNumber > holeFieldNames.length) {
+      throw new Error("Hole numbers must be between 1 and 18.");
+    }
+
+    nextHoles[hole.holeNumber - 1] = hole.score;
+  }
+
+  return nextHoles;
+}
+
+export function mergeScoreEntryPatch(
+  existing: {
+    holes: Array<number | null>;
+    quickFrontNine?: number | null;
+    quickBackNine?: number | null;
+    birdieHolesCsv?: string | null;
+    frontSubmittedAt?: Date | null;
+    backSubmittedAt?: Date | null;
+  },
+  patch: Omit<ScoreEntryPatch, "playerId">,
+  options: { allowLockedScoreEdit?: boolean } = {}
+) {
+  const nextHoles = patch.holes
+    ? [...patch.holes]
+    : patch.holeScores
+      ? applyHoleScorePatches(existing.holes, patch.holeScores)
+      : [...existing.holes];
+  validateHoleScores(nextHoles);
+
+  const frontChanged = existing.holes
+    .slice(0, 9)
+    .some((value, index) => value !== nextHoles[index]);
+  const anyHoleChanged = existing.holes.some((value, index) => value !== nextHoles[index]);
+
+  if (!options.allowLockedScoreEdit) {
+    if (existing.backSubmittedAt && anyHoleChanged) {
+      throw new Error("Submitted scores are locked. Password required to edit them.");
+    }
+
+    if (existing.frontSubmittedAt && frontChanged) {
+      throw new Error("Submitted scores are locked. Password required to edit them.");
+    }
+  }
+
+  const quickFrontNine =
+    patch.quickFrontNine !== undefined ? patch.quickFrontNine : existing.quickFrontNine ?? null;
+  const quickBackNine =
+    patch.quickBackNine !== undefined ? patch.quickBackNine : existing.quickBackNine ?? null;
+  validateQuickScore(quickFrontNine, "Front nine");
+  validateQuickScore(quickBackNine, "Back nine");
+
+  const goodSkinEntries =
+    patch.birdieHoles !== undefined
+      ? parseGoodSkinEntriesInput(patch.birdieHoles)
+      : parseGoodSkinEntriesInput(existing.birdieHolesCsv ?? "");
+
+  return {
+    holes: nextHoles,
+    quickFrontNine,
+    quickBackNine,
+    birdieHolesCsv: formatGoodSkinEntriesInput(goodSkinEntries),
+    frontSubmittedAt:
+      patch.frontSubmittedAt !== undefined ? patch.frontSubmittedAt : existing.frontSubmittedAt ?? null,
+    backSubmittedAt:
+      patch.backSubmittedAt !== undefined ? patch.backSubmittedAt : existing.backSubmittedAt ?? null
+  };
+}
+
+export async function applyScoreEntryPatches(
+  tx: Tx,
+  input: {
+    roundId: string;
+    entries: ScoreEntryPatch[];
+    allowLockedScoreEdit?: boolean;
+  }
+) {
+  if (!input.entries.length) {
+    throw new Error("At least one score entry is required.");
+  }
+
+  const round = await tx.round.findUnique({
+    where: { id: input.roundId },
+    select: {
+      id: true,
+      completedAt: true,
+      canceledAt: true,
+      isPayoutLocked: true
+    }
+  });
+
+  if (!round) {
+    throw new Error("Round not found.");
+  }
+
+  if (round.canceledAt) {
+    throw new Error("This round has been canceled.");
+  }
+
+  if (round.completedAt) {
+    throw new Error("Completed rounds cannot be edited from live score entry.");
+  }
+
+  if (round.isPayoutLocked) {
+    throw new Error("Payouts are locked for this round.");
+  }
+
+  const playerIds = input.entries.map((entry) => entry.playerId);
+  const uniquePlayerIds = new Set(playerIds);
+  if (uniquePlayerIds.size !== playerIds.length) {
+    throw new Error("Players can only appear once per score save.");
+  }
+
+  const existingEntries = await tx.roundEntry.findMany({
+    where: {
+      roundId: input.roundId,
+      playerId: {
+        in: playerIds
+      }
+    },
+    select: {
+      id: true,
+      playerId: true,
+      quickFrontNine: true,
+      quickBackNine: true,
+      birdieHolesCsv: true,
+      frontSubmittedAt: true,
+      backSubmittedAt: true,
+      hole1: true,
+      hole2: true,
+      hole3: true,
+      hole4: true,
+      hole5: true,
+      hole6: true,
+      hole7: true,
+      hole8: true,
+      hole9: true,
+      hole10: true,
+      hole11: true,
+      hole12: true,
+      hole13: true,
+      hole14: true,
+      hole15: true,
+      hole16: true,
+      hole17: true,
+      hole18: true
+    }
+  });
+  const existingByPlayerId = new Map(existingEntries.map((entry) => [entry.playerId, entry]));
+
+  for (const entry of input.entries) {
+    const existingEntry = existingByPlayerId.get(entry.playerId);
+
+    if (!existingEntry) {
+      throw new Error("A submitted player is not in this round.");
+    }
+
+    const merged = mergeScoreEntryPatch(
+      {
+        holes: entryHoleScores(existingEntry),
+        quickFrontNine: existingEntry.quickFrontNine,
+        quickBackNine: existingEntry.quickBackNine,
+        birdieHolesCsv: existingEntry.birdieHolesCsv,
+        frontSubmittedAt: existingEntry.frontSubmittedAt,
+        backSubmittedAt: existingEntry.backSubmittedAt
+      },
+      entry,
+      { allowLockedScoreEdit: input.allowLockedScoreEdit }
+    );
+
+    await tx.roundEntry.update({
+      where: { id: existingEntry.id },
+      data: {
+        ...buildHoleFields(merged.holes),
+        quickFrontNine: merged.quickFrontNine,
+        quickBackNine: merged.quickBackNine,
+        birdieHolesCsv: merged.birdieHolesCsv,
+        frontSubmittedAt: merged.frontSubmittedAt,
+        backSubmittedAt: merged.backSubmittedAt
+      }
+    });
+  }
+
+  await syncRoundComputedState(tx, input.roundId);
 }
 
 async function buildQuotaValidationSummary(
