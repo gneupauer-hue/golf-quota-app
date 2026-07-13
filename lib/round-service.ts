@@ -964,8 +964,8 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
   });
 
   console.info("[quota-rebuild] baseline", {
-    playerName: "Bob Lipski",
-    baselineQuota: players.find((player) => player.name === "Bob Lipski") ? requireBaselineQuota2026("Bob Lipski") : null
+    playerName: "Blake Morgan",
+    baselineQuota: players.find((player) => player.name === "Blake Morgan") ? requireBaselineQuota2026("Blake Morgan") : null
   });
 
   for (const round of rounds) {
@@ -993,8 +993,8 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
 
 
 
-      if (row.playerName === "John Thomas") {
-        console.info("[quota-rebuild] Saving John Thomas round", {
+      if (row.playerName === "Harper Quinn") {
+        console.info("[quota-rebuild] Saving Harper Quinn round", {
           roundName: round.roundName,
           completedAt: round.completedAt,
           startingQuota: row.startQuota,
@@ -1045,8 +1045,8 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
         );
       }
 
-      if (row.playerName === "John Thomas") {
-        console.info("[quota-rebuild] Saved John Thomas round", {
+      if (row.playerName === "Harper Quinn") {
+        console.info("[quota-rebuild] Saved Harper Quinn round", {
           roundName: round.roundName,
           completedAt: round.completedAt,
           startingQuota: persistedEntry.startQuota,
@@ -1059,11 +1059,11 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
 
       roundEntriesUpdated += 1;
 
-      if (row.playerName === "Bob Lipski") {
-        console.info("[quota-rebuild] Bob Lipski persisted repair", {
+      if (row.playerName === "Blake Morgan") {
+        console.info("[quota-rebuild] Blake Morgan persisted repair", {
           roundName: round.roundName,
           completedAt: round.completedAt,
-          baseline: requireBaselineQuota2026("Bob Lipski"),
+          baseline: requireBaselineQuota2026("Blake Morgan"),
           storedBefore: matchingEntry.startQuota,
           storedAfter: row.startQuota,
           points: row.totalPoints,
@@ -1098,8 +1098,8 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
       player.currentQuota !== nextQuota ||
       player.startingQuota !== baselineQuota;
 
-    if (player.name === "John Thomas") {
-      console.info("[quota-rebuild] Saving John Thomas quota", {
+    if (player.name === "Harper Quinn") {
+      console.info("[quota-rebuild] Saving Harper Quinn quota", {
         baselineQuota,
         valueBeforeSave: player.currentQuota,
         finalComputedQuota: nextQuota
@@ -1138,8 +1138,8 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
       );
     }
 
-    if (player.name === "John Thomas") {
-      console.info("[quota-rebuild] Saved John Thomas quota", {
+    if (player.name === "Harper Quinn") {
+      console.info("[quota-rebuild] Saved Harper Quinn quota", {
         baselineQuota,
         finalComputedQuota: nextQuota,
         storedCurrentQuotaAfterSave: persistedPlayer.currentQuota,
@@ -1168,8 +1168,8 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
       continue;
     }
 
-    if (player.name === "Bob Lipski") {
-      console.info("[quota-rebuild] Bob Lipski final persisted quota", {
+    if (player.name === "Blake Morgan") {
+      console.info("[quota-rebuild] Blake Morgan final persisted quota", {
         baseline: expected.baselineQuota,
         finalComputedQuota: expected.nextQuota,
         storedCurrentQuotaAfterSave: player.currentQuota,
@@ -1262,8 +1262,8 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
   const baseQuotaMap = buildBaselineQuotaMap(players);
 
   console.info("[quota-rebuild] baseline", {
-    playerName: "Bob Lipski",
-    baselineQuota: players.find((player) => player.name === "Bob Lipski") ? requireBaselineQuota2026("Bob Lipski") : null
+    playerName: "Blake Morgan",
+    baselineQuota: players.find((player) => player.name === "Blake Morgan") ? requireBaselineQuota2026("Blake Morgan") : null
   });
 
   for (const round of completedRounds) {
@@ -1283,8 +1283,8 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     );
 
     for (const row of recalculated) {
-      if (row.playerName === "Bob Lipski") {
-        console.info("[quota-rebuild] Bob Lipski round", {
+      if (row.playerName === "Blake Morgan") {
+        console.info("[quota-rebuild] Blake Morgan round", {
           roundName: round.roundName,
           completedAt: round.completedAt,
           startQuota: row.startQuota,

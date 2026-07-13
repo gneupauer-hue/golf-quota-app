@@ -10,8 +10,8 @@ export function ShareAppLinkButton() {
   async function handleShare() {
     const url = window.location.origin;
     const shareData = {
-      title: "Irem Golf Quota App",
-      text: "Use this link to open the Irem golf quota app.",
+      title: "Custom Golf League Demo",
+      text: "Use this link to open the Custom Golf League Demo app.",
       url
     };
 

@@ -605,7 +605,7 @@ type ScoringGroup = {
   playerNames: string[];
 };
 
-const defaultGroupOnePlayerName = "Gary Neupauer";
+const defaultGroupOnePlayerName = "Avery Cole";
 
 function normalizeGeneratedScoringGroupOrder(groups: ScoringGroup[]) {
   const defaultGroupIndex = groups.findIndex((group) =>

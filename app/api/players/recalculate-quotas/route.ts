@@ -9,7 +9,7 @@ function canUseRepairTool(cookieValue: string | undefined) {
   return process.env.NODE_ENV !== "production" || hasValidPlayerEditSession(cookieValue);
 }
 
-const DEBUG_PLAYER_NAMES = ["John Thomas", "Bob Lipski", "Gary Neupauer"];
+const DEBUG_PLAYER_NAMES = ["Harper Quinn", "Blake Morgan", "Avery Cole"];
 
 type DebugPlayerRow = {
   name: string;
@@ -85,35 +85,35 @@ export async function POST() {
       })
     ]);
 
-    const johnThomas = buildPlayerDebugSummary(
-      "John Thomas",
+    const harperQuinn = buildPlayerDebugSummary(
+      "Harper Quinn",
       beforePlayers,
       afterPlayers,
       currentQuotaRows
     );
-    const bobLipski = buildPlayerDebugSummary(
-      "Bob Lipski",
+    const blakeMorgan = buildPlayerDebugSummary(
+      "Blake Morgan",
       beforePlayers,
       afterPlayers,
       currentQuotaRows
     );
-    const garyNeupauer = buildPlayerDebugSummary(
-      "Gary Neupauer",
+    const averyCole = buildPlayerDebugSummary(
+      "Avery Cole",
       beforePlayers,
       afterPlayers,
       currentQuotaRows
     );
 
     console.info("[quota-rebuild] POST-REBUILD DB VALUE", {
-      johnThomas,
-      bobLipski,
-      garyNeupauer
+      harperQuinn,
+      blakeMorgan,
+      averyCole
     });
 
     const debugPlayers: Array<[string, ReturnType<typeof buildPlayerDebugSummary>]> = [
-      ["John Thomas", johnThomas],
-      ["Bob Lipski", bobLipski],
-      ["Gary Neupauer", garyNeupauer]
+      ["Harper Quinn", harperQuinn],
+      ["Blake Morgan", blakeMorgan],
+      ["Avery Cole", averyCole]
     ];
 
     const failedDiagnostics = debugPlayers.filter(
@@ -129,9 +129,9 @@ export async function POST() {
           debug: {
             endpointHit: true,
             databaseReadAfterCommit: true,
-            johnThomas,
-            bobLipski,
-            garyNeupauer
+            harperQuinn,
+            blakeMorgan,
+            averyCole
           },
           error:
             "Rebuild completed, but persisted currentQuota still does not match expected values for: " +
@@ -151,9 +151,9 @@ export async function POST() {
           debug: {
             endpointHit: true,
             databaseReadAfterCommit: true,
-            johnThomas,
-            bobLipski,
-            garyNeupauer
+            harperQuinn,
+            blakeMorgan,
+            averyCole
           },
           error: `Rebuild wrote data, but ${data.quotaAudit.mismatchCount} quota mismatch${data.quotaAudit.mismatchCount === 1 ? " remains" : "es remain"}.`
         },
@@ -168,9 +168,9 @@ export async function POST() {
       debug: {
         endpointHit: true,
         databaseReadAfterCommit: true,
-        johnThomas,
-        bobLipski,
-        garyNeupauer
+        harperQuinn,
+        blakeMorgan,
+        averyCole
       },
       message: `Updated ${repair.playersUpdated} player${repair.playersUpdated === 1 ? "" : "s"} and ${repair.roundEntriesUpdated} round record${repair.roundEntriesUpdated === 1 ? "" : "s"}. 0 quota mismatches found.`
     });
@@ -181,4 +181,3 @@ export async function POST() {
     );
   }
 }
-

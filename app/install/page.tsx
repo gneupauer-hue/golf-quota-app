@@ -39,7 +39,7 @@ export default function InstallPage() {
     <div className="space-y-4">
       <PageTitle
         title="Add This App To Your Phone"
-        subtitle="Save the Irem Golf Quota App to your home screen or send the link to another player."
+        subtitle="Save the Custom Golf League Demo app to your home screen or send the link to another player."
       />
 
       <SectionCard className="space-y-4 border border-pine/20 bg-[#FBF7F0]">

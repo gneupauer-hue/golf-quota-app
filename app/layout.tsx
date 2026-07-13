@@ -9,17 +9,17 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://golf-quota-app.vercel.app"),
+  metadataBase: new URL("https://custom-golf-league-demo.vercel.app"),
   title: {
-    default: "Irem Quota",
-    template: "%s | Irem Quota"
+    default: "Custom Golf League Demo",
+    template: "%s | Custom Golf League Demo"
   },
-  description: "Irem Quota keeps live golf scoring, teams, quotas, skins, and results fast on the course.",
-  applicationName: "Irem Quota",
+  description: "Custom Golf League Demo keeps live golf scoring, teams, quotas, skins, and results fast on the course.",
+  applicationName: "Custom Golf League Demo",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Irem Quota"
+    title: "Custom Golf League Demo"
   },
   manifest: "/manifest.webmanifest"
 };

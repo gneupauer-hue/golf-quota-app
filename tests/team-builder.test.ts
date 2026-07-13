@@ -233,7 +233,7 @@ test("supported formats through 30 build playing groups without dropping players
   }
 });
 
-test("automatic playing groups move Gary Neupauer's group to Group 1", () => {
+test("automatic playing groups move Avery Cole's group to Group 1", () => {
   const players = [
     { playerId: "p1", playerName: "Player 1", quota: 40, conflictIds: [], team: "A" as TeamCode },
     { playerId: "p2", playerName: "Player 2", quota: 39, conflictIds: [], team: "B" as TeamCode },
@@ -242,13 +242,13 @@ test("automatic playing groups move Gary Neupauer's group to Group 1", () => {
     { playerId: "p5", playerName: "Player 5", quota: 36, conflictIds: [], team: "A" as TeamCode },
     { playerId: "p6", playerName: "Player 6", quota: 35, conflictIds: [], team: "B" as TeamCode },
     { playerId: "p7", playerName: "Player 7", quota: 34, conflictIds: [], team: "C" as TeamCode },
-    { playerId: "gary-id", playerName: "Gary Neupauer", quota: 10, conflictIds: [], team: "D" as TeamCode }
+    { playerId: "avery-id", playerName: "Avery Cole", quota: 10, conflictIds: [], team: "D" as TeamCode }
   ];
   const assignments = buildGroups(players, ["Group 1", "Group 2"]);
   const byPlayerId = new Map(assignments.map((assignment) => [assignment.playerId, assignment]));
   const groupedPlayerIds = assignments.map((assignment) => assignment.playerId).sort();
 
-  assert.equal(byPlayerId.get("gary-id")?.groupNumber, 1);
+  assert.equal(byPlayerId.get("avery-id")?.groupNumber, 1);
   assert.deepEqual(groupedPlayerIds, players.map((player) => player.playerId).sort());
   assert.equal(new Set(groupedPlayerIds).size, players.length);
 });

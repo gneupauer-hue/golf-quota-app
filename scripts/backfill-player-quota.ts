@@ -34,10 +34,10 @@ async function main() {
   }
 
   const verificationNames = [
-    "Gary Neupauer",
-    "Chad Kelly",
-    "Jeff Hodorowski",
-    "Rob Michaels"
+    "Avery Cole",
+    "Dakota Lane",
+    "Gray Parker",
+    "Morgan Price"
   ];
 
   const verification = await prisma.player.findMany({

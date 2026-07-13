@@ -618,7 +618,7 @@ function buildGroupCapacities(playerCount: number, groupCount: number) {
   return Array.from({ length: groupCount }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
-const defaultGroupOnePlayerName = "Gary Neupauer";
+const defaultGroupOnePlayerName = "Avery Cole";
 
 function moveDefaultPlayerGroupFirst(
   assignments: GroupAssignment[],
