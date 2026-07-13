@@ -4,60 +4,50 @@ import { createOrReplaceRoundEntries } from "./round-service";
 const scorePlan = [6, 4, 2, 1, 0, -1] as const;
 
 export const regularPlayers = [
-  { name: "Billy Mattioli", quota: 27 },
-  { name: "Bob Lipski", quota: 34 },
-  { name: "Brandon Wills", quota: 33 },
-  { name: "Chad Kelley", quota: 23, previousNames: ["Chad Kelly"] },
-  { name: "Gary Neupauer", quota: 17 },
-  { name: "Jay Thomas", quota: 32 },
-  { name: "Jeff Hodorowski", quota: 28 },
-  { name: "John Thomas", quota: 27 },
-  { name: "Lou Belgio", quota: 30 },
-  { name: "Marty Behm", quota: 34 },
-  { name: "Mike Mahasky", quota: 25 },
-  { name: "Mike Wills", quota: 34 },
-  { name: "Rob Michaels", quota: 23 },
-  { name: "Ryan Holthaus", quota: 15 },
-  { name: "Scott Francis", quota: 30 },
-  { name: "Scott Schifter", quota: 15 }
+  { name: "Avery Cole", quota: 27 },
+  { name: "Blake Morgan", quota: 34 },
+  { name: "Cameron Reed", quota: 33 },
+  { name: "Dakota Lane", quota: 23 },
+  { name: "Emerson Shaw", quota: 17 },
+  { name: "Finley Brooks", quota: 32 },
+  { name: "Gray Parker", quota: 28 },
+  { name: "Harper Quinn", quota: 27 },
+  { name: "Indigo Flynn", quota: 30 },
+  { name: "Jordan Ellis", quota: 34 },
+  { name: "Kai Turner", quota: 25 },
+  { name: "Logan Hayes", quota: 34 },
+  { name: "Morgan Price", quota: 23 },
+  { name: "Nico Avery", quota: 15 },
+  { name: "Oakley Stone", quota: 30 },
+  { name: "Parker West", quota: 15 }
 ] as const;
 
 export const otherPlayers = [
-  { name: "AJ Kochanski", quota: 26 },
-  { name: "Bob Ashworth", quota: 21 },
-  { name: "Bogey", quota: 22 },
-  { name: "Brett Sikora", quota: 23 },
-  { name: "Brett Slocum", quota: 25 },
-  { name: "Broj", quota: 33 },
-  { name: "Chad DeBona", quota: 30 },
-  { name: "Charlie Gelso", quota: 29 },
-  { name: "Chris Jones", quota: 29 },
-  { name: "Chris Sikora", quota: 15 },
-  { name: "Chuck Brand", quota: 31 },
-  { name: "Cooper Kelly", quota: 30 },
-  { name: "Dave Straley", quota: 30 },
-  { name: "Dave Yurko", quota: 31 },
-  { name: "Derek Shurmanek", quota: 26 },
-  { name: "Ethan Zawatski", quota: 41 },
-  { name: "Jack Fenwick", quota: 32 },
-  { name: "Jack Morris", quota: 29 },
-  { name: "Jake Humphreys", quota: 27 },
-  { name: "Jim Blinn", quota: 34 },
-  { name: "Jim Fronzoni", quota: 26 },
-  { name: "Joe Bevavino", quota: 34 },
-  { name: "Joe Collini", quota: 32 },
-  { name: "Joe Rubbico", quota: 27 },
-  { name: "John Ashley", quota: 32 },
-  { name: "Jonathon Wilson", quota: 41 },
-  { name: "Matt Alfano", quota: 19 },
-  { name: "Mike Aritz", quota: 22 },
-  { name: "Mike Boland", quota: 32 },
-  { name: "Mike Lipski", quota: 23 },
-  { name: "Pat Murray", quota: 26 },
-  { name: "Phil Lipski", quota: 22 },
-  { name: "Ron Prokrinchak", quota: 21 },
-  { name: "Tony Bevevino", quota: 38 },
-  { name: "Travis Debona", quota: 27 }
+  { name: "Quinn Adler", quota: 26 },
+  { name: "River Boone", quota: 21 },
+  { name: "Sage Carter", quota: 22 },
+  { name: "Taylor Dean", quota: 23 },
+  { name: "Uma Foster", quota: 25 },
+  { name: "Valen Grant", quota: 33 },
+  { name: "Winter Hale", quota: 30 },
+  { name: "Xen Harper", quota: 29 },
+  { name: "Yael Irwin", quota: 29 },
+  { name: "Zion Keller", quota: 15 },
+  { name: "Arden Lewis", quota: 31 },
+  { name: "Briar Monroe", quota: 30 },
+  { name: "Cedar Nolan", quota: 30 },
+  { name: "Drew Oak", quota: 31 },
+  { name: "Elliot Page", quota: 26 },
+  { name: "Frankie Reese", quota: 41 },
+  { name: "Gale Sutton", quota: 32 },
+  { name: "Hollis Tate", quota: 29 },
+  { name: "Jules Upton", quota: 27 },
+  { name: "Kendall Vale", quota: 34 },
+  { name: "Lennon Ward", quota: 26 },
+  { name: "Marin York", quota: 22 },
+  { name: "Noel Zane", quota: 21 },
+  { name: "Orion Ames", quota: 38 },
+  { name: "Presley Birch", quota: 27 }
 ] as const;
 
 type StarterPlayerSeed = {
@@ -113,14 +103,14 @@ export async function resetDemoData(prisma: PrismaClient) {
   });
 
   const round410Entries: Array<[string, number, "A" | "B" | "C" | "D"]> = [
-    ["Gary Neupauer", 23, "A"],
-    ["Ryan Holthaus", 21, "A"],
-    ["Scott Schifter", 18, "B"],
-    ["Billy Mattioli", 29, "B"],
-    ["Bob Lipski", 32, "C"],
-    ["Mike Wills", 36, "C"],
-    ["Rob Michaels", 31, "D"],
-    ["AJ Kochanski", 27, "D"]
+    ["Avery Cole", 23, "A"],
+    ["Nico Avery", 21, "A"],
+    ["Parker West", 18, "B"],
+    ["Blake Morgan", 29, "B"],
+    ["Finley Brooks", 32, "C"],
+    ["Logan Hayes", 36, "C"],
+    ["Morgan Price", 31, "D"],
+    ["Quinn Adler", 27, "D"]
   ];
 
   await createOrReplaceRoundEntries(prisma, {
@@ -147,14 +137,14 @@ export async function resetDemoData(prisma: PrismaClient) {
   });
 
   const round411Entries: Array<[string, number, "A" | "B" | "C" | "D"]> = [
-    ["Gary Neupauer", 24, "A"],
-    ["Ryan Holthaus", 16, "A"],
-    ["Scott Francis", 35, "B"],
-    ["Chad Kelley", 30, "B"],
-    ["Jeff Hodorowski", 28, "C"],
-    ["Mike Mahasky", 24, "C"],
-    ["Tony Bevevino", 39, "D"],
-    ["Pat Murray", 29, "D"]
+    ["Avery Cole", 24, "A"],
+    ["Nico Avery", 16, "A"],
+    ["Oakley Stone", 35, "B"],
+    ["Dakota Lane", 30, "B"],
+    ["Gray Parker", 28, "C"],
+    ["Kai Turner", 24, "C"],
+    ["Orion Ames", 39, "D"],
+    ["Lennon Ward", 29, "D"]
   ];
 
   await createOrReplaceRoundEntries(prisma, {

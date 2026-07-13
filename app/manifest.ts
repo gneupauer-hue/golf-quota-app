@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Irem Quota",
-    short_name: "Irem Quota",
-    description: "Fast mobile golf quota scoring for live rounds, players, and results.",
+    name: "Custom Golf League Demo",
+    short_name: "Golf Demo",
+    description: "Fast mobile golf quota scoring demo for live rounds, players, and results.",
     start_url: "/",
     display: "standalone",
     background_color: "#0d1c18",

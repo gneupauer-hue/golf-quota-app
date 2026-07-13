@@ -132,8 +132,8 @@ function main() {
     })) as RoundRow[];
     const baseQuotaMap = buildBaselineQuotaMap(players);
     console.info("[quota-rebuild-script] baseline", {
-      playerName: "Bob Lipski",
-      baselineQuota: requireBaselineQuota2026("Bob Lipski")
+      playerName: "Blake Morgan",
+      baselineQuota: requireBaselineQuota2026("Blake Morgan")
     });
     const quotaMap = new Map(baseQuotaMap);
     const verificationMap = new Map<string, { playerName: string; oldestStartQuota: number; rounds: VerificationRound[] }>();
@@ -213,8 +213,8 @@ function main() {
         });
         verificationMap.set(row.playerId, verification);
 
-        if (row.playerName === "Bob Lipski") {
-          console.info("[quota-rebuild-script] Bob Lipski round", {
+        if (row.playerName === "Blake Morgan") {
+          console.info("[quota-rebuild-script] Blake Morgan round", {
             roundName: round.roundName,
             completedAt: formatEpoch(round.completedAt),
             startQuota: row.startQuota,
