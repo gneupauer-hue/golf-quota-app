@@ -10,6 +10,7 @@ const links = [
   { href: "/past-games", lines: ["Past", "Games"] },
   { href: "/players", lines: ["Players"] },
   { href: "/install", lines: ["Install"] },
+  { href: "/account", lines: ["Account"] },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === "/" ||
     pathname === "/round-setup" ||
     pathname === "/current-round" ||
+    pathname === "/account" ||
     pathname === "/install" ||
     pathname.startsWith("/side-matches") ||
     pathname === "/past-games" ||
@@ -54,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           bottom: "max(8px, calc(env(safe-area-inset-bottom) + 4px))"
         }}
       >
-        <ul className="grid grid-cols-5 gap-1.5">
+        <ul className="grid grid-cols-6 gap-1.5">
           {links.map((link) => {
             const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
 

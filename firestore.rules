@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function memberPath(clubId, uid) {
+      return /databases/$(database)/documents/clubs/$(clubId)/members/$(uid);
+    }
+
+    function isClubMember(clubId) {
+      return signedIn()
+        && exists(memberPath(clubId, request.auth.uid))
+        && get(memberPath(clubId, request.auth.uid)).data.status == "active";
+    }
+
+    function isClubOwner(clubId) {
+      return isClubMember(clubId)
+        && get(memberPath(clubId, request.auth.uid)).data.role == "owner"
+        && get(memberPath(clubId, request.auth.uid)).data.status == "active";
+    }
+
+    function validUserProfile(uid) {
+      return request.resource.data.keys().hasOnly([
+          "uid",
+          "email",
+          "displayName",
+          "photoURL",
+          "defaultClubId",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow create: if isSelf(uid) && validUserProfile(uid);
+      allow read: if isSelf(uid);
+      allow update: if isSelf(uid)
+        && validUserProfile(uid)
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(["email", "displayName", "photoURL", "defaultClubId", "updatedAt"]);
+      allow delete: if false;
+    }
+
+    match /clubs/{clubId} {
+      allow read: if isClubMember(clubId);
+      allow create: if false;
+      allow update: if isClubOwner(clubId)
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(["name", "slug", "updatedAt"]);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isSelf(uid) || isClubOwner(clubId);
+        allow create, update, delete: if false;
+      }
+
+      match /rounds/{roundId} {
+        allow read: if isClubMember(clubId);
+        allow write: if false;
+      }
+
+      match /state/{stateDocId} {
+        allow read: if isClubMember(clubId);
+        allow write: if false;
+      }
+    }
+
+    match /userClubMemberships/{membershipId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+  }
+}

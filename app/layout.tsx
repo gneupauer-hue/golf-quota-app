@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 import { AppShell } from "@/components/app-shell";
+import { FirebaseAuthProvider } from "@/components/firebase-auth-provider";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -40,7 +41,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${manrope.className} bg-hero text-white`}>
-        <AppShell>{children}</AppShell>
+        <FirebaseAuthProvider>
+          <AppShell>{children}</AppShell>
+        </FirebaseAuthProvider>
       </body>
     </html>
   );
