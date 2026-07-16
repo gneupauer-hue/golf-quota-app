@@ -2,7 +2,6 @@ import "server-only";
 import { applicationDefault, getApps, initializeApp, type Credential } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { getVercelOidcToken } from "@vercel/oidc";
 import { ExternalAccountClient } from "google-auth-library";
 
 const GOOGLE_CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
@@ -40,7 +39,11 @@ function getVercelOidcCredential(): Credential {
     service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccountEmail}:generateAccessToken`,
     scopes: [GOOGLE_CLOUD_SCOPE],
     subject_token_supplier: {
-      getSubjectToken: () => getVercelOidcToken({ audience: providerAudience })
+      getSubjectToken: async () => {
+        const { getVercelOidcToken } = await import("@vercel/oidc");
+
+        return getVercelOidcToken({ audience: providerAudience });
+      }
     }
   });
 

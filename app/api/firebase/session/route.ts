@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getFirebaseAdminAuth } from "@/lib/firebase/admin";
 
 const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 5;
 
@@ -12,6 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Firebase ID token is required." }, { status: 400 });
     }
 
+    const { getFirebaseAdminAuth } = await import("@/lib/firebase/admin");
     const auth = getFirebaseAdminAuth();
     const decoded = await auth.verifyIdToken(idToken);
     const sessionCookie = await auth.createSessionCookie(idToken, {

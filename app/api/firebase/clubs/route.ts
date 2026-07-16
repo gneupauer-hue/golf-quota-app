@@ -1,6 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase/admin";
 
 function slugify(value: string) {
   return value
@@ -19,6 +18,8 @@ async function verifyBearerToken(request: Request) {
     throw new Error("Sign in before creating a club.");
   }
 
+  const { getFirebaseAdminAuth } = await import("@/lib/firebase/admin");
+
   return getFirebaseAdminAuth().verifyIdToken(match[1]);
 }
 
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Club name is required." }, { status: 400 });
     }
 
+    const { getFirebaseAdminDb } = await import("@/lib/firebase/admin");
     const db = getFirebaseAdminDb();
     const clubRef = db.collection("clubs").doc();
     const membershipId = `${decoded.uid}_${clubRef.id}`;
