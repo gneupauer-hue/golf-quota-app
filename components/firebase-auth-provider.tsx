@@ -18,7 +18,6 @@ import {
   getDoc,
   onSnapshot,
   query,
-  setDoc,
   updateDoc,
   where
 } from "firebase/firestore";
@@ -72,19 +71,20 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
             throw new Error(sessionResult.error ?? "Could not sync Firebase session.");
           }
 
-          const db = getFirebaseDb();
-          await setDoc(
-            doc(db, "users", nextUser.uid),
-            {
-              uid: nextUser.uid,
-              email: nextUser.email,
-              displayName: nextUser.displayName,
-              photoURL: nextUser.photoURL,
-              updatedAt: new Date()
-            },
-            { merge: true }
-          );
+          const profileResponse = await fetch("/api/firebase/profile", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`
+            }
+          });
+          const profileResult = await profileResponse.json();
 
+          if (!profileResponse.ok) {
+            throw new Error(profileResult.error ?? "Could not sync Firebase profile.");
+          }
+
+          const db = getFirebaseDb();
           const userSnapshot = await getDoc(doc(db, "users", nextUser.uid));
           const defaultClubId = userSnapshot.data()?.defaultClubId;
           setActiveClubIdState(typeof defaultClubId === "string" ? defaultClubId : null);
