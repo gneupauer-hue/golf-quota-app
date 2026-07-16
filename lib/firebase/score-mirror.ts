@@ -158,6 +158,45 @@ function normalizeGoodSkinEntries(value: string | null | undefined): FirebaseSco
   }));
 }
 
+export function assertValidScoreMirrorBirdieHolesInput(value: string | null | undefined) {
+  if (!value?.trim()) {
+    return;
+  }
+
+  const tokens = value
+    .split(",")
+    .flatMap((segment) => segment.split(/\s+/))
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  for (const token of tokens) {
+    const [holeText, rawTypeText, extra] = token.split(":");
+    const holeNumber = Number(holeText);
+    const typeText = rawTypeText?.trim().toLowerCase();
+    const validType =
+      typeText == null ||
+      typeText === "" ||
+      typeText === "birdie" ||
+      typeText === "4" ||
+      typeText === "eagle" ||
+      typeText === "6" ||
+      typeText === "ace" ||
+      typeText === "hole-in-one" ||
+      typeText === "holeinone" ||
+      typeText === "8";
+
+    if (
+      extra !== undefined ||
+      !Number.isInteger(holeNumber) ||
+      holeNumber < 1 ||
+      holeNumber > 18 ||
+      !validType
+    ) {
+      throw new Error(`Malformed birdie-hole input "${token}".`);
+    }
+  }
+}
+
 function assertNoResultFields(entry: PrismaScoreMirrorEntryInput) {
   const disallowed = Object.keys(entry as Record<string, unknown>).find((key) => SCORE_RESULT_FIELD_NAMES.has(key));
   if (disallowed) {
@@ -204,6 +243,7 @@ function mapEntryToScoreMirror(
   const quickBackNine = entry.quickBackNine ?? null;
   validateQuickScore(quickFrontNine, "Front nine");
   validateQuickScore(quickBackNine, "Back nine");
+  assertValidScoreMirrorBirdieHolesInput(entry.birdieHolesCsv);
 
   const withoutChecksum: Omit<FirebaseScoreMirror, "checksum"> = {
     prismaRoundId: round.id,
