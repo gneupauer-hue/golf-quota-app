@@ -271,6 +271,10 @@ test("Prisma setup selection excludes score, skins, payout, and posting fields",
   }
 });
 
+test("Prisma round setup selection excludes fields missing from the Round model", () => {
+  assert.equal("updatedAt" in ROUND_MIRROR_PRISMA_ROUND_SELECT, false);
+});
+
 test("selectActivePrismaRoundSetup reuses active selection without Prisma mutation", async () => {
   const calls: string[] = [];
   let findUniqueArgs: unknown = null;
