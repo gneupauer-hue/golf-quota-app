@@ -40,6 +40,25 @@ export type FirebaseUserClubMembership = FirebaseClubMembership & {
   clubName: string;
 };
 
+export type FirebasePlayerMirrorSource = "prisma";
+
+export type FirebasePlayerMirror = {
+  prismaPlayerId: string;
+  name: string;
+  normalizedName: string;
+  isActive: boolean;
+  isRegular: boolean;
+  currentQuota: number;
+  startingQuota: number;
+  storedQuota: number | null;
+  finalizedNonTestRoundCount: number;
+  conflictPlayerIds: string[];
+  source: FirebasePlayerMirrorSource;
+  prismaUpdatedAt: string;
+  syncVersion: number;
+  checksum: string;
+};
+
 export function getRoundPath(clubId: string, roundId: string) {
   return `clubs/${clubId}/rounds/${roundId}`;
 }
