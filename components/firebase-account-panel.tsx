@@ -14,7 +14,14 @@ import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 const PLAYER_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 const PLAYER_MIRROR_EXPECTED_PLAYER_COUNT = 61;
 const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
-const ROUND_MIRROR_EXPECTED_ROUND_ID: string | null = null;
+
+export function buildRoundMirrorDryRunRequestBody(expectedPrismaRoundId: string | null) {
+  return {
+    clubId: PLAYER_MIRROR_DRY_RUN_CLUB_ID,
+    expectedProjectId: PLAYER_MIRROR_PROJECT_ID,
+    expectedPrismaRoundId
+  };
+}
 
 type PlayerMirrorDryRunResult = {
   mode?: "dry-run" | "write";
@@ -56,7 +63,11 @@ type RoundMirrorDryRunResult = {
   error?: string;
 };
 
-export function FirebaseAccountPanel() {
+export function FirebaseAccountPanel({
+  activePrismaRoundId = null
+}: {
+  activePrismaRoundId?: string | null;
+}) {
   const { user, memberships, activeClubId, loading, authError, setActiveClubId, signOut } = useFirebaseAuth();
   const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
   const [email, setEmail] = useState("");
@@ -199,11 +210,7 @@ export function FirebaseAccountPanel() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`
           },
-          body: JSON.stringify({
-            clubId: PLAYER_MIRROR_DRY_RUN_CLUB_ID,
-            expectedProjectId: PLAYER_MIRROR_PROJECT_ID,
-            expectedPrismaRoundId: ROUND_MIRROR_EXPECTED_ROUND_ID
-          })
+          body: JSON.stringify(buildRoundMirrorDryRunRequestBody(activePrismaRoundId))
         });
         const result = await response.json();
 
@@ -475,6 +482,9 @@ export function FirebaseAccountPanel() {
               {roundDryRunResult ? (
                 <div className="space-y-2 text-sm text-ink">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Expected round: <span className="font-bold">{activePrismaRoundId ?? "none"}</span>
+                    </p>
                     <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
                       Status: <span className="font-bold">{roundDryRunResult.status ?? "unknown"}</span>
                     </p>
