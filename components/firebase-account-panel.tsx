@@ -10,10 +10,14 @@ import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { useFirebaseAuth } from "@/components/firebase-auth-provider";
+import type { FirebaseUserClubMembership } from "@/lib/firebase/types";
 
 const PLAYER_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 const PLAYER_MIRROR_EXPECTED_PLAYER_COUNT = 61;
 const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
+const SCORE_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
+const SCORE_MIRROR_PROJECT_ID = "irem-golf-quota-app";
+const SCORE_MIRROR_EXPECTED_PRISMA_ROUND_ID = null;
 
 type PlayerMirrorDryRunResult = {
   mode?: "dry-run" | "write";
@@ -30,6 +34,44 @@ type PlayerMirrorDryRunResult = {
   error?: string;
 };
 
+type ScoreMirrorDryRunResult = {
+  status?: string;
+  prismaRoundId?: string | null;
+  firestoreRoundId?: string | null;
+  scoringEntryMode?: string | null;
+  roundMode?: string | null;
+  scores?: {
+    counts?: {
+      created?: number;
+      updated?: number;
+      unchanged?: number;
+      extra?: number;
+    };
+  };
+  writesPlanned?: number;
+  writesApplied?: number;
+  error?: string;
+};
+
+export function isActiveOwnerOrAdminMembership(
+  membership: FirebaseUserClubMembership,
+  clubId: string
+) {
+  return (
+    membership.clubId === clubId &&
+    membership.status === "active" &&
+    (membership.role === "owner" || membership.role === "admin")
+  );
+}
+
+export function buildScoreMirrorDryRunRequestBody() {
+  return {
+    clubId: SCORE_MIRROR_DRY_RUN_CLUB_ID,
+    expectedProjectId: SCORE_MIRROR_PROJECT_ID,
+    expectedPrismaRoundId: SCORE_MIRROR_EXPECTED_PRISMA_ROUND_ID
+  };
+}
+
 export function FirebaseAccountPanel() {
   const { user, memberships, activeClubId, loading, authError, setActiveClubId, signOut } = useFirebaseAuth();
   const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
@@ -40,6 +82,8 @@ export function FirebaseAccountPanel() {
   const [message, setMessage] = useState("");
   const [dryRunResult, setDryRunResult] = useState<PlayerMirrorDryRunResult | null>(null);
   const [dryRunError, setDryRunError] = useState("");
+  const [scoreMirrorResult, setScoreMirrorResult] = useState<ScoreMirrorDryRunResult | null>(null);
+  const [scoreMirrorError, setScoreMirrorError] = useState("");
   const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
@@ -48,6 +92,10 @@ export function FirebaseAccountPanel() {
       membership.clubId === PLAYER_MIRROR_DRY_RUN_CLUB_ID &&
       membership.role === "owner" &&
       membership.status === "active"
+  );
+  const activeOwnerAdminMembership = memberships.find((membership) =>
+    membership.clubId === activeClubId &&
+    isActiveOwnerOrAdminMembership(membership, SCORE_MIRROR_DRY_RUN_CLUB_ID)
   );
 
   function submitAuth() {
@@ -192,7 +240,43 @@ export function FirebaseAccountPanel() {
     });
   }
 
+  function runScoreMirrorDryRun() {
+    startTransition(async () => {
+      try {
+        setScoreMirrorError("");
+        setScoreMirrorResult(null);
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before running this audit.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/score-mirror/dry-run", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify(buildScoreMirrorDryRunRequestBody())
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not run score mirror dry-run.");
+        }
+
+        setScoreMirrorResult(result);
+        setMessage("Score mirror dry-run completed.");
+      } catch (error) {
+        setScoreMirrorError(error instanceof Error ? error.message : "Could not run score mirror dry-run.");
+      }
+    });
+  }
+
   const dryRunCounts = dryRunResult?.counts;
+  const scoreCounts = scoreMirrorResult?.scores?.counts;
   const canSyncPlayerMirror =
     dryRunResult?.mode === "dry-run" &&
     (dryRunCounts?.prismaPlayers ?? 0) === PLAYER_MIRROR_EXPECTED_PLAYER_COUNT &&
@@ -379,6 +463,64 @@ export function FirebaseAccountPanel() {
               {dryRunError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {dryRunError}
+                </p>
+              ) : null}
+            </SectionCard>
+          ) : null}
+
+          {activeOwnerAdminMembership ? (
+            <SectionCard className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">
+                Phase 4 Score Mirror Audit
+              </p>
+              <button
+                type="button"
+                className="club-btn-primary min-h-12 w-full disabled:opacity-50"
+                disabled={isPending || loading}
+                onClick={runScoreMirrorDryRun}
+              >
+                Run Score Mirror Dry-Run
+              </button>
+              {scoreMirrorResult ? (
+                <div className="grid grid-cols-2 gap-2 text-sm text-ink">
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Status: <span className="font-bold">{scoreMirrorResult.status ?? "unknown"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Prisma round: <span className="font-bold">{scoreMirrorResult.prismaRoundId ?? "None"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Firestore round: <span className="font-bold">{scoreMirrorResult.firestoreRoundId ?? "None"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Scoring mode: <span className="font-bold">{scoreMirrorResult.scoringEntryMode ?? "None"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Round mode: <span className="font-bold">{scoreMirrorResult.roundMode ?? "None"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Created: <span className="font-bold">{scoreCounts?.created ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Updated: <span className="font-bold">{scoreCounts?.updated ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Unchanged: <span className="font-bold">{scoreCounts?.unchanged ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Extra: <span className="font-bold">{scoreCounts?.extra ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Writes planned: <span className="font-bold">{scoreMirrorResult.writesPlanned ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Writes applied: <span className="font-bold">{scoreMirrorResult.writesApplied ?? 0}</span>
+                  </p>
+                </div>
+              ) : null}
+              {scoreMirrorError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {scoreMirrorError}
                 </p>
               ) : null}
             </SectionCard>
