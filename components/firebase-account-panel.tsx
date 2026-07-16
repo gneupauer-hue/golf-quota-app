@@ -11,6 +11,23 @@ import { SectionCard } from "@/components/section-card";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 
+const PLAYER_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
+const PLAYER_MIRROR_EXPECTED_PLAYER_COUNT = 61;
+const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
+
+type PlayerMirrorDryRunResult = {
+  counts?: {
+    prismaPlayers?: number;
+    firestorePlayers?: number;
+    created?: number;
+    updated?: number;
+    unchanged?: number;
+    extra?: number;
+  };
+  writesPlanned?: number;
+  writesApplied?: number;
+};
+
 export function FirebaseAccountPanel() {
   const { user, memberships, activeClubId, loading, authError, setActiveClubId, signOut } = useFirebaseAuth();
   const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
@@ -19,7 +36,16 @@ export function FirebaseAccountPanel() {
   const [displayName, setDisplayName] = useState("");
   const [clubName, setClubName] = useState("Irem Golf Quota");
   const [message, setMessage] = useState("");
+  const [dryRunResult, setDryRunResult] = useState<PlayerMirrorDryRunResult | null>(null);
+  const [dryRunError, setDryRunError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const activeOwnerMembership = memberships.find(
+    (membership) =>
+      membership.clubId === activeClubId &&
+      membership.clubId === PLAYER_MIRROR_DRY_RUN_CLUB_ID &&
+      membership.role === "owner" &&
+      membership.status === "active"
+  );
 
   function submitAuth() {
     startTransition(async () => {
@@ -71,6 +97,46 @@ export function FirebaseAccountPanel() {
         setMessage("Club created and selected.");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not create club.");
+      }
+    });
+  }
+
+  function runPlayerMirrorDryRun() {
+    startTransition(async () => {
+      try {
+        setDryRunError("");
+        setDryRunResult(null);
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerMembership) {
+          throw new Error("Sign in as the active club owner before running this audit.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/player-mirror/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            clubId: PLAYER_MIRROR_DRY_RUN_CLUB_ID,
+            mode: "dry-run",
+            expectedProjectId: PLAYER_MIRROR_PROJECT_ID,
+            expectedPrismaPlayerCount: PLAYER_MIRROR_EXPECTED_PLAYER_COUNT
+          })
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not run player mirror dry-run.");
+        }
+
+        setDryRunResult(result);
+        setMessage("Player mirror dry-run completed.");
+      } catch (error) {
+        setDryRunError(error instanceof Error ? error.message : "Could not run player mirror dry-run.");
       }
     });
   }
@@ -187,6 +253,55 @@ export function FirebaseAccountPanel() {
               Create Club
             </button>
           </SectionCard>
+
+          {activeOwnerMembership ? (
+            <SectionCard className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">
+                Phase 2 Player Mirror Audit
+              </p>
+              <button
+                type="button"
+                className="club-btn-primary min-h-12 w-full disabled:opacity-50"
+                disabled={isPending || loading}
+                onClick={runPlayerMirrorDryRun}
+              >
+                Run Player Mirror Dry-Run
+              </button>
+              {dryRunResult ? (
+                <div className="grid grid-cols-2 gap-2 text-sm text-ink">
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Prisma players: <span className="font-bold">{dryRunResult.counts?.prismaPlayers ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Firestore players: <span className="font-bold">{dryRunResult.counts?.firestorePlayers ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Created: <span className="font-bold">{dryRunResult.counts?.created ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Updated: <span className="font-bold">{dryRunResult.counts?.updated ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Unchanged: <span className="font-bold">{dryRunResult.counts?.unchanged ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Extra: <span className="font-bold">{dryRunResult.counts?.extra ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Writes planned: <span className="font-bold">{dryRunResult.writesPlanned ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Writes applied: <span className="font-bold">{dryRunResult.writesApplied ?? 0}</span>
+                  </p>
+                </div>
+              ) : null}
+              {dryRunError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {dryRunError}
+                </p>
+              ) : null}
+            </SectionCard>
+          ) : null}
         </>
       )}
 
