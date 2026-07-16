@@ -6,9 +6,18 @@ import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import type { RoundMode } from "@/lib/quota";
 
+export function buildCreateRoundRequestBody(roundMode: RoundMode, isTestRound: boolean) {
+  return {
+    roundMode,
+    scoringEntryMode: "QUICK" as const,
+    isTestRound
+  };
+}
+
 export function NewRoundForm() {
   const router = useRouter();
   const [roundMode, setRoundMode] = useState<RoundMode>("MATCH_QUOTA");
+  const [isTestRound, setIsTestRound] = useState(false);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -43,6 +52,21 @@ export function NewRoundForm() {
         </div>
 
 
+        <label className="flex items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-canvas px-4 py-3">
+          <span>
+            <span className="block text-sm font-semibold">Test Round</span>
+            <span className="mt-1 block text-xs text-ink/60">
+              Test rounds are excluded from quota history and season statistics.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={isTestRound}
+            onChange={(event) => setIsTestRound(event.target.checked)}
+            className="h-5 w-5 accent-pine"
+          />
+        </label>
+
         <button
           disabled={isPending}
           className="min-h-14 w-full rounded-[24px] bg-ink px-4 text-base font-semibold text-white disabled:opacity-60"
@@ -55,10 +79,7 @@ export function NewRoundForm() {
                 headers: {
                   "Content-Type": "application/json"
                 },
-                body: JSON.stringify({
-                  roundMode,
-                  scoringEntryMode: "QUICK"
-                })
+                body: JSON.stringify(buildCreateRoundRequestBody(roundMode, isTestRound))
               });
 
               const result = await response.json();
