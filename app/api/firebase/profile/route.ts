@@ -11,14 +11,14 @@ async function verifyBearerToken(request: Request) {
 
   const { getFirebaseAdminAuth } = await import("@/lib/firebase/admin");
 
-  return getFirebaseAdminAuth().verifyIdToken(match[1]);
+  return (await getFirebaseAdminAuth()).verifyIdToken(match[1]);
 }
 
 export async function POST(request: Request) {
   try {
     const decoded = await verifyBearerToken(request);
     const { getFirebaseAdminDb } = await import("@/lib/firebase/admin");
-    const db = getFirebaseAdminDb();
+    const db = await getFirebaseAdminDb();
     const userRef = db.collection("users").doc(decoded.uid);
     const snapshot = await userRef.get();
     const now = FieldValue.serverTimestamp();

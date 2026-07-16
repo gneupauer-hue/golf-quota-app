@@ -20,7 +20,7 @@ async function verifyBearerToken(request: Request) {
 
   const { getFirebaseAdminAuth } = await import("@/lib/firebase/admin");
 
-  return getFirebaseAdminAuth().verifyIdToken(match[1]);
+  return (await getFirebaseAdminAuth()).verifyIdToken(match[1]);
 }
 
 export async function POST(request: Request) {
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     const { getFirebaseAdminDb } = await import("@/lib/firebase/admin");
-    const db = getFirebaseAdminDb();
+    const db = await getFirebaseAdminDb();
     const clubRef = db.collection("clubs").doc();
     const membershipId = `${decoded.uid}_${clubRef.id}`;
     const userRef = db.collection("users").doc(decoded.uid);

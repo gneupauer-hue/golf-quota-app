@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const { getFirebaseAdminAuth } = await import("@/lib/firebase/admin");
-    const auth = getFirebaseAdminAuth();
+    const auth = await getFirebaseAdminAuth();
     const decoded = await auth.verifyIdToken(idToken);
     const sessionCookie = await auth.createSessionCookie(idToken, {
       expiresIn: SESSION_COOKIE_MAX_AGE_SECONDS * 1000
