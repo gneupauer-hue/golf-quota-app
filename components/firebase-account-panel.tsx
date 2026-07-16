@@ -14,6 +14,7 @@ import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 const PLAYER_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 const PLAYER_MIRROR_EXPECTED_PLAYER_COUNT = 61;
 const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
+const ROUND_MIRROR_EXPECTED_ROUND_ID: string | null = null;
 
 type PlayerMirrorDryRunResult = {
   mode?: "dry-run" | "write";
@@ -30,6 +31,31 @@ type PlayerMirrorDryRunResult = {
   error?: string;
 };
 
+type AuditCounts = {
+  created?: number;
+  updated?: number;
+  unchanged?: number;
+  extra?: number;
+};
+
+type RoundMirrorDryRunResult = {
+  status?: string;
+  prismaRoundId?: string | null;
+  firestoreRoundId?: string | null;
+  round?: {
+    counts?: AuditCounts;
+  };
+  entries?: {
+    counts?: AuditCounts;
+  };
+  activePointer?: {
+    counts?: AuditCounts;
+  };
+  writesPlanned?: number;
+  writesApplied?: number;
+  error?: string;
+};
+
 export function FirebaseAccountPanel() {
   const { user, memberships, activeClubId, loading, authError, setActiveClubId, signOut } = useFirebaseAuth();
   const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
@@ -40,6 +66,8 @@ export function FirebaseAccountPanel() {
   const [message, setMessage] = useState("");
   const [dryRunResult, setDryRunResult] = useState<PlayerMirrorDryRunResult | null>(null);
   const [dryRunError, setDryRunError] = useState("");
+  const [roundDryRunResult, setRoundDryRunResult] = useState<RoundMirrorDryRunResult | null>(null);
+  const [roundDryRunError, setRoundDryRunError] = useState("");
   const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
@@ -47,6 +75,13 @@ export function FirebaseAccountPanel() {
       membership.clubId === activeClubId &&
       membership.clubId === PLAYER_MIRROR_DRY_RUN_CLUB_ID &&
       membership.role === "owner" &&
+      membership.status === "active"
+  );
+  const activeOwnerAdminMembership = memberships.find(
+    (membership) =>
+      membership.clubId === activeClubId &&
+      membership.clubId === PLAYER_MIRROR_DRY_RUN_CLUB_ID &&
+      (membership.role === "owner" || membership.role === "admin") &&
       membership.status === "active"
   );
 
@@ -141,6 +176,46 @@ export function FirebaseAccountPanel() {
         setMessage("Player mirror dry-run completed.");
       } catch (error) {
         setDryRunError(error instanceof Error ? error.message : "Could not run player mirror dry-run.");
+      }
+    });
+  }
+
+  function runRoundMirrorDryRun() {
+    startTransition(async () => {
+      try {
+        setRoundDryRunError("");
+        setRoundDryRunResult(null);
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before running this audit.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/round-mirror/dry-run", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            clubId: PLAYER_MIRROR_DRY_RUN_CLUB_ID,
+            expectedProjectId: PLAYER_MIRROR_PROJECT_ID,
+            expectedPrismaRoundId: ROUND_MIRROR_EXPECTED_ROUND_ID
+          })
+        });
+        const result = await response.json();
+
+        setRoundDryRunResult(result);
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not run round mirror dry-run.");
+        }
+
+        setMessage("Round mirror dry-run completed.");
+      } catch (error) {
+        setRoundDryRunError(error instanceof Error ? error.message : "Could not run round mirror dry-run.");
       }
     });
   }
@@ -379,6 +454,86 @@ export function FirebaseAccountPanel() {
               {dryRunError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {dryRunError}
+                </p>
+              ) : null}
+            </SectionCard>
+          ) : null}
+
+          {activeOwnerAdminMembership ? (
+            <SectionCard className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">
+                Phase 3 Round Mirror Audit
+              </p>
+              <button
+                type="button"
+                className="club-btn-primary min-h-12 w-full disabled:opacity-50"
+                disabled={isPending || loading}
+                onClick={runRoundMirrorDryRun}
+              >
+                Run Round Mirror Dry-Run
+              </button>
+              {roundDryRunResult ? (
+                <div className="space-y-2 text-sm text-ink">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Status: <span className="font-bold">{roundDryRunResult.status ?? "unknown"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Prisma round: <span className="font-bold">{roundDryRunResult.prismaRoundId ?? "none"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Firestore round: <span className="font-bold">{roundDryRunResult.firestoreRoundId ?? "none"}</span>
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round created: <span className="font-bold">{roundDryRunResult.round?.counts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round updated: <span className="font-bold">{roundDryRunResult.round?.counts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round unchanged: <span className="font-bold">{roundDryRunResult.round?.counts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round extra: <span className="font-bold">{roundDryRunResult.round?.counts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries created: <span className="font-bold">{roundDryRunResult.entries?.counts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries updated: <span className="font-bold">{roundDryRunResult.entries?.counts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries unchanged: <span className="font-bold">{roundDryRunResult.entries?.counts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries extra: <span className="font-bold">{roundDryRunResult.entries?.counts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer created: <span className="font-bold">{roundDryRunResult.activePointer?.counts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer updated: <span className="font-bold">{roundDryRunResult.activePointer?.counts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer unchanged: <span className="font-bold">{roundDryRunResult.activePointer?.counts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer extra: <span className="font-bold">{roundDryRunResult.activePointer?.counts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes planned: <span className="font-bold">{roundDryRunResult.writesPlanned ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes applied: <span className="font-bold">{roundDryRunResult.writesApplied ?? 0}</span>
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+              {roundDryRunError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {roundDryRunError}
                 </p>
               ) : null}
             </SectionCard>
