@@ -14,12 +14,20 @@ import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 const PLAYER_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 const PLAYER_MIRROR_EXPECTED_PLAYER_COUNT = 61;
 const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
+const ROUND_MIRROR_VALIDATION_ROUND_ID = "cmrnk4tga0000jk04pji9u7ft";
 
 export function buildRoundMirrorDryRunRequestBody(expectedPrismaRoundId: string | null) {
   return {
     clubId: PLAYER_MIRROR_DRY_RUN_CLUB_ID,
     expectedProjectId: PLAYER_MIRROR_PROJECT_ID,
     expectedPrismaRoundId
+  };
+}
+
+export function buildRoundMirrorPublishRequestBody(expectedPrismaRoundId: string) {
+  return {
+    ...buildRoundMirrorDryRunRequestBody(expectedPrismaRoundId),
+    confirmPublish: true
   };
 }
 
@@ -49,6 +57,7 @@ type RoundMirrorDryRunResult = {
   status?: string;
   prismaRoundId?: string | null;
   firestoreRoundId?: string | null;
+  publishedRoundId?: string | null;
   round?: {
     counts?: AuditCounts;
   };
@@ -62,6 +71,35 @@ type RoundMirrorDryRunResult = {
   writesApplied?: number;
   error?: string;
 };
+
+export function canPublishRoundMirrorFromDryRun(
+  result: RoundMirrorDryRunResult | null,
+  expectedPrismaRoundId: string | null
+) {
+  if (!result || result.error || expectedPrismaRoundId !== ROUND_MIRROR_VALIDATION_ROUND_ID) {
+    return false;
+  }
+
+  const roundCounts = result.round?.counts;
+  const entryCounts = result.entries?.counts;
+  const pointerCounts = result.activePointer?.counts;
+  const hasRoundWrite = (roundCounts?.created ?? 0) + (roundCounts?.updated ?? 0) > 0;
+  const hasEntryWrite = (entryCounts?.created ?? 0) + (entryCounts?.updated ?? 0) > 0;
+  const hasPointerWrite = (pointerCounts?.created ?? 0) + (pointerCounts?.updated ?? 0) > 0;
+
+  return (
+    result.prismaRoundId === ROUND_MIRROR_VALIDATION_ROUND_ID &&
+    result.status !== "no-active-round" &&
+    (result.writesPlanned ?? 0) === 0 &&
+    (result.writesApplied ?? 0) === 0 &&
+    (roundCounts?.extra ?? 0) === 0 &&
+    (entryCounts?.extra ?? 0) === 0 &&
+    (pointerCounts?.extra ?? 0) === 0 &&
+    hasRoundWrite &&
+    hasEntryWrite &&
+    hasPointerWrite
+  );
+}
 
 export function FirebaseAccountPanel({
   activePrismaRoundId = null
@@ -79,6 +117,7 @@ export function FirebaseAccountPanel({
   const [dryRunError, setDryRunError] = useState("");
   const [roundDryRunResult, setRoundDryRunResult] = useState<RoundMirrorDryRunResult | null>(null);
   const [roundDryRunError, setRoundDryRunError] = useState("");
+  const [roundPublishConfirm, setRoundPublishConfirm] = useState(false);
   const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
@@ -196,6 +235,7 @@ export function FirebaseAccountPanel({
       try {
         setRoundDryRunError("");
         setRoundDryRunResult(null);
+        setRoundPublishConfirm(false);
         setMessage("");
 
         const currentUser = getFirebaseAuth().currentUser;
@@ -223,6 +263,46 @@ export function FirebaseAccountPanel({
         setMessage("Round mirror dry-run completed.");
       } catch (error) {
         setRoundDryRunError(error instanceof Error ? error.message : "Could not run round mirror dry-run.");
+      }
+    });
+  }
+
+  function publishRoundMirror() {
+    startTransition(async () => {
+      try {
+        setRoundDryRunError("");
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before publishing this mirror.");
+        }
+
+        if (!roundPublishConfirm || !canPublishRoundMirror) {
+          throw new Error("Run a clean dry-run and confirm before publishing.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/round-mirror/publish", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify(buildRoundMirrorPublishRequestBody(ROUND_MIRROR_VALIDATION_ROUND_ID))
+        });
+        const result = await response.json();
+
+        setRoundDryRunResult(result);
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not publish round mirror.");
+        }
+
+        setRoundPublishConfirm(false);
+        setMessage("Round mirror publish completed.");
+      } catch (error) {
+        setRoundDryRunError(error instanceof Error ? error.message : "Could not publish round mirror.");
       }
     });
   }
@@ -281,6 +361,9 @@ export function FirebaseAccountPanel({
     (dryRunCounts?.extra ?? 0) === 0 &&
     ((dryRunCounts?.created ?? 0) > 0 || (dryRunCounts?.updated ?? 0) > 0) &&
     (dryRunCounts?.created ?? 0) + (dryRunCounts?.updated ?? 0) <= PLAYER_MIRROR_EXPECTED_PLAYER_COUNT;
+  const canPublishRoundMirror =
+    Boolean(activeOwnerAdminMembership) &&
+    canPublishRoundMirrorFromDryRun(roundDryRunResult, activePrismaRoundId);
 
   return (
     <div className="space-y-3">
@@ -494,6 +577,9 @@ export function FirebaseAccountPanel({
                     <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
                       Firestore round: <span className="font-bold">{roundDryRunResult.firestoreRoundId ?? "none"}</span>
                     </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Published round: <span className="font-bold">{roundDryRunResult.publishedRoundId ?? "none"}</span>
+                    </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
@@ -541,6 +627,28 @@ export function FirebaseAccountPanel({
                   </div>
                 </div>
               ) : null}
+              {roundDryRunResult ? (
+                <label className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={roundPublishConfirm}
+                    disabled={!canPublishRoundMirror || isPending || loading}
+                    onChange={(event) => setRoundPublishConfirm(event.target.checked)}
+                  />
+                  <span>
+                    Confirm this clean test-round dry-run and allow the owner/admin round mirror publish.
+                  </span>
+                </label>
+              ) : null}
+              <button
+                type="button"
+                className="club-btn-danger min-h-12 w-full disabled:opacity-50"
+                disabled={!canPublishRoundMirror || !roundPublishConfirm || isPending || loading}
+                onClick={publishRoundMirror}
+              >
+                Publish Round Mirror
+              </button>
               {roundDryRunError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {roundDryRunError}
