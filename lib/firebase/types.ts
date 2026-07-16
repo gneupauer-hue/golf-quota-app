@@ -116,3 +116,49 @@ export type FirebaseActiveRoundPointerMirror = {
   status: FirebaseRoundMirrorStatus;
   checksum: string;
 };
+
+export type FirebaseScoreMirrorSource = "prisma";
+export type FirebaseScoreHoleNumber =
+  | "1"
+  | "2"
+  | "3"
+  | "4"
+  | "5"
+  | "6"
+  | "7"
+  | "8"
+  | "9"
+  | "10"
+  | "11"
+  | "12"
+  | "13"
+  | "14"
+  | "15"
+  | "16"
+  | "17"
+  | "18";
+export type FirebaseScoreHoles = Record<FirebaseScoreHoleNumber, number | null>;
+export type FirebaseScoreGoodSkinType = "birdie" | "eagle" | "ace";
+
+export type FirebaseScoreGoodSkinEntry = {
+  holeNumber: number;
+  type: FirebaseScoreGoodSkinType;
+  score: number;
+};
+
+export type FirebaseScoreMirror = {
+  prismaRoundId: string;
+  prismaEntryId: string;
+  prismaPlayerId: string;
+  scoringEntryMode: FirebaseRoundScoringEntryMode;
+  roundMode: FirebaseRoundMirrorMode;
+  holes: FirebaseScoreHoles;
+  quickFrontNine: number | null;
+  quickBackNine: number | null;
+  frontSubmittedAt: string | null;
+  backSubmittedAt: string | null;
+  birdieHoles: FirebaseScoreGoodSkinEntry[];
+  source: FirebaseScoreMirrorSource;
+  scoreVersion: 1;
+  checksum: string;
+};
