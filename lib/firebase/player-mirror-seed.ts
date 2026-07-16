@@ -12,6 +12,7 @@ export const IREM_FIREBASE_PROJECT_ID = "irem-golf-quota-app";
 export type PlayerMirrorSeedOptions = {
   clubId: string;
   confirmProductionWrite: boolean;
+  expectedPrismaPlayerCount?: number;
   expectedProjectId?: string;
   projectId: string;
   write: boolean;
@@ -96,6 +97,15 @@ export async function runPlayerMirrorSeed(
   }
 
   const prismaPlayers = await adapters.readPrismaPlayers();
+  if (
+    options.expectedPrismaPlayerCount !== undefined &&
+    prismaPlayers.length !== options.expectedPrismaPlayerCount
+  ) {
+    throw new Error(
+      `Prisma player count mismatch. Expected ${options.expectedPrismaPlayerCount}, found ${prismaPlayers.length}.`
+    );
+  }
+
   const playerMirrors = prismaPlayers.map((player) => mapPrismaPlayerToFirebaseMirror(player));
   const firestorePlayers = await adapters.readFirestorePlayers(options.clubId);
   const audit = auditFirebasePlayerMirror(playerMirrors, firestorePlayers);
