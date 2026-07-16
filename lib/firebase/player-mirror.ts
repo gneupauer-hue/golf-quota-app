@@ -18,10 +18,11 @@ export type PrismaPlayerMirrorInput = {
   };
 };
 
-export type FirestorePlayerMirrorComparisonInput = Pick<
-  FirebasePlayerMirror,
-  "prismaPlayerId" | "checksum"
->;
+export type FirestorePlayerMirrorComparisonInput = {
+  docId?: string;
+  prismaPlayerId?: string;
+  checksum?: string;
+};
 
 export type PlayerMirrorAuditResult = {
   counts: {
@@ -134,7 +135,12 @@ export function auditFirebasePlayerMirror(
   firestorePlayers: FirestorePlayerMirrorComparisonInput[]
 ): PlayerMirrorAuditResult {
   const firestoreByPlayerId = new Map(
-    firestorePlayers.map((player) => [player.prismaPlayerId, player])
+    firestorePlayers
+      .filter(
+        (player): player is FirestorePlayerMirrorComparisonInput & { prismaPlayerId: string } =>
+          typeof player.prismaPlayerId === "string"
+      )
+      .map((player) => [player.prismaPlayerId, player])
   );
   const prismaPlayerIds = new Set(prismaPlayers.map((player) => player.prismaPlayerId));
   const result: PlayerMirrorAuditResult = {
@@ -163,7 +169,7 @@ export function auditFirebasePlayerMirror(
   }
 
   for (const player of firestorePlayers) {
-    if (!prismaPlayerIds.has(player.prismaPlayerId)) {
+    if (typeof player.prismaPlayerId === "string" && !prismaPlayerIds.has(player.prismaPlayerId)) {
       result.extraPlayerIds.push(player.prismaPlayerId);
     }
   }

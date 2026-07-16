@@ -16,6 +16,7 @@ const PLAYER_MIRROR_EXPECTED_PLAYER_COUNT = 61;
 const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
 
 type PlayerMirrorDryRunResult = {
+  mode?: "dry-run" | "write";
   counts?: {
     prismaPlayers?: number;
     firestorePlayers?: number;
@@ -26,6 +27,7 @@ type PlayerMirrorDryRunResult = {
   };
   writesPlanned?: number;
   writesApplied?: number;
+  error?: string;
 };
 
 export function FirebaseAccountPanel() {
@@ -38,6 +40,7 @@ export function FirebaseAccountPanel() {
   const [message, setMessage] = useState("");
   const [dryRunResult, setDryRunResult] = useState<PlayerMirrorDryRunResult | null>(null);
   const [dryRunError, setDryRunError] = useState("");
+  const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
     (membership) =>
@@ -106,6 +109,7 @@ export function FirebaseAccountPanel() {
       try {
         setDryRunError("");
         setDryRunResult(null);
+        setSyncConfirm(false);
         setMessage("");
 
         const currentUser = getFirebaseAuth().currentUser;
@@ -140,6 +144,61 @@ export function FirebaseAccountPanel() {
       }
     });
   }
+
+  function syncPlayerMirror() {
+    startTransition(async () => {
+      try {
+        setDryRunError("");
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerMembership) {
+          throw new Error("Sign in as the active club owner before syncing this mirror.");
+        }
+
+        if (!syncConfirm || !canSyncPlayerMirror) {
+          throw new Error("Run a clean dry-run and confirm before syncing.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/player-mirror/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            clubId: PLAYER_MIRROR_DRY_RUN_CLUB_ID,
+            mode: "write",
+            expectedProjectId: PLAYER_MIRROR_PROJECT_ID,
+            expectedPrismaPlayerCount: PLAYER_MIRROR_EXPECTED_PLAYER_COUNT,
+            confirmProductionWrite: true,
+            allowExtraFirestorePlayers: false
+          })
+        });
+        const result = await response.json();
+
+        setDryRunResult(result);
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not sync player mirror.");
+        }
+
+        setSyncConfirm(false);
+        setMessage("Player mirror sync completed.");
+      } catch (error) {
+        setDryRunError(error instanceof Error ? error.message : "Could not sync player mirror.");
+      }
+    });
+  }
+
+  const dryRunCounts = dryRunResult?.counts;
+  const canSyncPlayerMirror =
+    dryRunResult?.mode === "dry-run" &&
+    (dryRunCounts?.prismaPlayers ?? 0) === PLAYER_MIRROR_EXPECTED_PLAYER_COUNT &&
+    (dryRunCounts?.extra ?? 0) === 0 &&
+    ((dryRunCounts?.created ?? 0) > 0 || (dryRunCounts?.updated ?? 0) > 0) &&
+    (dryRunCounts?.created ?? 0) + (dryRunCounts?.updated ?? 0) <= PLAYER_MIRROR_EXPECTED_PLAYER_COUNT;
 
   return (
     <div className="space-y-3">
@@ -295,6 +354,28 @@ export function FirebaseAccountPanel() {
                   </p>
                 </div>
               ) : null}
+              {dryRunResult ? (
+                <label className="flex items-start gap-3 rounded-lg border border-pine/15 bg-white px-3 py-3 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={syncConfirm}
+                    disabled={!canSyncPlayerMirror || isPending || loading}
+                    onChange={(event) => setSyncConfirm(event.target.checked)}
+                  />
+                  <span>
+                    Confirm this dry-run result and allow the owner-only player mirror sync.
+                  </span>
+                </label>
+              ) : null}
+              <button
+                type="button"
+                className="club-btn-danger min-h-12 w-full disabled:opacity-50"
+                disabled={!canSyncPlayerMirror || !syncConfirm || isPending || loading}
+                onClick={syncPlayerMirror}
+              >
+                Sync Player Mirror
+              </button>
               {dryRunError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {dryRunError}

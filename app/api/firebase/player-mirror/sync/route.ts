@@ -1,9 +1,12 @@
-import type { Firestore } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
 import { prisma } from "@/lib/prisma";
 import {
   handlePlayerMirrorSyncRequest,
   type PlayerMirrorSyncMembership
 } from "@/lib/firebase/player-mirror-sync-route";
+import type { FirebasePlayerMirror } from "@/lib/firebase/types";
+
+const PLAYER_MIRROR_LOCK_TTL_MS = 2 * 60 * 1000;
 
 async function readPrismaPlayers() {
   return prisma.player.findMany({
@@ -70,6 +73,7 @@ function buildFirestoreAdapters(db: Firestore) {
         const data = doc.data() as { prismaPlayerId?: unknown; checksum?: unknown };
 
         return {
+          docId: doc.id,
           prismaPlayerId: typeof data.prismaPlayerId === "string" ? data.prismaPlayerId : doc.id,
           checksum: typeof data.checksum === "string" ? data.checksum : ""
         };
@@ -87,8 +91,68 @@ export async function POST(request: Request) {
     verifyIdToken: async (idToken) => auth.verifyIdToken(idToken),
     ...buildFirestoreAdapters(db),
     readPrismaPlayers,
-    writePlayerMirrors: async () => {
-      throw new Error("Checkpoint 4A does not support Firestore writes.");
+    acquirePlayerMirrorWriteLock: async (clubId, uid) => {
+      const lockRef = db
+        .collection("clubs")
+        .doc(clubId)
+        .collection("syncLocks")
+        .doc("playerMirror");
+      const token = `${uid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(lockRef);
+        const data = snapshot.data() as
+          | { token?: unknown; expiresAt?: { toDate?: () => Date } | Date }
+          | undefined;
+        const expiresAt =
+          data?.expiresAt instanceof Date
+            ? data.expiresAt
+            : typeof data?.expiresAt?.toDate === "function"
+              ? data.expiresAt.toDate()
+              : null;
+
+        if (snapshot.exists && expiresAt && expiresAt.getTime() > Date.now()) {
+          throw Object.assign(new Error("Player mirror sync is already running."), {
+            status: 409
+          });
+        }
+
+        transaction.set(lockRef, {
+          token,
+          lockedByUid: uid,
+          lockedAt: FieldValue.serverTimestamp(),
+          expiresAt: Timestamp.fromDate(new Date(Date.now() + PLAYER_MIRROR_LOCK_TTL_MS))
+        });
+      });
+
+      return async () => {
+        await db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(lockRef);
+          const data = snapshot.data() as { token?: unknown } | undefined;
+
+          if (snapshot.exists && data?.token === token) {
+            transaction.delete(lockRef);
+          }
+        });
+      };
+    },
+    writePlayerMirrors: async (clubId, players: FirebasePlayerMirror[]) => {
+      if (!players.length) {
+        return 0;
+      }
+
+      const batch = db.batch();
+      const collection = db.collection("clubs").doc(clubId).collection("players");
+
+      for (const player of players) {
+        batch.set(collection.doc(player.prismaPlayerId), {
+          ...player,
+          syncedAt: FieldValue.serverTimestamp()
+        });
+      }
+
+      await batch.commit();
+      return players.length;
     }
   });
 }

@@ -8,7 +8,9 @@ import {
 import type { ClubRole, MembershipStatus } from "@/lib/firebase/types";
 
 export type PlayerMirrorSyncRequestBody = {
+  allowExtraFirestorePlayers?: unknown;
   clubId?: unknown;
+  confirmProductionWrite?: unknown;
   mode?: unknown;
   expectedProjectId?: unknown;
   expectedPrismaPlayerCount?: unknown;
@@ -29,6 +31,7 @@ export type PlayerMirrorSyncRouteAdapters = PlayerMirrorSeedAdapters & {
     clubId: string,
     uid: string
   ) => Promise<PlayerMirrorSyncMembership | null>;
+  acquirePlayerMirrorWriteLock?: (clubId: string, uid: string) => Promise<() => Promise<void>>;
 };
 
 function jsonError(message: string, status: number) {
@@ -65,8 +68,10 @@ function validateRequestBody(body: PlayerMirrorSyncRequestBody) {
     throw Object.assign(new Error("clubId is required."), { status: 400 });
   }
 
-  if (body.mode !== "dry-run") {
-    throw Object.assign(new Error('Unsupported mode. Checkpoint 4A only supports "dry-run".'), {
+  const mode = body.mode ?? "dry-run";
+
+  if (mode !== "dry-run" && mode !== "write") {
+    throw Object.assign(new Error('Unsupported mode. Use "dry-run" or "write".'), {
       status: 400
     });
   }
@@ -88,7 +93,10 @@ function validateRequestBody(body: PlayerMirrorSyncRequestBody) {
 
   return {
     clubId: body.clubId,
-    expectedPrismaPlayerCount: body.expectedPrismaPlayerCount
+    mode,
+    expectedPrismaPlayerCount: body.expectedPrismaPlayerCount,
+    confirmProductionWrite: body.confirmProductionWrite === true,
+    allowExtraFirestorePlayers: body.allowExtraFirestorePlayers === true
   };
 }
 
@@ -109,9 +117,9 @@ function assertOwnerMembership(membership: PlayerMirrorSyncMembership | null) {
 }
 
 function syncResponse(result: PlayerMirrorSeedResult) {
-  return NextResponse.json({
-    ok: true,
-    mode: "dry-run",
+  const payload = {
+    ok: !result.writeError,
+    mode: result.dryRun ? "dry-run" : "write",
     projectId: result.projectId,
     clubId: result.clubId,
     counts: {
@@ -129,9 +137,12 @@ function syncResponse(result: PlayerMirrorSeedResult) {
       extra: result.audit.counts.extra
     },
     players: result.players,
-    writesPlanned: 0,
-    writesApplied: 0
-  });
+    writesPlanned: result.writesPlanned,
+    writesApplied: result.writesApplied,
+    ...(result.writeError ? { error: result.writeError } : {})
+  };
+
+  return NextResponse.json(payload, { status: result.writeError ? 500 : 200 });
 }
 
 export async function handlePlayerMirrorSyncRequest(
@@ -140,7 +151,13 @@ export async function handlePlayerMirrorSyncRequest(
 ) {
   try {
     const body = await parseRequestBody(request);
-    const { clubId, expectedPrismaPlayerCount } = validateRequestBody(body);
+    const {
+      clubId,
+      mode,
+      expectedPrismaPlayerCount,
+      confirmProductionWrite,
+      allowExtraFirestorePlayers
+    } = validateRequestBody(body);
     const decoded = await adapters.verifyIdToken(getBearerToken(request));
     const club = await adapters.verifyClub(clubId);
 
@@ -150,19 +167,40 @@ export async function handlePlayerMirrorSyncRequest(
 
     assertOwnerMembership(await adapters.readClubMembership(clubId, decoded.uid));
 
-    const result = await runPlayerMirrorSeed(
-      {
-        clubId,
-        confirmProductionWrite: false,
-        expectedPrismaPlayerCount,
-        expectedProjectId: IREM_FIREBASE_PROJECT_ID,
-        projectId: IREM_FIREBASE_PROJECT_ID,
-        write: false
-      },
-      adapters
-    );
+    if (mode === "write" && !confirmProductionWrite) {
+      return jsonError("Write mode requires confirmProductionWrite: true.", 400);
+    }
 
-    return syncResponse(result);
+    let releaseLock: (() => Promise<void>) | null = null;
+
+    try {
+      if (mode === "write") {
+        if (!adapters.acquirePlayerMirrorWriteLock) {
+          throw Object.assign(new Error("Write lock adapter is not configured."), { status: 500 });
+        }
+
+        releaseLock = await adapters.acquirePlayerMirrorWriteLock(clubId, decoded.uid);
+      }
+
+      const result = await runPlayerMirrorSeed(
+        {
+          allowExtraFirestorePlayers,
+          clubId,
+          confirmProductionWrite,
+          expectedPrismaPlayerCount,
+          expectedProjectId: IREM_FIREBASE_PROJECT_ID,
+          projectId: IREM_FIREBASE_PROJECT_ID,
+          write: mode === "write"
+        },
+        adapters
+      );
+
+      return syncResponse(result);
+    } finally {
+      if (releaseLock) {
+        await releaseLock();
+      }
+    }
   } catch (error) {
     const status =
       error &&

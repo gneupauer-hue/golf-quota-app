@@ -10,6 +10,7 @@ import {
 export const IREM_FIREBASE_PROJECT_ID = "irem-golf-quota-app";
 
 export type PlayerMirrorSeedOptions = {
+  allowExtraFirestorePlayers?: boolean;
   clubId: string;
   confirmProductionWrite: boolean;
   expectedPrismaPlayerCount?: number;
@@ -36,13 +37,14 @@ export type PlayerMirrorSeedResult = {
   };
   writesPlanned: number;
   writesApplied: number;
+  writeError?: string;
 };
 
 export type PlayerMirrorSeedAdapters = {
   verifyClub: (clubId: string) => Promise<{ id: string; name?: string | null } | null>;
   readPrismaPlayers: () => Promise<PrismaPlayerMirrorInput[]>;
   readFirestorePlayers: (clubId: string) => Promise<FirestorePlayerMirrorComparisonInput[]>;
-  writePlayerMirrors?: (clubId: string, players: FirebasePlayerMirror[]) => Promise<void>;
+  writePlayerMirrors?: (clubId: string, players: FirebasePlayerMirror[]) => Promise<number | void>;
 };
 
 function requireNonEmpty(value: string, label: string) {
@@ -85,6 +87,46 @@ function writablePlayerMirrors(players: FirebasePlayerMirror[], audit: PlayerMir
   return players.filter((player) => writableIds.has(player.prismaPlayerId));
 }
 
+function assertUniquePrismaPlayerIds(players: PrismaPlayerMirrorInput[]) {
+  const seen = new Set<string>();
+
+  for (const player of players) {
+    if (seen.has(player.id)) {
+      throw new Error(`Duplicate Prisma player ID detected: ${player.id}.`);
+    }
+
+    seen.add(player.id);
+  }
+}
+
+function assertValidFirestoreMirrors(players: FirestorePlayerMirrorComparisonInput[]) {
+  const seen = new Set<string>();
+
+  for (const player of players) {
+    if (typeof player.prismaPlayerId !== "string" || !player.prismaPlayerId.trim()) {
+      throw new Error("Malformed Firestore player mirror document: missing prismaPlayerId.");
+    }
+
+    if (typeof player.checksum !== "string" || !player.checksum.trim()) {
+      throw new Error(
+        `Malformed Firestore player mirror document for "${player.prismaPlayerId}": missing checksum.`
+      );
+    }
+
+    if (player.docId && player.docId !== player.prismaPlayerId) {
+      throw new Error(
+        `Malformed Firestore player mirror document "${player.docId}": document ID must match prismaPlayerId "${player.prismaPlayerId}".`
+      );
+    }
+
+    if (seen.has(player.prismaPlayerId)) {
+      throw new Error(`Duplicate Firestore player mirror ID detected: ${player.prismaPlayerId}.`);
+    }
+
+    seen.add(player.prismaPlayerId);
+  }
+}
+
 export async function runPlayerMirrorSeed(
   options: PlayerMirrorSeedOptions,
   adapters: PlayerMirrorSeedAdapters
@@ -97,6 +139,8 @@ export async function runPlayerMirrorSeed(
   }
 
   const prismaPlayers = await adapters.readPrismaPlayers();
+  assertUniquePrismaPlayerIds(prismaPlayers);
+
   if (
     options.expectedPrismaPlayerCount !== undefined &&
     prismaPlayers.length !== options.expectedPrismaPlayerCount
@@ -108,18 +152,11 @@ export async function runPlayerMirrorSeed(
 
   const playerMirrors = prismaPlayers.map((player) => mapPrismaPlayerToFirebaseMirror(player));
   const firestorePlayers = await adapters.readFirestorePlayers(options.clubId);
+  assertValidFirestoreMirrors(firestorePlayers);
+
   const audit = auditFirebasePlayerMirror(playerMirrors, firestorePlayers);
   const mirrorsToWrite = writablePlayerMirrors(playerMirrors, audit);
-
-  if (options.write) {
-    if (!adapters.writePlayerMirrors) {
-      throw new Error("Write mode requested, but no Firestore writer was provided.");
-    }
-
-    await adapters.writePlayerMirrors(options.clubId, mirrorsToWrite);
-  }
-
-  return {
+  const baseResult = {
     audit,
     dryRun: !options.write,
     projectId: options.projectId,
@@ -129,9 +166,40 @@ export async function runPlayerMirrorSeed(
       updated: summarizeById(playerMirrors, audit.updatedPlayerIds),
       unchanged: summarizeById(playerMirrors, audit.unchangedPlayerIds),
       extra: summarizeById(playerMirrors, audit.extraPlayerIds)
-    },
-    writesPlanned: options.write ? mirrorsToWrite.length : 0,
-    writesApplied: options.write ? mirrorsToWrite.length : 0
+    }
+  };
+
+  if (options.write) {
+    if (audit.counts.extra > 0 && !options.allowExtraFirestorePlayers) {
+      throw new Error("Refusing to write while extra Firestore player mirror documents exist.");
+    }
+
+    if (!adapters.writePlayerMirrors) {
+      throw new Error("Write mode requested, but no Firestore writer was provided.");
+    }
+
+    try {
+      const writesApplied = await adapters.writePlayerMirrors(options.clubId, mirrorsToWrite);
+
+      return {
+        ...baseResult,
+        writesPlanned: mirrorsToWrite.length,
+        writesApplied: writesApplied ?? mirrorsToWrite.length
+      };
+    } catch (error) {
+      return {
+        ...baseResult,
+        writesPlanned: mirrorsToWrite.length,
+        writesApplied: 0,
+        writeError: error instanceof Error ? error.message : "Could not write player mirrors."
+      };
+    }
+  }
+
+  return {
+    ...baseResult,
+    writesPlanned: 0,
+    writesApplied: 0
   };
 }
 

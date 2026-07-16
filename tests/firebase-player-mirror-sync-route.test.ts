@@ -48,6 +48,18 @@ function makeRequest(
   });
 }
 
+function makeWriteRequest(overrides: Record<string, unknown> = {}) {
+  return makeRequest({
+    clubId: "club-1",
+    mode: "write",
+    expectedProjectId: IREM_FIREBASE_PROJECT_ID,
+    expectedPrismaPlayerCount: 1,
+    confirmProductionWrite: true,
+    allowExtraFirestorePlayers: false,
+    ...overrides
+  });
+}
+
 function makeAdapters(
   overrides: Partial<PlayerMirrorSyncRouteAdapters> = {}
 ): PlayerMirrorSyncRouteAdapters {
@@ -221,7 +233,7 @@ test("unsupported mode is denied", async () => {
   const response = await handlePlayerMirrorSyncRequest(
     makeRequest({
       clubId: "club-1",
-      mode: "write",
+      mode: "delete",
       expectedProjectId: IREM_FIREBASE_PROJECT_ID,
       expectedPrismaPlayerCount: 1
     }),
@@ -231,6 +243,225 @@ test("unsupported mode is denied", async () => {
 
   assert.equal(response.status, 400);
   assert.match(String(json.error), /dry-run/);
+});
+
+test("write is denied without confirmation", async () => {
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest({ confirmProductionWrite: false }),
+    makeAdapters({ writePlayerMirrors: async () => 1 })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 400);
+  assert.match(String(json.error), /confirmProductionWrite/);
+});
+
+test("write with wrong project is denied", async () => {
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest({ expectedProjectId: "wrong-project" }),
+    makeAdapters({ writePlayerMirrors: async () => 1 })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 400);
+  assert.match(String(json.error), /expectedProjectId/);
+});
+
+test("write with wrong player count is denied", async () => {
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest({ expectedPrismaPlayerCount: 2 }),
+    makeAdapters({
+      acquirePlayerMirrorWriteLock: async () => async () => undefined,
+      writePlayerMirrors: async () => 1
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 500);
+  assert.match(String(json.error), /Prisma player count mismatch/);
+});
+
+test("extra Firestore documents block write", async () => {
+  let writes = 0;
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest(),
+    makeAdapters({
+      readFirestorePlayers: async () => [{ docId: "extra", prismaPlayerId: "extra", checksum: "old-checksum" }],
+      acquirePlayerMirrorWriteLock: async () => async () => undefined,
+      writePlayerMirrors: async () => {
+        writes += 1;
+        return 1;
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 500);
+  assert.equal(writes, 0);
+  assert.match(String(json.error), /extra Firestore/);
+});
+
+test("write lock blocks overlapping writes", async () => {
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest(),
+    makeAdapters({
+      acquirePlayerMirrorWriteLock: async () => {
+        throw Object.assign(new Error("Player mirror sync is already running."), { status: 409 });
+      },
+      writePlayerMirrors: async () => 1
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 409);
+  assert.match(String(json.error), /already running/);
+});
+
+test("expired lock can recover when lock adapter grants a new lock", async () => {
+  let released = false;
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest(),
+    makeAdapters({
+      acquirePlayerMirrorWriteLock: async () => async () => {
+        released = true;
+      },
+      writePlayerMirrors: async () => 1
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(json.ok, true);
+  assert.equal(released, true);
+});
+
+test("batch failure returns writesApplied zero", async () => {
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest(),
+    makeAdapters({
+      acquirePlayerMirrorWriteLock: async () => async () => undefined,
+      writePlayerMirrors: async () => {
+        throw new Error("batch failed");
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 500);
+  assert.equal(json.ok, false);
+  assert.equal(json.writesPlanned, 1);
+  assert.equal(json.writesApplied, 0);
+  assert.match(String(json.error), /batch failed/);
+});
+
+test("write touches only created and updated documents", async () => {
+  const unchanged = makePlayer({ id: "unchanged", name: "Unchanged Player" });
+  const updated = makePlayer({ id: "updated", name: "Updated Player", currentQuota: 20 });
+  const created = makePlayer({ id: "created", name: "Created Player" });
+  const unchangedMirror = mapPrismaPlayerToFirebaseMirror(unchanged);
+  const writtenIds: string[] = [];
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest({ expectedPrismaPlayerCount: 3 }),
+    makeAdapters({
+      readPrismaPlayers: async () => [updated, created, unchanged],
+      readFirestorePlayers: async () => [
+        { docId: "unchanged", prismaPlayerId: "unchanged", checksum: unchangedMirror.checksum },
+        { docId: "updated", prismaPlayerId: "updated", checksum: "old-checksum" }
+      ],
+      acquirePlayerMirrorWriteLock: async () => async () => undefined,
+      writePlayerMirrors: async (_clubId, players) => {
+        writtenIds.push(...players.map((player) => player.prismaPlayerId));
+        return players.length;
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(writtenIds.sort(), ["created", "updated"]);
+  assert.deepEqual(json.counts, {
+    prismaPlayers: 3,
+    firestorePlayers: 2,
+    created: 1,
+    updated: 1,
+    unchanged: 1,
+    extra: 0
+  });
+  assert.equal(json.writesPlanned, 2);
+  assert.equal(json.writesApplied, 2);
+});
+
+test("idempotent second write has no writes to apply", async () => {
+  const player = makePlayer();
+  const mirror = mapPrismaPlayerToFirebaseMirror(player);
+  let writes = 0;
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest(),
+    makeAdapters({
+      readFirestorePlayers: async () => [
+        { docId: player.id, prismaPlayerId: player.id, checksum: mirror.checksum }
+      ],
+      acquirePlayerMirrorWriteLock: async () => async () => undefined,
+      writePlayerMirrors: async (_clubId, players) => {
+        writes += players.length;
+        return players.length;
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(writes, 0);
+  assert.deepEqual(json.counts, {
+    prismaPlayers: 1,
+    firestorePlayers: 1,
+    created: 0,
+    updated: 0,
+    unchanged: 1,
+    extra: 0
+  });
+  assert.equal(json.writesPlanned, 0);
+  assert.equal(json.writesApplied, 0);
+});
+
+test("duplicate Prisma IDs are rejected before write", async () => {
+  let writes = 0;
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest({ expectedPrismaPlayerCount: 2 }),
+    makeAdapters({
+      readPrismaPlayers: async () => [makePlayer(), makePlayer()],
+      acquirePlayerMirrorWriteLock: async () => async () => undefined,
+      writePlayerMirrors: async () => {
+        writes += 1;
+        return 1;
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 500);
+  assert.equal(writes, 0);
+  assert.match(String(json.error), /Duplicate Prisma player ID/);
+});
+
+test("malformed Firestore mirror docs are rejected before write", async () => {
+  let writes = 0;
+  const response = await handlePlayerMirrorSyncRequest(
+    makeWriteRequest(),
+    makeAdapters({
+      readFirestorePlayers: async () => [{ docId: "player-1", prismaPlayerId: "player-1", checksum: "" }],
+      acquirePlayerMirrorWriteLock: async () => async () => undefined,
+      writePlayerMirrors: async () => {
+        writes += 1;
+        return 1;
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 500);
+  assert.equal(writes, 0);
+  assert.match(String(json.error), /missing checksum/);
 });
 
 test("dry-run never writes", async () => {
