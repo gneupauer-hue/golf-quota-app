@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildRoundMirrorClearRequestBody,
   buildRoundMirrorDryRunRequestBody,
   buildRoundMirrorPublishRequestBody,
   canPublishRoundMirrorFromDryRun
@@ -28,6 +29,15 @@ test("round mirror publish body is hard-confirmed for the validation round", () 
     expectedProjectId: "irem-golf-quota-app",
     expectedPrismaRoundId: "cmrnk4tga0000jk04pji9u7ft",
     confirmPublish: true
+  });
+});
+
+test("round mirror clear body is hard-confirmed for the mirrored test round", () => {
+  assert.deepEqual(buildRoundMirrorClearRequestBody("cmrnk4tga0000jk04pji9u7ft"), {
+    clubId: "eO5PwRmRZrQJW0VbEp0B",
+    expectedProjectId: "irem-golf-quota-app",
+    expectedFirestoreRoundId: "cmrnk4tga0000jk04pji9u7ft",
+    confirmClear: true
   });
 });
 

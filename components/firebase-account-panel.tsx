@@ -31,6 +31,15 @@ export function buildRoundMirrorPublishRequestBody(expectedPrismaRoundId: string
   };
 }
 
+export function buildRoundMirrorClearRequestBody(expectedFirestoreRoundId: string) {
+  return {
+    clubId: PLAYER_MIRROR_DRY_RUN_CLUB_ID,
+    expectedProjectId: PLAYER_MIRROR_PROJECT_ID,
+    expectedFirestoreRoundId,
+    confirmClear: true
+  };
+}
+
 type PlayerMirrorDryRunResult = {
   mode?: "dry-run" | "write";
   counts?: {
@@ -68,6 +77,15 @@ type RoundMirrorDryRunResult = {
     counts?: AuditCounts;
   };
   writesPlanned?: number;
+  writesApplied?: number;
+  error?: string;
+};
+
+type RoundMirrorClearResult = {
+  clearedRoundId?: string;
+  entriesDeleted?: number;
+  roundDeleted?: boolean;
+  pointerCleared?: boolean;
   writesApplied?: number;
   error?: string;
 };
@@ -118,6 +136,9 @@ export function FirebaseAccountPanel({
   const [roundDryRunResult, setRoundDryRunResult] = useState<RoundMirrorDryRunResult | null>(null);
   const [roundDryRunError, setRoundDryRunError] = useState("");
   const [roundPublishConfirm, setRoundPublishConfirm] = useState(false);
+  const [roundClearConfirm, setRoundClearConfirm] = useState(false);
+  const [roundClearResult, setRoundClearResult] = useState<RoundMirrorClearResult | null>(null);
+  const [roundClearError, setRoundClearError] = useState("");
   const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
@@ -236,6 +257,8 @@ export function FirebaseAccountPanel({
         setRoundDryRunError("");
         setRoundDryRunResult(null);
         setRoundPublishConfirm(false);
+        setRoundClearResult(null);
+        setRoundClearError("");
         setMessage("");
 
         const currentUser = getFirebaseAuth().currentUser;
@@ -263,6 +286,47 @@ export function FirebaseAccountPanel({
         setMessage("Round mirror dry-run completed.");
       } catch (error) {
         setRoundDryRunError(error instanceof Error ? error.message : "Could not run round mirror dry-run.");
+      }
+    });
+  }
+
+  function clearTestRoundMirror() {
+    startTransition(async () => {
+      try {
+        setRoundClearError("");
+        setRoundClearResult(null);
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before clearing this mirror.");
+        }
+
+        if (!roundClearConfirm) {
+          throw new Error("Confirm before clearing the test round mirror.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/round-mirror/clear", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify(buildRoundMirrorClearRequestBody(ROUND_MIRROR_VALIDATION_ROUND_ID))
+        });
+        const result = await response.json();
+
+        setRoundClearResult(result);
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not clear test round mirror.");
+        }
+
+        setRoundClearConfirm(false);
+        setMessage("Test round mirror cleared.");
+      } catch (error) {
+        setRoundClearError(error instanceof Error ? error.message : "Could not clear test round mirror.");
       }
     });
   }
@@ -652,6 +716,55 @@ export function FirebaseAccountPanel({
               {roundDryRunError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {roundDryRunError}
+                </p>
+              ) : null}
+              <div className="border-t border-pine/10 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-danger">
+                  Test Round Mirror Cleanup
+                </p>
+              </div>
+              <label className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={roundClearConfirm}
+                  disabled={isPending || loading}
+                  onChange={(event) => setRoundClearConfirm(event.target.checked)}
+                />
+                <span>
+                  Confirm clearing the mirrored test round and active pointer for {ROUND_MIRROR_VALIDATION_ROUND_ID}.
+                </span>
+              </label>
+              <button
+                type="button"
+                className="club-btn-danger min-h-12 w-full disabled:opacity-50"
+                disabled={!roundClearConfirm || isPending || loading}
+                onClick={clearTestRoundMirror}
+              >
+                Clear Test Round Mirror
+              </button>
+              {roundClearResult ? (
+                <div className="grid grid-cols-2 gap-2 text-sm text-ink">
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Cleared round: <span className="font-bold">{roundClearResult.clearedRoundId ?? "none"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Entries deleted: <span className="font-bold">{roundClearResult.entriesDeleted ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Round deleted: <span className="font-bold">{roundClearResult.roundDeleted ? "yes" : "no"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Pointer cleared: <span className="font-bold">{roundClearResult.pointerCleared ? "yes" : "no"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Writes applied: <span className="font-bold">{roundClearResult.writesApplied ?? 0}</span>
+                  </p>
+                </div>
+              ) : null}
+              {roundClearError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {roundClearError}
                 </p>
               ) : null}
             </SectionCard>
