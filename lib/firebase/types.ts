@@ -66,3 +66,53 @@ export function getRoundPath(clubId: string, roundId: string) {
 export function getActiveRoundPointerPath(clubId: string) {
   return `clubs/${clubId}/state/activeRound`;
 }
+
+export type FirebaseRoundMirrorSource = "prisma";
+export type FirebaseRoundMirrorStatus = "setup" | "active" | "locked" | "canceled" | "posted";
+export type FirebaseRoundMirrorMode = "MATCH_QUOTA" | "SKINS_ONLY";
+export type FirebaseRoundScoringEntryMode = "QUICK" | "DETAILED";
+export type FirebaseRoundTeamCode = "A" | "B" | "C" | "D" | "E";
+
+export type FirebaseRoundMirror = {
+  prismaRoundId: string;
+  roundName: string;
+  roundDate: string;
+  roundMode: FirebaseRoundMirrorMode;
+  scoringEntryMode: FirebaseRoundScoringEntryMode;
+  isTestRound: boolean;
+  status: FirebaseRoundMirrorStatus;
+  teamCount: number | null;
+  notes: string | null;
+  setupVersion: number;
+  source: FirebaseRoundMirrorSource;
+  migrationPhase: 3;
+  prismaCreatedAt: string;
+  prismaUpdatedAt: string;
+  createdByUid: null;
+  updatedByUid: null;
+  checksum: string;
+};
+
+export type FirebaseRoundEntryMirror = {
+  prismaEntryId: string;
+  prismaPlayerId: string;
+  playerName: string;
+  normalizedName: string;
+  startQuota: number;
+  currentQuota: number;
+  team: FirebaseRoundTeamCode | null;
+  groupNumber: number | null;
+  teeTime: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  isRegular: boolean;
+  setupVersion: number;
+  checksum: string;
+};
+
+export type FirebaseActiveRoundPointerMirror = {
+  roundId: string;
+  prismaRoundId: string;
+  status: FirebaseRoundMirrorStatus;
+  checksum: string;
+};
