@@ -75,6 +75,11 @@ service cloud.firestore {
           allow read: if isClubMember(clubId);
           allow create, update, delete: if false;
         }
+
+        match /scores/{playerId} {
+          allow read: if isClubMember(clubId);
+          allow create, update, delete: if false;
+        }
       }
 
       match /state/{stateDocId} {
