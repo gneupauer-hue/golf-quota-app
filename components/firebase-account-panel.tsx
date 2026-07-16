@@ -35,6 +35,7 @@ type PlayerMirrorDryRunResult = {
 };
 
 type ScoreMirrorDryRunResult = {
+  ok?: boolean;
   status?: string;
   prismaRoundId?: string | null;
   firestoreRoundId?: string | null;
@@ -47,6 +48,39 @@ type ScoreMirrorDryRunResult = {
       unchanged?: number;
       extra?: number;
     };
+    created?: ScoreMirrorAuditDisplayItem[];
+    updated?: ScoreMirrorAuditDisplayItem[];
+    unchanged?: ScoreMirrorAuditDisplayItem[];
+    extra?: ScoreMirrorAuditDisplayItem[];
+  };
+  writesPlanned?: number;
+  writesApplied?: number;
+  error?: string;
+};
+
+type ScoreMirrorAuditDisplayItem = {
+  id?: string;
+  name?: string | null;
+};
+
+type ScoreMirrorPublishResult = {
+  ok?: boolean;
+  status?: string;
+  publishedRoundId?: string | null;
+  scoringEntryMode?: string | null;
+  roundMode?: string | null;
+  operationId?: string;
+  scores?: {
+    counts?: {
+      created?: number;
+      updated?: number;
+      unchanged?: number;
+      extra?: number;
+    };
+    created?: ScoreMirrorAuditDisplayItem[];
+    updated?: ScoreMirrorAuditDisplayItem[];
+    unchanged?: ScoreMirrorAuditDisplayItem[];
+    extra?: ScoreMirrorAuditDisplayItem[];
   };
   writesPlanned?: number;
   writesApplied?: number;
@@ -72,6 +106,66 @@ export function buildScoreMirrorDryRunRequestBody() {
   };
 }
 
+export function shouldShowScoreMirrorValidationControls(input: {
+  membership: FirebaseUserClubMembership | null | undefined;
+  signedIn: boolean;
+}) {
+  return Boolean(
+    input.signedIn &&
+      input.membership &&
+      isActiveOwnerOrAdminMembership(input.membership, SCORE_MIRROR_DRY_RUN_CLUB_ID)
+  );
+}
+
+export function canPublishScoreMirror(input: {
+  confirmed: boolean;
+  dryRunError?: string;
+  dryRunResult: ScoreMirrorDryRunResult | null;
+  isBusy: boolean;
+}) {
+  const counts = input.dryRunResult?.scores?.counts;
+
+  return Boolean(
+    !input.isBusy &&
+      input.confirmed &&
+      !input.dryRunError &&
+      input.dryRunResult?.ok !== false &&
+      input.dryRunResult?.status === "active-round" &&
+      input.dryRunResult?.prismaRoundId &&
+      (counts?.extra ?? 0) === 0
+  );
+}
+
+export function buildScoreMirrorPublishRequestBody(dryRunResult: ScoreMirrorDryRunResult) {
+  if (!dryRunResult.prismaRoundId) {
+    throw new Error("Run a successful dry-run with an active round before publishing.");
+  }
+
+  return {
+    clubId: SCORE_MIRROR_DRY_RUN_CLUB_ID,
+    expectedProjectId: SCORE_MIRROR_PROJECT_ID,
+    expectedPrismaRoundId: dryRunResult.prismaRoundId,
+    confirmPublish: true
+  };
+}
+
+function renderScoreAuditItems(items: ScoreMirrorAuditDisplayItem[] | undefined) {
+  if (!items?.length) {
+    return null;
+  }
+
+  return (
+    <ul className="space-y-1 rounded-lg border border-pine/15 bg-white px-3 py-2 text-xs text-ink/75">
+      {items.map((item) => (
+        <li key={item.id ?? item.name ?? "unknown"} className="break-words">
+          <span className="font-semibold text-ink">{item.name ?? "Unnamed player"}</span>
+          {item.id ? <span className="text-ink/60"> - {item.id}</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function FirebaseAccountPanel() {
   const { user, memberships, activeClubId, loading, authError, setActiveClubId, signOut } = useFirebaseAuth();
   const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
@@ -84,6 +178,9 @@ export function FirebaseAccountPanel() {
   const [dryRunError, setDryRunError] = useState("");
   const [scoreMirrorResult, setScoreMirrorResult] = useState<ScoreMirrorDryRunResult | null>(null);
   const [scoreMirrorError, setScoreMirrorError] = useState("");
+  const [scoreMirrorPublishResult, setScoreMirrorPublishResult] = useState<ScoreMirrorPublishResult | null>(null);
+  const [scoreMirrorPublishError, setScoreMirrorPublishError] = useState("");
+  const [scoreMirrorPublishConfirm, setScoreMirrorPublishConfirm] = useState(false);
   const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
@@ -97,6 +194,10 @@ export function FirebaseAccountPanel() {
     membership.clubId === activeClubId &&
     isActiveOwnerOrAdminMembership(membership, SCORE_MIRROR_DRY_RUN_CLUB_ID)
   );
+  const showScoreMirrorControls = shouldShowScoreMirrorValidationControls({
+    membership: activeOwnerAdminMembership,
+    signedIn: Boolean(user)
+  });
 
   function submitAuth() {
     startTransition(async () => {
@@ -245,6 +346,9 @@ export function FirebaseAccountPanel() {
       try {
         setScoreMirrorError("");
         setScoreMirrorResult(null);
+        setScoreMirrorPublishError("");
+        setScoreMirrorPublishResult(null);
+        setScoreMirrorPublishConfirm(false);
         setMessage("");
 
         const currentUser = getFirebaseAuth().currentUser;
@@ -275,14 +379,66 @@ export function FirebaseAccountPanel() {
     });
   }
 
+  function publishScoreMirror() {
+    startTransition(async () => {
+      try {
+        setScoreMirrorPublishError("");
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before publishing this mirror.");
+        }
+
+        if (!canPublishCurrentScoreMirror) {
+          throw new Error("Run a successful dry-run with an active round before publishing.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/score-mirror/publish", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify(buildScoreMirrorPublishRequestBody(scoreMirrorResult!))
+        });
+        const result = await response.json();
+
+        setScoreMirrorPublishResult(result);
+        setScoreMirrorPublishConfirm(false);
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not publish score mirror.");
+        }
+
+        setMessage("Score mirror publish completed.");
+      } catch (error) {
+        setScoreMirrorPublishConfirm(false);
+        setScoreMirrorPublishError(error instanceof Error ? error.message : "Could not publish score mirror.");
+      }
+    });
+  }
+
   const dryRunCounts = dryRunResult?.counts;
   const scoreCounts = scoreMirrorResult?.scores?.counts;
+  const publishScoreCounts = scoreMirrorPublishResult?.scores?.counts;
   const canSyncPlayerMirror =
     dryRunResult?.mode === "dry-run" &&
     (dryRunCounts?.prismaPlayers ?? 0) === PLAYER_MIRROR_EXPECTED_PLAYER_COUNT &&
     (dryRunCounts?.extra ?? 0) === 0 &&
     ((dryRunCounts?.created ?? 0) > 0 || (dryRunCounts?.updated ?? 0) > 0) &&
     (dryRunCounts?.created ?? 0) + (dryRunCounts?.updated ?? 0) <= PLAYER_MIRROR_EXPECTED_PLAYER_COUNT;
+  const canPublishCurrentScoreMirror = canPublishScoreMirror({
+    confirmed: scoreMirrorPublishConfirm,
+    dryRunError: scoreMirrorError,
+    dryRunResult: scoreMirrorResult,
+    isBusy: isPending || loading
+  });
+  const scorePublishDisabledReason =
+    scoreMirrorResult?.status === "active-round"
+      ? "Confirm the dry-run result before publishing."
+      : "Run a successful dry-run with an active round before publishing.";
 
   return (
     <div className="space-y-3">
@@ -468,7 +624,7 @@ export function FirebaseAccountPanel() {
             </SectionCard>
           ) : null}
 
-          {activeOwnerAdminMembership ? (
+          {showScoreMirrorControls ? (
             <SectionCard className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">
                 Phase 4 Score Mirror Audit
@@ -521,6 +677,92 @@ export function FirebaseAccountPanel() {
               {scoreMirrorError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {scoreMirrorError}
+                </p>
+              ) : null}
+            </SectionCard>
+          ) : null}
+
+          {showScoreMirrorControls ? (
+            <SectionCard className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">
+                Phase 4 Score Mirror Publish
+              </p>
+              <p className="text-sm text-ink/70">
+                {scorePublishDisabledReason}
+              </p>
+              <label className="flex items-start gap-3 rounded-lg border border-pine/15 bg-white px-3 py-3 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={scoreMirrorPublishConfirm}
+                  disabled={
+                    isPending ||
+                    loading ||
+                    !scoreMirrorResult?.prismaRoundId ||
+                    scoreMirrorResult.status !== "active-round" ||
+                    Boolean(scoreMirrorError) ||
+                    (scoreCounts?.extra ?? 0) > 0
+                  }
+                  onChange={(event) => setScoreMirrorPublishConfirm(event.target.checked)}
+                />
+                <span>
+                  I understand this writes a Prisma score mirror to Firestore but does not change live scoring.
+                </span>
+              </label>
+              <button
+                type="button"
+                className="club-btn-danger min-h-12 w-full disabled:opacity-50"
+                disabled={!canPublishCurrentScoreMirror}
+                onClick={publishScoreMirror}
+              >
+                Publish Score Mirror
+              </button>
+              {scoreMirrorPublishResult ? (
+                <div className="space-y-2 text-sm text-ink">
+                  <div className="grid grid-cols-2 gap-2">
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Status: <span className="font-bold">{scoreMirrorPublishResult.status ?? "unknown"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Published round: <span className="font-bold">{scoreMirrorPublishResult.publishedRoundId ?? "None"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Scoring mode: <span className="font-bold">{scoreMirrorPublishResult.scoringEntryMode ?? "None"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round mode: <span className="font-bold">{scoreMirrorPublishResult.roundMode ?? "None"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Created: <span className="font-bold">{publishScoreCounts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Updated: <span className="font-bold">{publishScoreCounts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Unchanged: <span className="font-bold">{publishScoreCounts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Extra: <span className="font-bold">{publishScoreCounts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes planned: <span className="font-bold">{scoreMirrorPublishResult.writesPlanned ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes applied: <span className="font-bold">{scoreMirrorPublishResult.writesApplied ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2 col-span-2">
+                      Operation ID: <span className="font-bold">{scoreMirrorPublishResult.operationId ?? "None"}</span>
+                    </p>
+                  </div>
+                  {renderScoreAuditItems(scoreMirrorPublishResult.scores?.created)}
+                  {renderScoreAuditItems(scoreMirrorPublishResult.scores?.updated)}
+                  {renderScoreAuditItems(scoreMirrorPublishResult.scores?.unchanged)}
+                  {renderScoreAuditItems(scoreMirrorPublishResult.scores?.extra)}
+                </div>
+              ) : null}
+              {scoreMirrorPublishError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {scoreMirrorPublishError}
                 </p>
               ) : null}
             </SectionCard>
