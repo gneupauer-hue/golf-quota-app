@@ -117,7 +117,7 @@ export type FirebaseActiveRoundPointerMirror = {
   checksum: string;
 };
 
-export type FirebaseScoreMirrorSource = "prisma";
+export type FirebaseScoreMirrorSource = "prisma" | "firestore-test";
 export type FirebaseScoreHoleNumber =
   | "1"
   | "2"
@@ -159,6 +159,6 @@ export type FirebaseScoreMirror = {
   backSubmittedAt: string | null;
   birdieHoles: FirebaseScoreGoodSkinEntry[];
   source: FirebaseScoreMirrorSource;
-  scoreVersion: 1;
+  scoreVersion: number;
   checksum: string;
 };

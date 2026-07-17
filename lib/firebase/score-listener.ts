@@ -144,12 +144,12 @@ export function normalizeScoreMirrorDocument(doc: ScoreMirrorListenerDocument): 
     return { docId: doc.id, score: null, malformedReason: "roundMode is invalid." };
   }
 
-  if (data.source !== "prisma") {
-    return { docId: doc.id, score: null, malformedReason: "source must be prisma." };
+  if (data.source !== "prisma" && data.source !== "firestore-test") {
+    return { docId: doc.id, score: null, malformedReason: "source must be prisma or firestore-test." };
   }
 
-  if (data.scoreVersion !== 1) {
-    return { docId: doc.id, score: null, malformedReason: "scoreVersion must be 1." };
+  if (!Number.isInteger(data.scoreVersion) || typeof data.scoreVersion !== "number" || data.scoreVersion < 1) {
+    return { docId: doc.id, score: null, malformedReason: "scoreVersion must be a positive integer." };
   }
 
   const holes = normalizeHoles(data.holes);
@@ -178,6 +178,8 @@ export function normalizeScoreMirrorDocument(doc: ScoreMirrorListenerDocument): 
   const frontSubmittedAt = data.frontSubmittedAt as string | null;
   const backSubmittedAt = data.backSubmittedAt as string | null;
   const checksum = data.checksum as string;
+  const scoreVersion = data.scoreVersion;
+  const source = data.source as FirebaseScoreMirror["source"];
 
   return {
     docId: doc.id,
@@ -194,8 +196,8 @@ export function normalizeScoreMirrorDocument(doc: ScoreMirrorListenerDocument): 
       frontSubmittedAt,
       backSubmittedAt,
       birdieHoles,
-      source: "prisma",
-      scoreVersion: 1,
+      source,
+      scoreVersion,
       checksum
     }
   };

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { MatchRoundView, SkinsOnlyRoundView } from "@/components/active-round-view";
+import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 import { QuickEntryRoundView } from "@/components/quick-entry-round-view";
 import { PageTitle } from "@/components/page-title";
 import { RoundUtilityActions } from "@/components/round-utility-actions";
@@ -115,6 +116,13 @@ type RowState = {
 
 type SaveState = {
   tone: "idle" | "saving" | "saved" | "failed";
+  message: string;
+};
+
+type FirestoreTestWriteDiagnostic = {
+  status: "idle" | "writing" | "written" | "failed" | "disabled";
+  operationType: string | null;
+  scoreVersion: number | null;
   message: string;
 };
 
@@ -881,6 +889,7 @@ function buildIndividualScoringGroups(
 }
 export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, groups: initialGroups }: EditorProps) {
   const router = useRouter();
+  const { user, memberships, activeClubId } = useFirebaseAuth();
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
   const [isTestRound] = useState(Boolean(round.isTestRound));
   const [buyInPaidPlayerIds, setBuyInPaidPlayerIds] = useState<string[]>(
@@ -929,6 +938,13 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const [quotaAdjustmentPreview, setQuotaAdjustmentPreview] =
     useState<QuotaAdjustmentPreview | null>(null);
   const [quotaAdjustmentError, setQuotaAdjustmentError] = useState("");
+  const [firestoreTestWriteDiagnostic, setFirestoreTestWriteDiagnostic] =
+    useState<FirestoreTestWriteDiagnostic>({
+      status: "idle",
+      operationType: null,
+      scoreVersion: null,
+      message: ""
+    });
   const derivedRoundName = useMemo(() => formatRoundNameFromDate(roundDate), [roundDate]);
   const displayRoundName = useMemo(() => getPreferredRoundName(round.roundName, roundDate), [round.roundName, roundDate]);
   const isSkinsOnly = gameMode === "SKINS_ONLY";
@@ -947,6 +963,19 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   );
   const hasSupportedMatchFormat = availableMatchFormats.length > 0;
   const isLocked = Boolean(lockedAt);
+  const activeFirebaseMembership = memberships.find((membership) => membership.clubId === activeClubId) ?? null;
+  const canUseFirestoreTestScoreWrite = Boolean(
+    isTestRound &&
+      (isLocked || startedAt) &&
+      user &&
+      activeClubId &&
+      activeFirebaseMembership?.status === "active"
+  );
+  const canSeeFirestoreTestWriteDiagnostic = Boolean(
+    user &&
+      activeFirebaseMembership?.status === "active" &&
+      (activeFirebaseMembership.role === "owner" || activeFirebaseMembership.role === "admin")
+  );
   const selectedIds = useMemo(() => new Set(rows.map((row) => row.playerId)), [rows]);
   const assignedSetupPlayerIds = useMemo(
     () => new Set(rows.filter((row) => row.team != null).map((row) => row.playerId)),
@@ -1394,6 +1423,46 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   }, [setupTeams]);
   const scoreMirrorPilot =
     isLocked || startedAt ? <ScoreMirrorListenerPilot roundId={round.id} /> : null;
+  const firestoreTestWriteDiagnosticPanel =
+    canSeeFirestoreTestWriteDiagnostic && isTestRound && (isLocked || startedAt) ? (
+      <SectionCard className="space-y-3 border border-[#D5B154]/30 bg-[#FFF9D8]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
+              Test-round Firestore Write
+            </p>
+            <h3 className="mt-1 text-lg font-semibold text-ink">
+              {canUseFirestoreTestScoreWrite ? "Enabled" : "Disabled"}
+            </h3>
+            <p className="mt-1 text-sm text-ink/65">
+              Prisma scoring remains live. This only mirrors test-round score actions.
+            </p>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink">
+            {firestoreTestWriteDiagnostic.status}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-2xl bg-white/75 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Latest Op</p>
+            <p className="mt-1 break-words text-sm font-semibold text-ink">
+              {firestoreTestWriteDiagnostic.operationType ?? "-"}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white/75 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Version</p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {firestoreTestWriteDiagnostic.scoreVersion ?? "-"}
+            </p>
+          </div>
+        </div>
+        {firestoreTestWriteDiagnostic.message ? (
+          <p className="text-sm font-semibold text-ink/70">
+            {firestoreTestWriteDiagnostic.message}
+          </p>
+        ) : null}
+      </SectionCard>
+    ) : null;
 
   const groupChatText = useMemo(() => {
     const golf = "\uD83C\uDFCC\uFE0F\u200D\u2642\uFE0F";
@@ -1793,6 +1862,147 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
 
     if (!response.ok) {
       throw new Error(result.error ?? "Could not save scores.");
+    }
+
+    await writeFirestoreTestScoreOperations(nextRows, options);
+  }
+
+  function buildFirestoreTestScoreOperations(
+    nextRows: RowState[],
+    options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
+  ) {
+    const operations: Array<{ playerId: string; operation: Record<string, unknown> }> = [];
+
+    for (const row of nextRows) {
+      for (const holeIndex of options.holeIndexes ?? []) {
+        operations.push({
+          playerId: row.playerId,
+          operation: {
+            type: "set-hole",
+            holeNumber: holeIndex + 1,
+            value: row.holeScores[holeIndex]
+          }
+        });
+      }
+
+      if (options.includeAllHoles) {
+        operations.push({
+          playerId: row.playerId,
+          operation: {
+            type: "set-quick-front",
+            value: row.quickFrontNine
+          }
+        });
+        operations.push({
+          playerId: row.playerId,
+          operation: {
+            type: "set-quick-back",
+            value: row.quickBackNine
+          }
+        });
+        operations.push({
+          playerId: row.playerId,
+          operation: {
+            type: "set-birdie-holes",
+            value: parseGoodSkinEntriesInput(row.birdieHolesText)
+          }
+        });
+
+        if (row.frontSubmittedAt) {
+          operations.push({
+            playerId: row.playerId,
+            operation: { type: "submit-front" }
+          });
+        }
+        if (row.backSubmittedAt) {
+          operations.push({
+            playerId: row.playerId,
+            operation: { type: "submit-back" }
+          });
+        }
+      }
+    }
+
+    return operations;
+  }
+
+  async function writeFirestoreTestScoreOperations(
+    nextRows: RowState[],
+    options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
+  ) {
+    if (!canUseFirestoreTestScoreWrite || !user || !activeClubId) {
+      return;
+    }
+
+    const operations = buildFirestoreTestScoreOperations(nextRows, options);
+    for (const item of operations) {
+      const ok = await sendFirestoreTestScoreOperation(item.playerId, item.operation);
+      if (!ok) {
+        return;
+      }
+    }
+  }
+
+  async function sendFirestoreTestScoreOperation(playerId: string, operation: Record<string, unknown>) {
+    if (!canUseFirestoreTestScoreWrite || !user || !activeClubId) {
+      return true;
+    }
+
+    try {
+      setFirestoreTestWriteDiagnostic({
+        status: "writing",
+        operationType: String(operation.type),
+        scoreVersion: null,
+        message: "Writing test-round Firestore mirror..."
+      });
+      const idToken = await user.getIdToken();
+      const response = await fetch("/api/firebase/score-write", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          clubId: activeClubId,
+          expectedProjectId: "irem-golf-quota-app",
+          expectedPrismaRoundId: round.id,
+          prismaPlayerId: playerId,
+          operation,
+          clientRequestId: `${round.id}:${playerId}:${String(operation.type)}:${Date.now()}:${Math.random().toString(36).slice(2)}`
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not write Firestore test score.");
+      }
+
+      setFirestoreTestWriteDiagnostic({
+        status: "written",
+        operationType: result.operationType ?? String(operation.type),
+        scoreVersion: typeof result.scoreVersion === "number" ? result.scoreVersion : null,
+        message: result.alreadyApplied ? "Firestore test write already applied." : "Firestore test write saved."
+      });
+      return true;
+    } catch (error) {
+      setFirestoreTestWriteDiagnostic({
+        status: "failed",
+        operationType: String(operation.type),
+        scoreVersion: null,
+        message: error instanceof Error ? error.message : "Firestore test write failed."
+      });
+      return false;
+    }
+  }
+
+  async function writeFirestoreTestSegmentSubmit(playerIds: string[], segment: "front" | "back") {
+    for (const playerId of playerIds) {
+      const ok = await sendFirestoreTestScoreOperation(playerId, {
+        type: segment === "front" ? "submit-front" : "submit-back"
+      });
+      if (!ok) {
+        return;
+      }
     }
   }
 
@@ -2585,6 +2795,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
           throw new Error(result.error ?? "Could not submit this segment.");
         }
 
+        await writeFirestoreTestSegmentSubmit([playerId], segment);
         setRows(nextRows);
         setSavedRows((current) =>
           mergeSavedRowState(current, nextRows.filter((row) => row.playerId === playerId))
@@ -2642,6 +2853,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         throw new Error(result.error ?? "Could not submit this segment.");
       }
     }
+
+    await writeFirestoreTestSegmentSubmit(groupPlayerIds, segment);
 
     const submittedAt = new Date().toISOString();
     const nextRows = workingRows.map((row) =>
@@ -3471,6 +3684,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     return (
       <>
         {scoreMirrorPilot}
+        {firestoreTestWriteDiagnosticPanel}
         <SkinsOnlyScoreEntry
           isTestRound={isTestRound}
           activeHole={skinsActiveHole}
@@ -3520,6 +3734,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     return (
       <>
         {scoreMirrorPilot}
+        {firestoreTestWriteDiagnosticPanel}
         <TeamScoreEntry
         team={selectedTeam}
         title={scoringGroup?.label ?? `Team ${selectedTeam}`}
@@ -3554,6 +3769,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   return (
     <div className="space-y-3 pb-[18rem]">
       {scoreMirrorPilot}
+      {firestoreTestWriteDiagnosticPanel}
       {!isLocked ? (
         <PageTitle
           title={round.completedAt ? "Round Review" : "Round Setup"}

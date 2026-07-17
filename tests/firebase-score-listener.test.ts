@@ -139,3 +139,14 @@ test("round editor mounts the pilot without changing Prisma score save paths", (
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("/api/rounds/${round.id}/score-entry"), -1);
   assert.equal(ROUND_EDITOR_SOURCE.includes("/api/firebase/score-mirror/publish"), false);
 });
+
+test("round editor test-write pilot is server-routed and test-round gated", () => {
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("/api/firebase/score-write"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("isTestRound &&"), -1);
+  assert.ok(
+    ROUND_EDITOR_SOURCE.indexOf("/api/rounds/${round.id}/score-entry") <
+      ROUND_EDITOR_SOURCE.indexOf("await writeFirestoreTestScoreOperations(nextRows, options);")
+  );
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("canSeeFirestoreTestWriteDiagnostic"), -1);
+  assert.equal(/\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\b/.test(ROUND_EDITOR_SOURCE), false);
+});
