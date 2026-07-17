@@ -8,6 +8,7 @@ import { QuickEntryRoundView } from "@/components/quick-entry-round-view";
 import { PageTitle } from "@/components/page-title";
 import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
+import { ScoreMirrorListenerPilot } from "@/components/score-mirror-listener-pilot";
 import { SectionCard } from "@/components/section-card";
 import {
   calculateLiveLeaders,
@@ -1391,6 +1392,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     const totals = setupTeams.map((team) => team.totalQuota);
     return Math.max(...totals) - Math.min(...totals);
   }, [setupTeams]);
+  const scoreMirrorPilot =
+    isLocked || startedAt ? <ScoreMirrorListenerPilot roundId={round.id} /> : null;
 
   const groupChatText = useMemo(() => {
     const golf = "\uD83C\uDFCC\uFE0F\u200D\u2642\uFE0F";
@@ -3466,25 +3469,28 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       calculatedRows.every((row) => row.holeScores[skinsActiveHole - 1] != null);
 
     return (
-      <SkinsOnlyScoreEntry
-        isTestRound={isTestRound}
-        activeHole={skinsActiveHole}
-        rows={calculatedRows}
-        message={message}
-        toast={toast}
-        saveState={saveState}
-        refreshState={refreshState}
-        isPending={isPending}
-        lastRefreshedAt={lastRefreshedAt}
-        canGoBack={canGoBack}
-        canSaveHole={canSaveHole}
-        onUpdateHole={updateHole}
-        onPreviousHole={() => setSkinsActiveHole((current) => Math.max(1, current - 1))}
-        onSaveHole={saveSkinsHole}
-        onSelectHole={(hole) => setSkinsActiveHole(Math.max(1, Math.min(18, hole)))}
-        onBackToRound={() => setSkinsEntryOpen(false)}
-        onRefresh={refreshRoundData}
-      />
+      <>
+        {scoreMirrorPilot}
+        <SkinsOnlyScoreEntry
+          isTestRound={isTestRound}
+          activeHole={skinsActiveHole}
+          rows={calculatedRows}
+          message={message}
+          toast={toast}
+          saveState={saveState}
+          refreshState={refreshState}
+          isPending={isPending}
+          lastRefreshedAt={lastRefreshedAt}
+          canGoBack={canGoBack}
+          canSaveHole={canSaveHole}
+          onUpdateHole={updateHole}
+          onPreviousHole={() => setSkinsActiveHole((current) => Math.max(1, current - 1))}
+          onSaveHole={saveSkinsHole}
+          onSelectHole={(hole) => setSkinsActiveHole(Math.max(1, Math.min(18, hole)))}
+          onBackToRound={() => setSkinsEntryOpen(false)}
+          onRefresh={refreshRoundData}
+        />
+      </>
     );
   }
 
@@ -3512,7 +3518,9 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       groupRows.length > 0 && groupRows.every((row) => row.holeScores[activeHoleIndex] != null);
 
     return (
-      <TeamScoreEntry
+      <>
+        {scoreMirrorPilot}
+        <TeamScoreEntry
         team={selectedTeam}
         title={scoringGroup?.label ?? `Team ${selectedTeam}`}
         subtitle={groupTeams.map((teamCode) => `Team ${teamCode}`).join(" • ")}
@@ -3538,12 +3546,14 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         onSelectHole={setActiveHole}
         onBackToTeams={() => setSelectedTeam(null)}
         onRefresh={refreshRoundData}
-      />
+        />
+      </>
     );
   }
 
   return (
     <div className="space-y-3 pb-[18rem]">
+      {scoreMirrorPilot}
       {!isLocked ? (
         <PageTitle
           title={round.completedAt ? "Round Review" : "Round Setup"}
