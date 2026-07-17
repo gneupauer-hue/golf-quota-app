@@ -96,7 +96,7 @@ function makeAdapters(overrides: Partial<ScoreWriteRouteAdapters> = {}): ScoreWr
     readClubMembership: async () => ({ role: "member", status: "active" }),
     readActivePrismaRoundScores: async () => makeRound(),
     runScoreWriteTransaction: async (input) => {
-      const previousScoreVersion = input.initialScore.scoreVersion;
+      const previousScoreVersion = 0;
       const { score, updatedFields } = applyScoreWriteOperation(
         { ...input.initialScore, scoreVersion: previousScoreVersion + 1 },
         input.operation,
@@ -140,7 +140,7 @@ test("active owner, admin, scorekeeper, and member roles can write only after me
     assert.equal(response.status, 200);
     assert.equal(json.ok, true);
     assert.equal(json.operationType, "set-hole");
-    assert.equal(json.scoreVersion, 2);
+    assert.equal(json.scoreVersion, 1);
   }
 });
 
@@ -277,6 +277,94 @@ test("transaction adapter can enforce idempotency and score version conflicts", 
   assert.equal(savedClientRequestId, "request-1");
   assert.equal(conflict.status, 409);
   assert.equal((await readJson(conflict)).currentScoreVersion, 4);
+});
+
+test("first missing-document operation is version 1 and second logical operation is version 2", async () => {
+  let existing: FirestoreScoreWriteDocument | null = null;
+  const adapters = makeAdapters({
+    runScoreWriteTransaction: async (input) => {
+      const current = existing ?? { ...input.initialScore, scoreVersion: 0 };
+      const previousScoreVersion = current.scoreVersion;
+      const { score, updatedFields } = applyScoreWriteOperation(
+        { ...current, scoreVersion: previousScoreVersion + 1 },
+        input.operation,
+        "2026-07-18T18:00:00.000Z"
+      );
+      existing = score;
+
+      return {
+        previousScoreVersion,
+        scoreVersion: score.scoreVersion,
+        alreadyApplied: false,
+        updatedFields
+      };
+    }
+  });
+
+  const first = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 }, clientRequestId: "first" }),
+    adapters
+  );
+  const second = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-back", value: 2 }, clientRequestId: "second" }),
+    adapters
+  );
+
+  assert.equal(first.status, 200);
+  assert.equal((await readJson(first)).scoreVersion, 1);
+  assert.equal(second.status, 200);
+  assert.equal((await readJson(second)).scoreVersion, 2);
+});
+
+test("duplicate clientRequestId does not increment version", async () => {
+  let existing: FirestoreScoreWriteDocument | null = null;
+  const seenClientRequestIds = new Set<string>();
+  const adapters = makeAdapters({
+    runScoreWriteTransaction: async (input) => {
+      const current = existing ?? { ...input.initialScore, scoreVersion: 0 };
+
+      if (input.clientRequestId && seenClientRequestIds.has(input.clientRequestId)) {
+        return {
+          previousScoreVersion: current.scoreVersion,
+          scoreVersion: current.scoreVersion,
+          alreadyApplied: true,
+          updatedFields: []
+        };
+      }
+
+      const previousScoreVersion = current.scoreVersion;
+      const { score, updatedFields } = applyScoreWriteOperation(
+        { ...current, scoreVersion: previousScoreVersion + 1 },
+        input.operation,
+        "2026-07-18T18:00:00.000Z"
+      );
+      existing = { ...score, lastClientRequestId: input.clientRequestId };
+      if (input.clientRequestId) {
+        seenClientRequestIds.add(input.clientRequestId);
+      }
+
+      return {
+        previousScoreVersion,
+        scoreVersion: score.scoreVersion,
+        alreadyApplied: false,
+        updatedFields
+      };
+    }
+  });
+
+  const first = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 }, clientRequestId: "same-request" }),
+    adapters
+  );
+  const duplicate = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 }, clientRequestId: "same-request" }),
+    adapters
+  );
+
+  assert.equal((await readJson(first)).scoreVersion, 1);
+  const duplicateJson = await readJson(duplicate);
+  assert.equal(duplicateJson.scoreVersion, 1);
+  assert.equal(duplicateJson.alreadyApplied, true);
 });
 
 test("existing Firestore score documents reject malformed, mismatched, or derived result fields", () => {

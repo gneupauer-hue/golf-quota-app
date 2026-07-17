@@ -79,7 +79,7 @@ export async function POST(request: Request) {
         const initial = buildInitialScoreWriteDocument(input.initialScore);
         const current = snapshot.exists
           ? normalizeExistingScoreDocument(input.prismaPlayerId, snapshot.data() ?? {}, initial)
-          : initial;
+          : { ...initial, scoreVersion: 0 };
 
         if (input.clientRequestId && current.lastClientRequestId === input.clientRequestId) {
           return {

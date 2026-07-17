@@ -147,6 +147,7 @@ test("round editor test-write pilot is server-routed and test-round gated", () =
     ROUND_EDITOR_SOURCE.indexOf("/api/rounds/${round.id}/score-entry") <
       ROUND_EDITOR_SOURCE.indexOf("await writeFirestoreTestScoreOperations(nextRows, options);")
   );
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("buildFirestoreTestScoreOperations(nextRows, savedRows, options)"), -1);
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("canSeeFirestoreTestWriteDiagnostic"), -1);
   assert.equal(/\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\b/.test(ROUND_EDITOR_SOURCE), false);
 });

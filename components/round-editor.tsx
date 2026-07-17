@@ -11,6 +11,7 @@ import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
 import { ScoreMirrorListenerPilot } from "@/components/score-mirror-listener-pilot";
 import { SectionCard } from "@/components/section-card";
+import { buildFirestoreTestScoreOperations } from "@/lib/firebase/score-write-operations";
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
@@ -1867,65 +1868,6 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     await writeFirestoreTestScoreOperations(nextRows, options);
   }
 
-  function buildFirestoreTestScoreOperations(
-    nextRows: RowState[],
-    options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
-  ) {
-    const operations: Array<{ playerId: string; operation: Record<string, unknown> }> = [];
-
-    for (const row of nextRows) {
-      for (const holeIndex of options.holeIndexes ?? []) {
-        operations.push({
-          playerId: row.playerId,
-          operation: {
-            type: "set-hole",
-            holeNumber: holeIndex + 1,
-            value: row.holeScores[holeIndex]
-          }
-        });
-      }
-
-      if (options.includeAllHoles) {
-        operations.push({
-          playerId: row.playerId,
-          operation: {
-            type: "set-quick-front",
-            value: row.quickFrontNine
-          }
-        });
-        operations.push({
-          playerId: row.playerId,
-          operation: {
-            type: "set-quick-back",
-            value: row.quickBackNine
-          }
-        });
-        operations.push({
-          playerId: row.playerId,
-          operation: {
-            type: "set-birdie-holes",
-            value: parseGoodSkinEntriesInput(row.birdieHolesText)
-          }
-        });
-
-        if (row.frontSubmittedAt) {
-          operations.push({
-            playerId: row.playerId,
-            operation: { type: "submit-front" }
-          });
-        }
-        if (row.backSubmittedAt) {
-          operations.push({
-            playerId: row.playerId,
-            operation: { type: "submit-back" }
-          });
-        }
-      }
-    }
-
-    return operations;
-  }
-
   async function writeFirestoreTestScoreOperations(
     nextRows: RowState[],
     options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
@@ -1934,7 +1876,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       return;
     }
 
-    const operations = buildFirestoreTestScoreOperations(nextRows, options);
+    const operations = buildFirestoreTestScoreOperations(nextRows, savedRows, options);
     for (const item of operations) {
       const ok = await sendFirestoreTestScoreOperation(item.playerId, item.operation);
       if (!ok) {
