@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { RoundEditor } from "@/components/round-editor";
 import { getRoundEditorData } from "@/lib/data";
+import { getRegularRoundScoreMirrorCapability } from "@/lib/firebase/score-mirror-rollout-server";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
       partnerHistory={data.partnerHistory}
       quotaSnapshot={data.quotaSnapshot}
       groups={data.groups as Array<{ groupNumber: number; teeTime: string; players: string[] }>}
+      regularRoundScoreMirrorEnabled={getRegularRoundScoreMirrorCapability()}
     />
   );
 }

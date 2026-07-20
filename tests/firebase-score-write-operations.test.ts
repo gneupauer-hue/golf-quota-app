@@ -1,11 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import {
   buildFirestoreTestScoreOperations,
   cloneFirestoreTestScoreOperationRows,
-  isRegularRoundScoreMirrorClientEnabled,
   shouldAttemptFirestoreScoreMirror,
   type FirestoreTestScoreOperationRow
 } from "@/lib/firebase/score-write-operations";
@@ -20,15 +17,6 @@ function makeRow(overrides: Partial<FirestoreTestScoreOperationRow> = {}): Fires
     ...overrides
   };
 }
-
-test("client rollout flag source uses a static public environment reference", () => {
-  const source = fs.readFileSync(path.join(process.cwd(), "lib/firebase/score-write-operations.ts"), "utf8");
-
-  assert.match(
-    source,
-    /process\.env\.NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED/
-  );
-});
 
 test("changing only quick front sends exactly one set-quick-front request", () => {
   const saved = makeRow();
@@ -137,15 +125,7 @@ test("captured previous snapshots are not changed by later row mutations", () =>
   assert.equal(capturedPreviousRows[0].holeScores[0], null);
 });
 
-test("regular-round client rollout flag defaults to false unless explicitly true", () => {
-  assert.equal(isRegularRoundScoreMirrorClientEnabled(undefined), false);
-  assert.equal(isRegularRoundScoreMirrorClientEnabled(""), false);
-  assert.equal(isRegularRoundScoreMirrorClientEnabled("false"), false);
-  assert.equal(isRegularRoundScoreMirrorClientEnabled("TRUE"), false);
-  assert.equal(isRegularRoundScoreMirrorClientEnabled("true"), true);
-});
-
-test("client attempts regular-round mirroring only when the public flag is enabled", () => {
+test("client attempts regular-round mirroring only when the server-resolved capability is enabled", () => {
   const base = {
     isRoundOpenForScoring: true,
     signedIn: true,

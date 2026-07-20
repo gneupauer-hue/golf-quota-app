@@ -14,7 +14,6 @@ import { SectionCard } from "@/components/section-card";
 import {
   buildFirestoreTestScoreOperations,
   cloneFirestoreTestScoreOperationRows,
-  isRegularRoundScoreMirrorClientEnabled,
   shouldAttemptFirestoreScoreMirror
 } from "@/lib/firebase/score-write-operations";
 import {
@@ -105,6 +104,7 @@ type EditorProps = {
     teeTime: string;
     players: string[];
   }>;
+  regularRoundScoreMirrorEnabled?: boolean;
 };
 
 type RowState = {
@@ -893,7 +893,14 @@ function buildIndividualScoringGroups(
     preferDefaultPlayerFirst: true
   });
 }
-export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, groups: initialGroups }: EditorProps) {
+export function RoundEditor({
+  round,
+  players,
+  partnerHistory,
+  quotaSnapshot,
+  groups: initialGroups,
+  regularRoundScoreMirrorEnabled = false
+}: EditorProps) {
   const router = useRouter();
   const { user, memberships, activeClubId } = useFirebaseAuth();
   const [roundDate, setRoundDate] = useState(formatDateInput(round.roundDate));
@@ -970,14 +977,13 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const hasSupportedMatchFormat = availableMatchFormats.length > 0;
   const isLocked = Boolean(lockedAt);
   const activeFirebaseMembership = memberships.find((membership) => membership.clubId === activeClubId) ?? null;
-  const regularRoundScoreMirrorClientEnabled = isRegularRoundScoreMirrorClientEnabled();
   const canUseFirestoreTestScoreWrite = shouldAttemptFirestoreScoreMirror({
     isTestRound,
     isRoundOpenForScoring: Boolean(isLocked || startedAt),
     signedIn: Boolean(user),
     activeClubId,
     activeMembershipStatus: activeFirebaseMembership?.status,
-    regularRoundClientEnabled: regularRoundScoreMirrorClientEnabled
+    regularRoundClientEnabled: regularRoundScoreMirrorEnabled
   });
   const canSeeFirestoreTestWriteDiagnostic = Boolean(
     user &&

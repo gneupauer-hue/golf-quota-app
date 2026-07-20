@@ -14,15 +14,6 @@ export type FirestoreTestScoreOperationRow = {
   birdieHolesText: string;
 };
 
-export const NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG =
-  "NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED";
-
-export function isRegularRoundScoreMirrorClientEnabled(
-  value: string | undefined = process.env.NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED
-) {
-  return value === "true";
-}
-
 export function shouldAttemptFirestoreScoreMirror(input: {
   isTestRound: boolean;
   isRoundOpenForScoring: boolean;

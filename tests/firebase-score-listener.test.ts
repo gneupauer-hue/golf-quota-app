@@ -11,6 +11,7 @@ import {
 const LISTENER_SOURCE = readFileSync("lib/firebase/score-listener.ts", "utf8");
 const PILOT_SOURCE = readFileSync("components/score-mirror-listener-pilot.tsx", "utf8");
 const ROUND_EDITOR_SOURCE = readFileSync("components/round-editor.tsx", "utf8");
+const ROUND_PAGE_SOURCE = readFileSync("app/rounds/[id]/page.tsx", "utf8");
 
 function makeHoles(overrides: Record<string, number | null> = {}) {
   return Object.fromEntries(
@@ -140,9 +141,12 @@ test("round editor mounts the pilot without changing Prisma score save paths", (
   assert.equal(ROUND_EDITOR_SOURCE.includes("/api/firebase/score-mirror/publish"), false);
 });
 
-test("round editor score-write pilot is server-routed and gated by test or public regular flag", () => {
+test("round editor score-write pilot is server-routed and gated by test or server-resolved regular capability", () => {
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("/api/firebase/score-write"), -1);
-  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("isRegularRoundScoreMirrorClientEnabled"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("regularRoundScoreMirrorEnabled"), -1);
+  assert.equal(ROUND_EDITOR_SOURCE.includes("process.env.NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED"), false);
+  assert.notEqual(ROUND_PAGE_SOURCE.indexOf("getRegularRoundScoreMirrorCapability"), -1);
+  assert.notEqual(ROUND_PAGE_SOURCE.indexOf("regularRoundScoreMirrorEnabled"), -1);
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("shouldAttemptFirestoreScoreMirror"), -1);
   assert.ok(
     ROUND_EDITOR_SOURCE.indexOf("/api/rounds/${round.id}/score-entry") <
