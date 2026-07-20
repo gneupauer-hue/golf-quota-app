@@ -17,7 +17,6 @@ const PLAYER_MIRROR_EXPECTED_PLAYER_COUNT = 61;
 const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
 const SCORE_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 const SCORE_MIRROR_PROJECT_ID = "irem-golf-quota-app";
-const SCORE_MIRROR_EXPECTED_PRISMA_ROUND_ID = null;
 const ROUND_MIRROR_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 const ROUND_MIRROR_PROJECT_ID = "irem-golf-quota-app";
 
@@ -141,11 +140,11 @@ export function isActiveOwnerOrAdminMembership(
   );
 }
 
-export function buildScoreMirrorDryRunRequestBody() {
+export function buildScoreMirrorDryRunRequestBody(activePrismaRoundId: string | null) {
   return {
     clubId: SCORE_MIRROR_DRY_RUN_CLUB_ID,
     expectedProjectId: SCORE_MIRROR_PROJECT_ID,
-    expectedPrismaRoundId: SCORE_MIRROR_EXPECTED_PRISMA_ROUND_ID
+    expectedPrismaRoundId: activePrismaRoundId
   };
 }
 
@@ -568,7 +567,7 @@ export function FirebaseAccountPanel({
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`
           },
-          body: JSON.stringify(buildScoreMirrorDryRunRequestBody())
+          body: JSON.stringify(buildScoreMirrorDryRunRequestBody(activePrismaRoundId))
         });
         const result = await response.json();
 

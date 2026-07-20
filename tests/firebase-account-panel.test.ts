@@ -72,11 +72,11 @@ test("score mirror publish card follows owner/admin visibility rules", () => {
   );
 });
 
-test("score mirror dry-run request body is read-only and pinned to the Irem club", () => {
-  assert.deepEqual(buildScoreMirrorDryRunRequestBody(), {
+test("score mirror dry-run request body uses the active Prisma round ID", () => {
+  assert.deepEqual(buildScoreMirrorDryRunRequestBody("active-round-1"), {
     clubId: "eO5PwRmRZrQJW0VbEp0B",
     expectedProjectId: "irem-golf-quota-app",
-    expectedPrismaRoundId: null
+    expectedPrismaRoundId: "active-round-1"
   });
 });
 
