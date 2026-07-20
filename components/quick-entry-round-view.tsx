@@ -111,6 +111,43 @@ function getSkinHoleClasses(selected: boolean, pending: boolean) {
   return "border-sand/70 bg-white text-ink/70";
 }
 
+export function getQuickEntryMissingScoreMessage({
+  quickFrontNine,
+  quickBackNine,
+  isIndividualQuotaSkins = false
+}: {
+  quickFrontNine: number | null;
+  quickBackNine: number | null;
+  isIndividualQuotaSkins?: boolean;
+}) {
+  if (isIndividualQuotaSkins) {
+    return quickFrontNine == null ? "Enter a Front score, including 0." : null;
+  }
+
+  if (quickFrontNine == null && quickBackNine == null) {
+    return "Enter Front and Back scores, including 0.";
+  }
+
+  if (quickFrontNine == null) {
+    return "Enter a Front score, including 0.";
+  }
+
+  if (quickBackNine == null) {
+    return "Enter a Back score, including 0.";
+  }
+
+  return null;
+}
+
+function parseQuickEntryInputValue(value: string) {
+  if (value.trim() === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+}
+
 export function QuickEntryRoundView({
   rows,
   saveState,
@@ -153,6 +190,7 @@ export function QuickEntryRoundView({
   const [finalValidationMessage, setFinalValidationMessage] = useState<string | null>(null);
   const [activeSkinTypeByPlayerId, setActiveSkinTypeByPlayerId] = useState<Record<string, GoodSkinType | null>>({});
   const [skinValidationByPlayerId, setSkinValidationByPlayerId] = useState<Record<string, string | null>>({});
+  const [scoreValidationByPlayerId, setScoreValidationByPlayerId] = useState<Record<string, string | null>>({});
 
   const lastSavedLabel = formatTimeLabel(lastSavedAt);
   const lastRefreshedLabel = formatTimeLabel(lastRefreshedAt);
@@ -277,6 +315,7 @@ export function QuickEntryRoundView({
     setEditingPlayerIds((current) => current.filter((playerId) => rowIds.includes(playerId)));
     setActiveSkinTypeByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
     setSkinValidationByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
+    setScoreValidationByPlayerId((current) => Object.fromEntries(Object.entries(current).filter(([playerId]) => rowIds.includes(playerId))));
   }, [isIndividualQuotaSkins, rowIds, summaryRows]);
 
   useEffect(() => {
@@ -353,12 +392,61 @@ export function QuickEntryRoundView({
   }
 
   function handleTotalPointsChange(playerId: string, value: string) {
+    const nextFront = parseQuickEntryInputValue(value);
+    setScoreValidationByPlayerId((current) => ({
+      ...current,
+      [playerId]: getQuickEntryMissingScoreMessage({
+        quickFrontNine: nextFront,
+        quickBackNine: 0,
+        isIndividualQuotaSkins
+      })
+    }));
     onFrontNineChange(playerId, value);
     onBackNineChange(playerId, "0");
   }
 
+  function handleFrontNineChange(row: SummaryRow, value: string) {
+    const nextFront = parseQuickEntryInputValue(value);
+    setScoreValidationByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: getQuickEntryMissingScoreMessage({
+        quickFrontNine: nextFront,
+        quickBackNine: row.quickBackNine,
+        isIndividualQuotaSkins
+      })
+    }));
+    onFrontNineChange(row.playerId, value);
+  }
+
+  function handleBackNineChange(row: SummaryRow, value: string) {
+    const nextBack = parseQuickEntryInputValue(value);
+    setScoreValidationByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: getQuickEntryMissingScoreMessage({
+        quickFrontNine: row.quickFrontNine,
+        quickBackNine: nextBack,
+        isIndividualQuotaSkins
+      })
+    }));
+    onBackNineChange(row.playerId, value);
+  }
+
   function handleSavePlayerScore(row: SummaryRow) {
     if (isArchiving) return;
+
+    const missingScoreMessage = getQuickEntryMissingScoreMessage({
+      quickFrontNine: row.quickFrontNine,
+      quickBackNine: row.quickBackNine,
+      isIndividualQuotaSkins
+    });
+
+    if (missingScoreMessage) {
+      setScoreValidationByPlayerId((current) => ({
+        ...current,
+        [row.playerId]: missingScoreMessage
+      }));
+      return;
+    }
 
     const valuesToValidate = isIndividualQuotaSkins
       ? [row.quickFrontNine]
@@ -378,6 +466,10 @@ export function QuickEntryRoundView({
     }
 
     setActivePlayerId(row.playerId);
+    setScoreValidationByPlayerId((current) => ({
+      ...current,
+      [row.playerId]: null
+    }));
     setPlayerConfirmId(row.playerId);
   }
 
@@ -395,6 +487,10 @@ export function QuickEntryRoundView({
     );
     setEditingPlayerIds((current) => current.filter((playerId) => playerId !== confirmedId));
     setPlayerConfirmId(null);
+    setScoreValidationByPlayerId((current) => ({
+      ...current,
+      [confirmedId]: null
+    }));
     onSaveRound(confirmedId);
 
     const nextIncomplete = visibleRows.find(
@@ -537,9 +633,9 @@ export function QuickEntryRoundView({
             <div className="space-y-2">
               {visibleRows.map((row) => {
                 const completed = isPlayerComplete(row);
-                const missingScore = isIndividualQuotaSkins ? row.quickFrontNine == null : row.quickFrontNine == null || row.quickBackNine == null;
                 const activeSkinType = getActiveSkinType(row);
                 const skinValidationMessage = skinValidationByPlayerId[row.playerId] ?? null;
+                const scoreValidationMessage = scoreValidationByPlayerId[row.playerId] ?? null;
 
                 return (
                   <div
@@ -591,7 +687,7 @@ export function QuickEntryRoundView({
                             disabled={completed}
                             className="h-11 w-full min-w-0 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
                             value={row.quickFrontNine ?? ""}
-                            onChange={(event) => onFrontNineChange(row.playerId, event.target.value)}
+                            onChange={(event) => handleFrontNineChange(row, event.target.value)}
                             placeholder="0"
                           />
                         </label>
@@ -605,7 +701,7 @@ export function QuickEntryRoundView({
                             disabled={completed}
                             className="h-11 w-full min-w-0 rounded-xl border border-sand/70 bg-white px-2 text-base font-semibold text-ink outline-none transition focus:border-pine/50 disabled:bg-canvas disabled:text-ink/60"
                             value={row.quickBackNine ?? ""}
-                            onChange={(event) => onBackNineChange(row.playerId, event.target.value)}
+                            onChange={(event) => handleBackNineChange(row, event.target.value)}
                             placeholder="0"
                           />
                         </label>
@@ -651,13 +747,17 @@ export function QuickEntryRoundView({
                         <button
                           type="button"
                           className="rounded-full bg-pine px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                          disabled={isArchiving || missingScore}
+                          disabled={isArchiving}
                           onClick={() => handleSavePlayerScore(row)}
                         >
                           Save
                         </button>
                       )}
                     </div>
+
+                    {scoreValidationMessage ? (
+                      <p className="mt-2 rounded-xl bg-[#FCE5E2] px-3 py-2 text-xs font-semibold text-danger">{scoreValidationMessage}</p>
+                    ) : null}
 
                     {skinValidationMessage ? (
                       <p className="mt-2 rounded-xl bg-[#FCE5E2] px-3 py-2 text-xs font-semibold text-danger">{skinValidationMessage}</p>
