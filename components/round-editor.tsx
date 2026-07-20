@@ -1464,9 +1464,9 @@ export function RoundEditor({
             </p>
           </div>
           <div className="rounded-2xl bg-white/75 px-3 py-2.5">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Regular Mirror</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Regular Rollout</p>
             <p className="mt-1 text-sm font-semibold text-ink">
-              {!isTestRound && canUseFirestoreTestScoreWrite ? "Enabled" : "Disabled"}
+              {regularRoundScoreMirrorEnabled ? "Enabled" : "Disabled"}
             </p>
           </div>
           <div className="rounded-2xl bg-white/75 px-3 py-2.5">

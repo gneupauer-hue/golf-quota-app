@@ -158,12 +158,24 @@ test("round editor score-write pilot is server-routed and gated by test or serve
   assert.equal(/\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\b/.test(ROUND_EDITOR_SOURCE), false);
 });
 
-test("round editor owner diagnostics show test and regular mirror status only to owner/admin", () => {
+test("round editor owner diagnostics show test status and server-resolved regular rollout capability", () => {
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("canSeeFirestoreTestWriteDiagnostic"), -1);
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("activeFirebaseMembership.role === \"owner\""), -1);
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("activeFirebaseMembership.role === \"admin\""), -1);
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("Test Mirror"), -1);
-  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("Regular Mirror"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("Regular Rollout"), -1);
+  assert.notEqual(
+    ROUND_EDITOR_SOURCE.indexOf(
+      'regularRoundScoreMirrorEnabled ? "Enabled" : "Disabled"'
+    ),
+    -1
+  );
+  assert.equal(
+    ROUND_EDITOR_SOURCE.includes(
+      '!isTestRound && canUseFirestoreTestScoreWrite ? "Enabled" : "Disabled"'
+    ),
+    false
+  );
 });
 
 test("round editor player score save captures previous rows and uses granular PATCH before Firestore writes", () => {
