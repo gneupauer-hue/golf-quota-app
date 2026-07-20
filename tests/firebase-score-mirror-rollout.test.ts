@@ -26,3 +26,11 @@ test("server wrapper returns only the boolean capability", () => {
   assert.match(SERVER_SOURCE, /isRegularRoundScoreMirrorCapabilityEnabled\(process\.env\)/);
   assert.equal(SERVER_SOURCE.includes("return process.env"), false);
 });
+
+test("server wrapper logs only safe rollout booleans", () => {
+  assert.match(SERVER_SOURCE, /\[score-mirror-rollout\] capability evaluated/);
+  assert.match(SERVER_SOURCE, /privateFlagPresent/);
+  assert.match(SERVER_SOURCE, /capabilityEnabled/);
+  assert.equal(SERVER_SOURCE.includes("privateFlagValue"), false);
+  assert.doesNotMatch(SERVER_SOURCE, /console\.info\([\s\S]*?process\.env/);
+});

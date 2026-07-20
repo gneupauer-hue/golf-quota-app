@@ -1,7 +1,19 @@
 import "server-only";
 
-import { isRegularRoundScoreMirrorCapabilityEnabled } from "@/lib/firebase/score-mirror-rollout";
+import {
+  FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG,
+  isRegularRoundScoreMirrorCapabilityEnabled
+} from "@/lib/firebase/score-mirror-rollout";
 
 export function getRegularRoundScoreMirrorCapability() {
-  return isRegularRoundScoreMirrorCapabilityEnabled(process.env);
+  const privateFlagPresent =
+    typeof process.env[FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG] === "string";
+  const capabilityEnabled = isRegularRoundScoreMirrorCapabilityEnabled(process.env);
+
+  console.info("[score-mirror-rollout] capability evaluated", {
+    privateFlagPresent,
+    capabilityEnabled
+  });
+
+  return capabilityEnabled;
 }
