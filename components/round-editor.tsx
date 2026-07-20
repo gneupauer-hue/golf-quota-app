@@ -17,6 +17,12 @@ import {
   shouldAttemptFirestoreScoreMirror
 } from "@/lib/firebase/score-write-operations";
 import {
+  addRecentLocalOperationId,
+  reconcileRealtimeQuickScoreDisplay,
+  type RealtimeScoreDisplayState,
+  type RealtimeScoreDisplayMirror
+} from "@/lib/firebase/realtime-score-display";
+import {
   calculateLiveLeaders,
   calculateLiveProjections,
   calculatePayoutPredictions,
@@ -47,6 +53,7 @@ import {
   getTeamFormats
 } from "@/lib/round-setup";
 import { classNames, formatDateInput, formatRoundNameFromDate, getPreferredRoundName } from "@/lib/utils";
+import type { ScoreMirrorListenerSnapshot } from "@/lib/firebase/score-listener";
 
 type PlayerOption = {
   id: string;
@@ -105,6 +112,7 @@ type EditorProps = {
     players: string[];
   }>;
   regularRoundScoreMirrorEnabled?: boolean;
+  realtimeScoreDisplayEnabled?: boolean;
 };
 
 type RowState = {
@@ -899,7 +907,8 @@ export function RoundEditor({
   partnerHistory,
   quotaSnapshot,
   groups: initialGroups,
-  regularRoundScoreMirrorEnabled = false
+  regularRoundScoreMirrorEnabled = false,
+  realtimeScoreDisplayEnabled = false
 }: EditorProps) {
   const router = useRouter();
   const { user, memberships, activeClubId } = useFirebaseAuth();
@@ -958,6 +967,14 @@ export function RoundEditor({
       scoreVersion: null,
       message: ""
     });
+  const [dirtyPlayerIds, setDirtyPlayerIds] = useState<string[]>([]);
+  const [savingPlayerIds, setSavingPlayerIds] = useState<string[]>([]);
+  const [remoteConflictPlayerIds, setRemoteConflictPlayerIds] = useState<string[]>([]);
+  const [localScoreMirrorOperationIds, setLocalScoreMirrorOperationIds] = useState<string[]>([]);
+  const realtimeScoreDisplayStateRef = useRef<RealtimeScoreDisplayState>({
+    baselineVersions: {},
+    initialized: false
+  });
   const derivedRoundName = useMemo(() => formatRoundNameFromDate(roundDate), [roundDate]);
   const displayRoundName = useMemo(() => getPreferredRoundName(round.roundName, roundDate), [round.roundName, roundDate]);
   const isSkinsOnly = gameMode === "SKINS_ONLY";
@@ -1436,7 +1453,12 @@ export function RoundEditor({
     return Math.max(...totals) - Math.min(...totals);
   }, [setupTeams]);
   const scoreMirrorPilot =
-    isLocked || startedAt ? <ScoreMirrorListenerPilot roundId={round.id} /> : null;
+    isLocked || startedAt ? (
+      <ScoreMirrorListenerPilot
+        roundId={round.id}
+        onSnapshot={realtimeScoreDisplayEnabled ? handleRealtimeScoreSnapshot : undefined}
+      />
+    ) : null;
   const firestoreTestWriteDiagnosticPanel =
     canSeeFirestoreTestWriteDiagnostic && (isLocked || startedAt) ? (
       <SectionCard className="space-y-3 border border-[#D5B154]/30 bg-[#FFF9D8]">
@@ -1479,6 +1501,18 @@ export function RoundEditor({
             <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Version</p>
             <p className="mt-1 text-sm font-semibold text-ink">
               {firestoreTestWriteDiagnostic.scoreVersion ?? "-"}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white/75 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Realtime Display</p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {realtimeScoreDisplayEnabled ? "Enabled" : "Disabled"}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white/75 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Review Needed</p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {remoteConflictPlayerIds.length}
             </p>
           </div>
         </div>
@@ -1561,6 +1595,14 @@ export function RoundEditor({
 
     return lines.join("\n");
   }, [displayRoundName, individualScoringGroupsPreview, isSkinsOnly, playersById, quotaSnapshot, setupScoringGroupsPreview, setupTeams]);
+
+  useEffect(() => {
+    realtimeScoreDisplayStateRef.current = { baselineVersions: {}, initialized: false };
+    setDirtyPlayerIds([]);
+    setSavingPlayerIds([]);
+    setRemoteConflictPlayerIds([]);
+    setLocalScoreMirrorOperationIds([]);
+  }, [activeClubId, round.id, realtimeScoreDisplayEnabled]);
 
   useEffect(() => {
     if (isSkinsOnly) {
@@ -1982,6 +2024,9 @@ export function RoundEditor({
         scoreVersion: typeof result.scoreVersion === "number" ? result.scoreVersion : null,
         message: result.alreadyApplied ? "Firestore mirror write already applied." : "Firestore mirror write saved."
       });
+      if (typeof result.operationId === "string") {
+        setLocalScoreMirrorOperationIds((current) => addRecentLocalOperationId(current, result.operationId));
+      }
       return true;
     } catch (error) {
       setFirestoreTestWriteDiagnostic({
@@ -2591,6 +2636,7 @@ export function RoundEditor({
 
   function updateQuickFrontNine(playerId: string, value: string) {
     setSaveState({ tone: "idle", message: "" });
+    markPlayerDirty(playerId);
     setRows((current) =>
       current.map((row) =>
         row.playerId === playerId
@@ -2605,6 +2651,7 @@ export function RoundEditor({
 
   function updateQuickBackNine(playerId: string, value: string) {
     setSaveState({ tone: "idle", message: "" });
+    markPlayerDirty(playerId);
     setRows((current) =>
       current.map((row) =>
         row.playerId === playerId
@@ -2619,6 +2666,7 @@ export function RoundEditor({
 
   function updateQuickBirdieHoles(playerId: string, value: string) {
     setSaveState({ tone: "idle", message: "" });
+    markPlayerDirty(playerId);
     setRows((current) =>
       current.map((row) =>
         row.playerId === playerId
@@ -2666,6 +2714,57 @@ export function RoundEditor({
         message: error instanceof Error ? error.message : "Refresh failed"
       });
     }
+  }
+
+  function markPlayerDirty(playerId: string) {
+    setDirtyPlayerIds((current) => (current.includes(playerId) ? current : [...current, playerId]));
+  }
+
+  function clearPlayerLocalState(playerId: string) {
+    setDirtyPlayerIds((current) => current.filter((id) => id !== playerId));
+    setSavingPlayerIds((current) => current.filter((id) => id !== playerId));
+    setRemoteConflictPlayerIds((current) => current.filter((id) => id !== playerId));
+  }
+
+  function handleRealtimeScoreSnapshot(snapshot: ScoreMirrorListenerSnapshot) {
+    if (!realtimeScoreDisplayEnabled || scoringEntryMode !== "QUICK") {
+      return;
+    }
+
+    const validScores = snapshot.scores.filter(
+      (score): score is RealtimeScoreDisplayMirror =>
+        score.prismaRoundId === round.id && score.scoringEntryMode === "QUICK"
+    );
+
+    setRows((currentRows) => {
+      const result = reconcileRealtimeQuickScoreDisplay({
+        rows: currentRows,
+        scores: validScores,
+        state: realtimeScoreDisplayStateRef.current,
+        dirtyPlayerIds,
+        savingPlayerIds,
+        localOperationIds: localScoreMirrorOperationIds
+      });
+      realtimeScoreDisplayStateRef.current = result.state;
+
+      if (result.conflictPlayerIds.length) {
+        setRemoteConflictPlayerIds((current) =>
+          Array.from(new Set([...current, ...result.conflictPlayerIds]))
+        );
+        setMessage("This player changed on another phone. Review before saving.");
+      }
+
+      if (result.updatedPlayerIds.length) {
+        const updatedRows = result.rows.filter((row) => result.updatedPlayerIds.includes(row.playerId));
+        setSavedRows((current) => mergeSavedRowState(current, updatedRows));
+        setRemoteConflictPlayerIds((current) =>
+          current.filter((id) => !result.updatedPlayerIds.includes(id))
+        );
+        setToast("Updated from another phone.");
+      }
+
+      return result.rows;
+    });
   }
 
   function openLockedScorePrompt(action: LockedScoreAction) {
@@ -3017,6 +3116,9 @@ export function RoundEditor({
           throw new Error("Could not find this player in the current round. Refresh and try again.");
         }
         if (playerId) {
+          setSavingPlayerIds((current) => (current.includes(playerId) ? current : [...current, playerId]));
+        }
+        if (playerId) {
           await persistScoreEntries(rowsToSave, {
             includeAllHoles: true,
             previousRows: previousRowsForSave
@@ -3054,9 +3156,13 @@ export function RoundEditor({
         setMessage(messageText);
         setSaved("Saved");
         if (playerId) {
+          clearPlayerLocalState(playerId);
           await refreshRoundData();
         }
       } catch (error) {
+        if (playerId) {
+          setSavingPlayerIds((current) => current.filter((id) => id !== playerId));
+        }
         const errorMessage = error instanceof Error ? error.message : "Could not save round.";
         setMessage(errorMessage);
         setSaveFailed(errorMessage);

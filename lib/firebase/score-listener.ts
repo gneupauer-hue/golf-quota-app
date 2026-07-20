@@ -10,6 +10,7 @@ import type {
   FirebaseScoreHoles,
   FirebaseScoreMirror
 } from "@/lib/firebase/types";
+import type { RealtimeScoreDisplayMirror } from "@/lib/firebase/realtime-score-display";
 
 export type ScoreMirrorListenerDocument = {
   id: string;
@@ -18,12 +19,12 @@ export type ScoreMirrorListenerDocument = {
 
 export type NormalizedScoreMirrorDocument = {
   docId: string;
-  score: FirebaseScoreMirror | null;
+  score: RealtimeScoreDisplayMirror | null;
   malformedReason: string | null;
 };
 
 export type ScoreMirrorListenerSnapshot = {
-  scores: FirebaseScoreMirror[];
+  scores: RealtimeScoreDisplayMirror[];
   malformed: NormalizedScoreMirrorDocument[];
 };
 
@@ -180,6 +181,8 @@ export function normalizeScoreMirrorDocument(doc: ScoreMirrorListenerDocument): 
   const checksum = data.checksum as string;
   const scoreVersion = data.scoreVersion;
   const source = data.source as FirebaseScoreMirror["source"];
+  const lastEditedByUid = typeof data.lastEditedByUid === "string" ? data.lastEditedByUid : null;
+  const lastOperationId = typeof data.lastOperationId === "string" ? data.lastOperationId : null;
 
   return {
     docId: doc.id,
@@ -198,7 +201,9 @@ export function normalizeScoreMirrorDocument(doc: ScoreMirrorListenerDocument): 
       birdieHoles,
       source,
       scoreVersion,
-      checksum
+      checksum,
+      lastEditedByUid,
+      lastOperationId
     }
   };
 }

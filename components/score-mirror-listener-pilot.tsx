@@ -106,7 +106,13 @@ function getStatusTone(status: ListenerStatus) {
   return "bg-canvas text-ink/70";
 }
 
-export function ScoreMirrorListenerPilot({ roundId }: { roundId: string | null }) {
+export function ScoreMirrorListenerPilot({
+  roundId,
+  onSnapshot
+}: {
+  roundId: string | null;
+  onSnapshot?: (snapshot: ScoreMirrorListenerSnapshot) => void;
+}) {
   const { user, memberships, activeClubId } = useFirebaseAuth();
   const [state, setState] = useState<ListenerState>(INITIAL_LISTENER_STATE);
   const activeMembership = useMemo(
@@ -124,6 +130,11 @@ export function ScoreMirrorListenerPilot({ roundId }: { roundId: string | null }
     membership: activeMembership
   });
   const latestSubscriptionKey = useRef("");
+  const onSnapshotRef = useRef(onSnapshot);
+
+  useEffect(() => {
+    onSnapshotRef.current = onSnapshot;
+  }, [onSnapshot]);
 
   useEffect(() => {
     if (!shouldSubscribe || !activeClubId || !roundId) {
@@ -147,6 +158,7 @@ export function ScoreMirrorListenerPilot({ roundId }: { roundId: string | null }
         if (latestSubscriptionKey.current !== subscriptionKey) {
           return;
         }
+        onSnapshotRef.current?.(snapshot);
         setState(buildScoreMirrorPilotSnapshotState(roundId, snapshot, new Date().toISOString()));
       },
       onError: (error) => {
