@@ -209,6 +209,18 @@ function assertValidFirestoreActivePointer(
 ) {
   if (!pointer) return;
 
+  if (typeof pointer.roundId !== "string" || !pointer.roundId.trim()) {
+    throw new Error("Malformed Firestore active-round pointer: missing roundId.");
+  }
+
+  if (typeof pointer.prismaRoundId !== "string" || !pointer.prismaRoundId.trim()) {
+    throw new Error("Malformed Firestore active-round pointer: missing prismaRoundId.");
+  }
+
+  if (pointer.prismaRoundId !== pointer.roundId) {
+    throw new Error("Malformed Firestore active-round pointer: mismatched round IDs.");
+  }
+
   if (typeof pointer.checksum !== "string" || !pointer.checksum.trim()) {
     throw new Error("Malformed Firestore active-round pointer: missing checksum.");
   }

@@ -462,10 +462,10 @@ export function auditFirebaseRoundMirror(
   }
 
   if (activePointerExisting && activePointerExisting.id !== expected.activePointer.roundId) {
-    activePointerAudit.createdIds.push(expected.activePointer.roundId);
-    activePointerAudit.updatedIds = [];
+    activePointerAudit.updatedIds = [expected.activePointer.roundId];
+    activePointerAudit.createdIds = [];
     activePointerAudit.unchangedIds = [];
-    activePointerAudit.extraIds.push(activePointerExisting.id);
+    activePointerAudit.extraIds = [];
     finalizeAuditSection(activePointerAudit);
   }
 

@@ -373,6 +373,49 @@ test("publish writes only created and updated setup mirror docs", async () => {
   assert.equal(writtenInput.activePointer?.roundId, "round-1");
 });
 
+test("publish rolls over prior valid active pointer without touching old round data", async () => {
+  let written: RoundMirrorPublishWriteInput | null = null;
+  let writeClubId: string | null = null;
+  let writeRoundId: string | null = null;
+  const response = await handleRoundMirrorPublishRequest(
+    makeRequest(),
+    makeAdapters({
+      readFirestoreActivePointer: async () => ({
+        roundId: "prior-round",
+        prismaRoundId: "prior-round",
+        checksum: "prior-pointer-checksum"
+      }),
+      writeRoundMirror: async (clubId, roundId, input) => {
+        writeClubId = clubId;
+        writeRoundId = roundId;
+        written = input;
+        return 4;
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(writeClubId, "club-1");
+  assert.equal(writeRoundId, "round-1");
+  assert.deepEqual(json.round.counts, { created: 1, updated: 0, unchanged: 0, extra: 0 });
+  assert.deepEqual(json.entries.counts, { created: 2, updated: 0, unchanged: 0, extra: 0 });
+  assert.deepEqual(json.activePointer.counts, { created: 0, updated: 1, unchanged: 0, extra: 0 });
+  assert.deepEqual(json.activePointer.updatedIds, ["round-1"]);
+  assert.deepEqual(json.activePointer.extraIds, []);
+  assert.equal(json.writesPlanned, 4);
+  assert.equal(json.writesApplied, 4);
+  assert.ok(written);
+  const writtenInput = written as RoundMirrorPublishWriteInput;
+  assert.equal(writtenInput.round?.prismaRoundId, "round-1");
+  assert.deepEqual(
+    writtenInput.entries.map((entry) => entry.prismaPlayerId).sort(),
+    ["player-1", "player-2"]
+  );
+  assert.equal(writtenInput.activePointer?.roundId, "round-1");
+  assert.equal(JSON.stringify(writtenInput).includes("prior-round"), false);
+});
+
 test("score fields are excluded from publish writes", async () => {
   let written: RoundMirrorPublishWriteInput | null = null;
   const response = await handleRoundMirrorPublishRequest(
@@ -492,6 +535,29 @@ test("malformed Firestore mirror docs are rejected before write", async () => {
   assert.equal(response.status, 500);
   assert.equal(writes, 0);
   assert.match(String(json.error), /missing checksum/);
+});
+
+test("malformed active pointer blocks publish before write", async () => {
+  let writes = 0;
+  const response = await handleRoundMirrorPublishRequest(
+    makeRequest(),
+    makeAdapters({
+      readFirestoreActivePointer: async () => ({
+        roundId: "prior-round",
+        prismaRoundId: undefined,
+        checksum: "prior-pointer-checksum"
+      }),
+      writeRoundMirror: async () => {
+        writes += 1;
+        return 1;
+      }
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 500);
+  assert.equal(writes, 0);
+  assert.match(String(json.error), /active-round pointer/);
 });
 
 test("publish does not mutate Prisma input data", async () => {

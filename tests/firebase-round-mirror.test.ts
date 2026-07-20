@@ -271,7 +271,7 @@ test("audit classifies round, entries, and active pointer as created, updated, u
   assert.deepEqual(result.entries.extraIds, ["extra-player"]);
 });
 
-test("audit reports created round and extra existing round when IDs differ", () => {
+test("audit reports created round and extra existing round when round IDs differ", () => {
   const expected = mapPrismaRoundToFirebaseMirror(makeRound());
   const result = auditFirebaseRoundMirror(expected, {
     round: { prismaRoundId: "old-round", checksum: "old" },
@@ -281,7 +281,28 @@ test("audit reports created round and extra existing round when IDs differ", () 
 
   assert.deepEqual(result.round.counts, { created: 1, updated: 0, unchanged: 0, extra: 1 });
   assert.deepEqual(result.round.extraIds, ["old-round"]);
-  assert.deepEqual(result.activePointer.counts, { created: 1, updated: 0, unchanged: 0, extra: 1 });
+  assert.deepEqual(result.activePointer.counts, { created: 0, updated: 1, unchanged: 0, extra: 0 });
+  assert.deepEqual(result.activePointer.updatedIds, ["round-1"]);
+  assert.deepEqual(result.activePointer.extraIds, []);
+});
+
+test("audit treats prior valid active pointer as rollover update without extra", () => {
+  const expected = mapPrismaRoundToFirebaseMirror(makeRound());
+  const result = auditFirebaseRoundMirror(expected, {
+    round: null,
+    entries: [],
+    activePointer: {
+      roundId: "prior-round",
+      prismaRoundId: "prior-round",
+      checksum: "prior-pointer-checksum"
+    }
+  });
+
+  assert.deepEqual(result.round.counts, { created: 1, updated: 0, unchanged: 0, extra: 0 });
+  assert.deepEqual(result.entries.counts, { created: 2, updated: 0, unchanged: 0, extra: 0 });
+  assert.deepEqual(result.activePointer.counts, { created: 0, updated: 1, unchanged: 0, extra: 0 });
+  assert.deepEqual(result.activePointer.updatedIds, ["round-1"]);
+  assert.deepEqual(result.activePointer.extraIds, []);
 });
 
 test("audit is idempotent and does not mutate inputs", () => {

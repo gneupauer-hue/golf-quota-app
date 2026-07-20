@@ -389,6 +389,29 @@ test("entry created and active-pointer updated audits are returned", async () =>
   assert.deepEqual(json.activePointer.counts, { created: 0, updated: 1, unchanged: 0, extra: 0 });
 });
 
+test("prior valid active pointer is reported as rollover update without extra", async () => {
+  const response = await handleRoundMirrorDryRunRequest(
+    makeRequest(),
+    makeAdapters({
+      readFirestoreActivePointer: async () => ({
+        roundId: "prior-round",
+        prismaRoundId: "prior-round",
+        checksum: "prior-pointer-checksum"
+      })
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(json.round.counts, { created: 1, updated: 0, unchanged: 0, extra: 0 });
+  assert.deepEqual(json.entries.counts, { created: 2, updated: 0, unchanged: 0, extra: 0 });
+  assert.deepEqual(json.activePointer.counts, { created: 0, updated: 1, unchanged: 0, extra: 0 });
+  assert.deepEqual(json.activePointer.updatedIds, ["round-1"]);
+  assert.deepEqual(json.activePointer.extraIds, []);
+  assert.equal(json.writesPlanned, 0);
+  assert.equal(json.writesApplied, 0);
+});
+
 test("dry-run never writes and does not mutate Prisma input data", async () => {
   const prismaRound = makeRound();
   const snapshot = structuredClone(prismaRound);
