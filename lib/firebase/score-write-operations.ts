@@ -17,8 +17,10 @@ export type FirestoreTestScoreOperationRow = {
 export const NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG =
   "NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED";
 
-export function isRegularRoundScoreMirrorClientEnabled(env: Record<string, string | undefined> = process.env) {
-  return env[NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG] === "true";
+export function isRegularRoundScoreMirrorClientEnabled(
+  value: string | undefined = process.env.NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED
+) {
+  return value === "true";
 }
 
 export function shouldAttemptFirestoreScoreMirror(input: {
