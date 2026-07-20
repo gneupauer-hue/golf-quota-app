@@ -80,12 +80,19 @@ export type ScoreWriteRouteAdapters = {
   verifyClub: (clubId: string) => Promise<{ id: string } | null>;
   readClubMembership: (clubId: string, uid: string) => Promise<ScoreWriteMembership | null>;
   readActivePrismaRoundScores: () => Promise<ScoreWritePrismaRound | null>;
+  readFirestoreRoundShell: (clubId: string, roundId: string) => Promise<Record<string, unknown> | null>;
   runScoreWriteTransaction: (input: ScoreWriteTransactionInput) => Promise<ScoreWriteTransactionResult>;
+  isRegularRoundScoreMirrorEnabled?: () => boolean;
   createOperationId?: () => string;
 };
 
 const VALID_HOLE_SCORES = new Set([-1, 0, 1, 2, 4, 6]);
 const VALID_SKIN_TYPES = new Set(["birdie", "eagle", "ace"]);
+export const FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG = "FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED";
+
+export function isRegularRoundScoreMirrorServerEnabled(env: Record<string, string | undefined> = process.env) {
+  return env[FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG] === "true";
+}
 
 function jsonError(message: string, status: number, extra: Record<string, unknown> = {}) {
   return NextResponse.json({ ok: false, error: message, ...extra }, { status });
@@ -273,9 +280,13 @@ function validateRequestBody(body: ScoreWriteRequestBody) {
   };
 }
 
-function assertTestRoundGate(
+function assertScoreWriteRoundGate(
   round: ScoreWritePrismaRound | null,
-  expectedPrismaRoundId: string
+  expectedPrismaRoundId: string,
+  options: {
+    regularRoundEnabled: boolean;
+    firestoreRoundShell: Record<string, unknown> | null;
+  }
 ): asserts round is ScoreWritePrismaRound {
   if (!round) {
     throw Object.assign(new Error("No active Prisma round exists."), { status: 409 });
@@ -290,9 +301,31 @@ function assertTestRoundGate(
       status: 409
     });
   }
-  if (round.isTestRound !== true) {
-    throw Object.assign(new Error("Firestore score writes are only enabled for active test rounds."), {
+
+  if (round.isTestRound === true) {
+    return;
+  }
+
+  if (!options.regularRoundEnabled) {
+    throw Object.assign(new Error("Regular-round Firestore score mirroring is disabled."), {
       status: 403
+    });
+  }
+
+  const shell = options.firestoreRoundShell;
+  if (!shell) {
+    throw Object.assign(new Error("Regular-round score mirroring requires an existing Firestore round shell."), {
+      status: 409
+    });
+  }
+  if (
+    shell.prismaRoundId !== round.id ||
+    shell.roundMode !== round.roundMode ||
+    shell.scoringEntryMode !== round.scoringEntryMode ||
+    shell.isTestRound !== false
+  ) {
+    throw Object.assign(new Error("Firestore round shell does not match the active Prisma round."), {
+      status: 409
     });
   }
 }
@@ -314,6 +347,51 @@ function findPlayerScore(round: PrismaScoreMirrorRoundInput, prismaPlayerId: str
     });
   }
   return mapped;
+}
+
+function stableGoodSkinEntries(value: FirebaseScoreGoodSkinEntry[]) {
+  return stableStringify([...value].sort((left, right) => left.holeNumber - right.holeNumber || left.type.localeCompare(right.type)));
+}
+
+export function assertOperationMatchesLatestPrismaScore(
+  operation: ScoreWriteOperation,
+  latestScore: FirebaseScoreMirror
+) {
+  if (operation.type === "set-hole") {
+    const latestValue = latestScore.holes[String(operation.holeNumber) as keyof typeof latestScore.holes];
+    if (latestValue !== operation.value) {
+      throw Object.assign(new Error("Latest Prisma score does not match the requested Firestore hole value."), {
+        status: 409
+      });
+    }
+    return;
+  }
+
+  if (operation.type === "set-quick-front") {
+    if (latestScore.quickFrontNine !== operation.value) {
+      throw Object.assign(new Error("Latest Prisma score does not match the requested Firestore Front value."), {
+        status: 409
+      });
+    }
+    return;
+  }
+
+  if (operation.type === "set-quick-back") {
+    if (latestScore.quickBackNine !== operation.value) {
+      throw Object.assign(new Error("Latest Prisma score does not match the requested Firestore Back value."), {
+        status: 409
+      });
+    }
+    return;
+  }
+
+  if (operation.type === "set-birdie-holes") {
+    if (stableGoodSkinEntries(latestScore.birdieHoles) !== stableGoodSkinEntries(operation.value)) {
+      throw Object.assign(new Error("Latest Prisma score does not match the requested Firestore birdie-hole value."), {
+        status: 409
+      });
+    }
+  }
 }
 
 function stableStringify(value: unknown): string {
@@ -483,9 +561,19 @@ export async function handleScoreWriteRequest(
     assertActiveMembership(await adapters.readClubMembership(input.clubId, decoded.uid));
 
     const activeRound = await adapters.readActivePrismaRoundScores();
-    assertTestRoundGate(activeRound, input.expectedPrismaRoundId);
+    const firestoreRoundShell = activeRound?.isTestRound === false
+      ? await adapters.readFirestoreRoundShell(input.clubId, input.expectedPrismaRoundId)
+      : null;
+    assertScoreWriteRoundGate(activeRound, input.expectedPrismaRoundId, {
+      regularRoundEnabled: adapters.isRegularRoundScoreMirrorEnabled?.() ?? isRegularRoundScoreMirrorServerEnabled(),
+      firestoreRoundShell
+    });
 
-    const initialScore = buildInitialScoreWriteDocument(findPlayerScore(activeRound, input.prismaPlayerId));
+    const latestPrismaScore = findPlayerScore(activeRound, input.prismaPlayerId);
+    if (activeRound.isTestRound === false) {
+      assertOperationMatchesLatestPrismaScore(input.operation, latestPrismaScore);
+    }
+    const initialScore = buildInitialScoreWriteDocument(latestPrismaScore);
     const result = await adapters.runScoreWriteTransaction({
       clubId: input.clubId,
       roundId: activeRound.id,

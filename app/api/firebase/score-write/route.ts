@@ -24,6 +24,10 @@ function buildFirestoreAdapters(db: Firestore) {
       }
 
       return (snapshot.data() as ScoreWriteMembership | undefined) ?? null;
+    },
+    readFirestoreRoundShell: async (clubId: string, roundId: string) => {
+      const snapshot = await db.collection("clubs").doc(clubId).collection("rounds").doc(roundId).get();
+      return snapshot.exists ? snapshot.data() ?? null : null;
     }
   };
 }

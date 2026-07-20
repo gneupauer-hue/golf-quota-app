@@ -14,6 +14,33 @@ export type FirestoreTestScoreOperationRow = {
   birdieHolesText: string;
 };
 
+export const NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG =
+  "NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED";
+
+export function isRegularRoundScoreMirrorClientEnabled(env: Record<string, string | undefined> = process.env) {
+  return env[NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG] === "true";
+}
+
+export function shouldAttemptFirestoreScoreMirror(input: {
+  isTestRound: boolean;
+  isRoundOpenForScoring: boolean;
+  signedIn: boolean;
+  activeClubId: string | null;
+  activeMembershipStatus: string | null | undefined;
+  regularRoundClientEnabled?: boolean;
+}) {
+  if (
+    !input.isRoundOpenForScoring ||
+    !input.signedIn ||
+    !input.activeClubId ||
+    input.activeMembershipStatus !== "active"
+  ) {
+    return false;
+  }
+
+  return input.isTestRound || input.regularRoundClientEnabled === true;
+}
+
 export function cloneFirestoreTestScoreOperationRows<Row extends FirestoreTestScoreOperationRow>(rows: Row[]): Row[] {
   return rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
 }

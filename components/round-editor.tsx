@@ -13,7 +13,9 @@ import { ScoreMirrorListenerPilot } from "@/components/score-mirror-listener-pil
 import { SectionCard } from "@/components/section-card";
 import {
   buildFirestoreTestScoreOperations,
-  cloneFirestoreTestScoreOperationRows
+  cloneFirestoreTestScoreOperationRows,
+  isRegularRoundScoreMirrorClientEnabled,
+  shouldAttemptFirestoreScoreMirror
 } from "@/lib/firebase/score-write-operations";
 import {
   calculateLiveLeaders,
@@ -124,7 +126,7 @@ type SaveState = {
 };
 
 type FirestoreTestWriteDiagnostic = {
-  status: "idle" | "writing" | "written" | "failed" | "disabled";
+  status: "idle" | "writing" | "written" | "failed" | "disabled" | "conflict";
   operationType: string | null;
   scoreVersion: number | null;
   message: string;
@@ -968,13 +970,15 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const hasSupportedMatchFormat = availableMatchFormats.length > 0;
   const isLocked = Boolean(lockedAt);
   const activeFirebaseMembership = memberships.find((membership) => membership.clubId === activeClubId) ?? null;
-  const canUseFirestoreTestScoreWrite = Boolean(
-    isTestRound &&
-      (isLocked || startedAt) &&
-      user &&
-      activeClubId &&
-      activeFirebaseMembership?.status === "active"
-  );
+  const regularRoundScoreMirrorClientEnabled = isRegularRoundScoreMirrorClientEnabled();
+  const canUseFirestoreTestScoreWrite = shouldAttemptFirestoreScoreMirror({
+    isTestRound,
+    isRoundOpenForScoring: Boolean(isLocked || startedAt),
+    signedIn: Boolean(user),
+    activeClubId,
+    activeMembershipStatus: activeFirebaseMembership?.status,
+    regularRoundClientEnabled: regularRoundScoreMirrorClientEnabled
+  });
   const canSeeFirestoreTestWriteDiagnostic = Boolean(
     user &&
       activeFirebaseMembership?.status === "active" &&
@@ -1428,18 +1432,18 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
   const scoreMirrorPilot =
     isLocked || startedAt ? <ScoreMirrorListenerPilot roundId={round.id} /> : null;
   const firestoreTestWriteDiagnosticPanel =
-    canSeeFirestoreTestWriteDiagnostic && isTestRound && (isLocked || startedAt) ? (
+    canSeeFirestoreTestWriteDiagnostic && (isLocked || startedAt) ? (
       <SectionCard className="space-y-3 border border-[#D5B154]/30 bg-[#FFF9D8]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
-              Test-round Firestore Write
+              Firestore Score Mirror Write
             </p>
             <h3 className="mt-1 text-lg font-semibold text-ink">
               {canUseFirestoreTestScoreWrite ? "Enabled" : "Disabled"}
             </h3>
             <p className="mt-1 text-sm text-ink/65">
-              Prisma scoring remains live. This only mirrors test-round score actions.
+              Prisma scoring remains live. Firestore only receives granular shadow mirror actions.
             </p>
           </div>
           <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink">
@@ -1447,6 +1451,18 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-2xl bg-white/75 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Test Mirror</p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {isTestRound && canUseFirestoreTestScoreWrite ? "Enabled" : "Disabled"}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white/75 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Regular Mirror</p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {!isTestRound && canUseFirestoreTestScoreWrite ? "Enabled" : "Disabled"}
+            </p>
+          </div>
           <div className="rounded-2xl bg-white/75 px-3 py-2.5">
             <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Latest Op</p>
             <p className="mt-1 break-words text-sm font-semibold text-ink">
@@ -1908,25 +1924,47 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         status: "writing",
         operationType: String(operation.type),
         scoreVersion: null,
-        message: "Writing test-round Firestore mirror..."
+        message: isTestRound ? "Writing test-round Firestore mirror..." : "Writing regular-round Firestore shadow mirror..."
       });
       const idToken = await user.getIdToken();
-      const response = await fetch("/api/firebase/score-write", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          clubId: activeClubId,
-          expectedProjectId: "irem-golf-quota-app",
-          expectedPrismaRoundId: round.id,
-          prismaPlayerId: playerId,
-          operation,
-          clientRequestId: `${round.id}:${playerId}:${String(operation.type)}:${Date.now()}:${Math.random().toString(36).slice(2)}`
-        })
-      });
-      const result = await response.json();
+      const clientRequestId = `${round.id}:${playerId}:${String(operation.type)}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const body = {
+        clubId: activeClubId,
+        expectedProjectId: "irem-golf-quota-app",
+        expectedPrismaRoundId: round.id,
+        prismaPlayerId: playerId,
+        operation,
+        clientRequestId
+      };
+      const sendRequest = async (expectedScoreVersion?: number) => {
+        const response = await fetch("/api/firebase/score-write", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            ...body,
+            ...(expectedScoreVersion == null ? {} : { expectedScoreVersion })
+          })
+        });
+        const result = await response.json();
+        return { response, result };
+      };
+      let { response, result } = await sendRequest();
+
+      if (
+        response.status === 409 &&
+        typeof result.currentScoreVersion === "number"
+      ) {
+        setFirestoreTestWriteDiagnostic({
+          status: "conflict",
+          operationType: String(operation.type),
+          scoreVersion: result.currentScoreVersion,
+          message: "Firestore score mirror conflict detected. Retrying once with the latest version."
+        });
+        ({ response, result } = await sendRequest(result.currentScoreVersion));
+      }
 
       if (!response.ok) {
         throw new Error(result.error ?? "Could not write Firestore test score.");
@@ -1936,7 +1974,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         status: "written",
         operationType: result.operationType ?? String(operation.type),
         scoreVersion: typeof result.scoreVersion === "number" ? result.scoreVersion : null,
-        message: result.alreadyApplied ? "Firestore test write already applied." : "Firestore test write saved."
+        message: result.alreadyApplied ? "Firestore mirror write already applied." : "Firestore mirror write saved."
       });
       return true;
     } catch (error) {

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   buildFirestoreTestScoreOperations,
   cloneFirestoreTestScoreOperationRows,
+  isRegularRoundScoreMirrorClientEnabled,
+  shouldAttemptFirestoreScoreMirror,
   type FirestoreTestScoreOperationRow
 } from "@/lib/firebase/score-write-operations";
 
@@ -122,4 +124,67 @@ test("captured previous snapshots are not changed by later row mutations", () =>
   );
   assert.equal(capturedPreviousRows[0].quickFrontNine, 0);
   assert.equal(capturedPreviousRows[0].holeScores[0], null);
+});
+
+test("regular-round client rollout flag defaults to false unless explicitly true", () => {
+  assert.equal(isRegularRoundScoreMirrorClientEnabled({}), false);
+  assert.equal(
+    isRegularRoundScoreMirrorClientEnabled({ NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "" }),
+    false
+  );
+  assert.equal(
+    isRegularRoundScoreMirrorClientEnabled({ NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "false" }),
+    false
+  );
+  assert.equal(
+    isRegularRoundScoreMirrorClientEnabled({ NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "TRUE" }),
+    false
+  );
+  assert.equal(
+    isRegularRoundScoreMirrorClientEnabled({ NEXT_PUBLIC_FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "true" }),
+    true
+  );
+});
+
+test("client attempts regular-round mirroring only when the public flag is enabled", () => {
+  const base = {
+    isRoundOpenForScoring: true,
+    signedIn: true,
+    activeClubId: "club-1",
+    activeMembershipStatus: "active"
+  };
+
+  assert.equal(
+    shouldAttemptFirestoreScoreMirror({
+      ...base,
+      isTestRound: true,
+      regularRoundClientEnabled: false
+    }),
+    true
+  );
+  assert.equal(
+    shouldAttemptFirestoreScoreMirror({
+      ...base,
+      isTestRound: false,
+      regularRoundClientEnabled: false
+    }),
+    false
+  );
+  assert.equal(
+    shouldAttemptFirestoreScoreMirror({
+      ...base,
+      isTestRound: false,
+      regularRoundClientEnabled: true
+    }),
+    true
+  );
+  assert.equal(
+    shouldAttemptFirestoreScoreMirror({
+      ...base,
+      isTestRound: false,
+      activeMembershipStatus: "removed",
+      regularRoundClientEnabled: true
+    }),
+    false
+  );
 });

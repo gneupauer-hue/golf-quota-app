@@ -140,9 +140,10 @@ test("round editor mounts the pilot without changing Prisma score save paths", (
   assert.equal(ROUND_EDITOR_SOURCE.includes("/api/firebase/score-mirror/publish"), false);
 });
 
-test("round editor test-write pilot is server-routed and test-round gated", () => {
+test("round editor score-write pilot is server-routed and gated by test or public regular flag", () => {
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("/api/firebase/score-write"), -1);
-  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("isTestRound &&"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("isRegularRoundScoreMirrorClientEnabled"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("shouldAttemptFirestoreScoreMirror"), -1);
   assert.ok(
     ROUND_EDITOR_SOURCE.indexOf("/api/rounds/${round.id}/score-entry") <
       ROUND_EDITOR_SOURCE.indexOf("await writeFirestoreTestScoreOperations(nextRows, options);")
@@ -151,6 +152,14 @@ test("round editor test-write pilot is server-routed and test-round gated", () =
   assert.equal(ROUND_EDITOR_SOURCE.includes("buildFirestoreTestScoreOperations(nextRows, savedRows, options)"), false);
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("canSeeFirestoreTestWriteDiagnostic"), -1);
   assert.equal(/\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\b/.test(ROUND_EDITOR_SOURCE), false);
+});
+
+test("round editor owner diagnostics show test and regular mirror status only to owner/admin", () => {
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("canSeeFirestoreTestWriteDiagnostic"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("activeFirebaseMembership.role === \"owner\""), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("activeFirebaseMembership.role === \"admin\""), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("Test Mirror"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("Regular Mirror"), -1);
 });
 
 test("round editor player score save captures previous rows and uses granular PATCH before Firestore writes", () => {
@@ -176,6 +185,24 @@ test("round editor reports zero Firestore operations without claiming a write", 
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("No Firestore mirror operation was needed."), -1);
   assert.ok(
     ROUND_EDITOR_SOURCE.indexOf("No Firestore mirror operation was needed.") <
-      ROUND_EDITOR_SOURCE.indexOf("Firestore test write saved.")
+      ROUND_EDITOR_SOURCE.indexOf("Firestore mirror write saved.")
+  );
+});
+
+test("round editor retries a score mirror conflict only once with the same client request ID", () => {
+  const clientRequestIdIndex = ROUND_EDITOR_SOURCE.indexOf("const clientRequestId =");
+  const firstSendIndex = ROUND_EDITOR_SOURCE.indexOf("let { response, result } = await sendRequest();");
+  const retryIndex = ROUND_EDITOR_SOURCE.indexOf("await sendRequest(result.currentScoreVersion)");
+
+  assert.ok(clientRequestIdIndex >= 0);
+  assert.ok(firstSendIndex > clientRequestIdIndex);
+  assert.ok(retryIndex > firstSendIndex);
+  assert.equal(
+    ROUND_EDITOR_SOURCE.includes("sendRequest(result.currentScoreVersion +"),
+    false
+  );
+  assert.equal(
+    ROUND_EDITOR_SOURCE.includes("buildFirestoreTestScoreOperations(rows"),
+    false
   );
 });

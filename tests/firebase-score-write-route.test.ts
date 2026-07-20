@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyScoreWriteOperation,
+  assertOperationMatchesLatestPrismaScore,
   buildInitialScoreWriteDocument,
   handleScoreWriteRequest,
+  isRegularRoundScoreMirrorServerEnabled,
   normalizeExistingScoreDocument,
   type FirestoreScoreWriteDocument,
   type ScoreWriteMembership,
@@ -95,6 +97,12 @@ function makeAdapters(overrides: Partial<ScoreWriteRouteAdapters> = {}): ScoreWr
     verifyClub: async (clubId) => ({ id: clubId }),
     readClubMembership: async () => ({ role: "member", status: "active" }),
     readActivePrismaRoundScores: async () => makeRound(),
+    readFirestoreRoundShell: async () => ({
+      prismaRoundId: "round-1",
+      roundMode: "MATCH_QUOTA",
+      scoringEntryMode: "QUICK",
+      isTestRound: false
+    }),
     runScoreWriteTransaction: async (input) => {
       const previousScoreVersion = 0;
       const { score, updatedFields } = applyScoreWriteOperation(
@@ -117,6 +125,26 @@ function makeAdapters(overrides: Partial<ScoreWriteRouteAdapters> = {}): ScoreWr
 async function readJson(response: Response) {
   return (await response.json()) as Record<string, any>;
 }
+
+test("regular-round server rollout flag defaults to false unless explicitly true", () => {
+  assert.equal(isRegularRoundScoreMirrorServerEnabled({}), false);
+  assert.equal(
+    isRegularRoundScoreMirrorServerEnabled({ FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "" }),
+    false
+  );
+  assert.equal(
+    isRegularRoundScoreMirrorServerEnabled({ FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "false" }),
+    false
+  );
+  assert.equal(
+    isRegularRoundScoreMirrorServerEnabled({ FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "TRUE" }),
+    false
+  );
+  assert.equal(
+    isRegularRoundScoreMirrorServerEnabled({ FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED: "true" }),
+    true
+  );
+});
 
 test("unauthenticated and invalid token requests are denied with JSON", async () => {
   const missing = await handleScoreWriteRequest(makeRequest({}, ""), makeAdapters());
@@ -187,6 +215,118 @@ test("score writes are gated to the active matching test round", async () => {
   assert.equal(closedRound.status, 409);
 });
 
+test("regular-round score mirroring is denied when the private server flag is false", async () => {
+  const response = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 } }),
+    makeAdapters({
+      readActivePrismaRoundScores: async () =>
+        makeRound({
+          isTestRound: false,
+          entries: [makeEntry({ quickFrontNine: 1 })]
+        }),
+      isRegularRoundScoreMirrorEnabled: () => false
+    })
+  );
+
+  assert.equal(response.status, 403);
+  assert.match(String((await readJson(response)).error), /disabled/);
+});
+
+test("regular-round score mirroring requires a matching Firestore round shell", async () => {
+  const missingShell = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 } }),
+    makeAdapters({
+      readActivePrismaRoundScores: async () =>
+        makeRound({
+          isTestRound: false,
+          entries: [makeEntry({ quickFrontNine: 1 })]
+        }),
+      readFirestoreRoundShell: async () => null,
+      isRegularRoundScoreMirrorEnabled: () => true
+    })
+  );
+  const mismatchedShell = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 } }),
+    makeAdapters({
+      readActivePrismaRoundScores: async () =>
+        makeRound({
+          isTestRound: false,
+          entries: [makeEntry({ quickFrontNine: 1 })]
+        }),
+      readFirestoreRoundShell: async () => ({
+        prismaRoundId: "round-1",
+        roundMode: "SKINS_ONLY",
+        scoringEntryMode: "QUICK",
+        isTestRound: false
+      }),
+      isRegularRoundScoreMirrorEnabled: () => true
+    })
+  );
+
+  assert.equal(missingShell.status, 409);
+  assert.match(String((await readJson(missingShell)).error), /round shell/);
+  assert.equal(mismatchedShell.status, 409);
+  assert.match(String((await readJson(mismatchedShell)).error), /does not match/);
+});
+
+test("regular-round score mirroring is allowed only after Prisma state matches the granular request", async () => {
+  let writeCount = 0;
+  const response = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 } }),
+    makeAdapters({
+      readActivePrismaRoundScores: async () =>
+        makeRound({
+          isTestRound: false,
+          entries: [makeEntry({ quickFrontNine: 1 })]
+        }),
+      isRegularRoundScoreMirrorEnabled: () => true,
+      runScoreWriteTransaction: async (input) => {
+        writeCount += 1;
+        return {
+          previousScoreVersion: 0,
+          scoreVersion: 1,
+          alreadyApplied: false,
+          updatedFields: [input.operation.type]
+        };
+      }
+    })
+  );
+  const mismatch = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 2 } }),
+    makeAdapters({
+      readActivePrismaRoundScores: async () =>
+        makeRound({
+          isTestRound: false,
+          entries: [makeEntry({ quickFrontNine: 1 })]
+        }),
+      isRegularRoundScoreMirrorEnabled: () => true
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal((await readJson(response)).scoreVersion, 1);
+  assert.equal(writeCount, 1);
+  assert.equal(mismatch.status, 409);
+  assert.match(String((await readJson(mismatch)).error), /Latest Prisma score/);
+});
+
+test("test-round score writes still work when regular-round flags are false", async () => {
+  const response = await handleScoreWriteRequest(
+    makeRequest({ operation: { type: "set-quick-front", value: 1 } }),
+    makeAdapters({
+      readActivePrismaRoundScores: async () =>
+        makeRound({
+          isTestRound: true,
+          entries: [makeEntry({ quickFrontNine: null })]
+        }),
+      isRegularRoundScoreMirrorEnabled: () => false
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal((await readJson(response)).operationType, "set-quick-front");
+});
+
 test("request validation rejects wrong project, unknown player, duplicates, and protected fields", async () => {
   const wrongProject = await handleScoreWriteRequest(
     makeRequest({ expectedProjectId: "other-project" }),
@@ -241,6 +381,18 @@ test("quick score operations are rejected for detailed scoring mode", () => {
   assert.throws(
     () => applyScoreWriteOperation({ ...base, scoreVersion: 2 }, { type: "set-quick-front", value: 12 }, "2026-07-18T18:00:00.000Z"),
     /QUICK scoring mode/
+  );
+});
+
+test("latest Prisma score verification compares only the requested granular field", () => {
+  const latest = initialScore(makeRound({ entries: [makeEntry({ quickFrontNine: 1, quickBackNine: 0 })] }));
+
+  assert.doesNotThrow(() =>
+    assertOperationMatchesLatestPrismaScore({ type: "set-quick-front", value: 1 }, latest)
+  );
+  assert.throws(
+    () => assertOperationMatchesLatestPrismaScore({ type: "set-quick-front", value: 2 }, latest),
+    /Latest Prisma score/
   );
 });
 
