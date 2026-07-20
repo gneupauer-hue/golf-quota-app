@@ -18,6 +18,8 @@ const PLAYER_MIRROR_PROJECT_ID = "irem-golf-quota-app";
 const SCORE_MIRROR_DRY_RUN_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 const SCORE_MIRROR_PROJECT_ID = "irem-golf-quota-app";
 const SCORE_MIRROR_EXPECTED_PRISMA_ROUND_ID = null;
+const ROUND_MIRROR_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
+const ROUND_MIRROR_PROJECT_ID = "irem-golf-quota-app";
 
 type PlayerMirrorDryRunResult = {
   mode?: "dry-run" | "write";
@@ -63,6 +65,47 @@ type ScoreMirrorAuditDisplayItem = {
   name?: string | null;
 };
 
+type RoundMirrorAuditCounts = {
+  created?: number;
+  updated?: number;
+  unchanged?: number;
+  extra?: number;
+};
+
+type RoundMirrorAuditSection = {
+  counts?: RoundMirrorAuditCounts;
+  createdIds?: string[];
+  updatedIds?: string[];
+  unchangedIds?: string[];
+  extraIds?: string[];
+};
+
+type RoundMirrorEntryAuditSection = {
+  counts?: RoundMirrorAuditCounts;
+  created?: ScoreMirrorAuditDisplayItem[];
+  updated?: ScoreMirrorAuditDisplayItem[];
+  unchanged?: ScoreMirrorAuditDisplayItem[];
+  extra?: ScoreMirrorAuditDisplayItem[];
+};
+
+type RoundMirrorDryRunResult = {
+  ok?: boolean;
+  mode?: "dry-run" | "publish";
+  status?: string;
+  prismaRoundId?: string | null;
+  firestoreRoundId?: string | null;
+  round?: RoundMirrorAuditSection;
+  entries?: RoundMirrorEntryAuditSection;
+  activePointer?: RoundMirrorAuditSection;
+  writesPlanned?: number;
+  writesApplied?: number;
+  error?: string;
+};
+
+type RoundMirrorPublishResult = RoundMirrorDryRunResult & {
+  publishedRoundId?: string | null;
+};
+
 type ScoreMirrorPublishResult = {
   ok?: boolean;
   status?: string;
@@ -103,6 +146,14 @@ export function buildScoreMirrorDryRunRequestBody() {
     clubId: SCORE_MIRROR_DRY_RUN_CLUB_ID,
     expectedProjectId: SCORE_MIRROR_PROJECT_ID,
     expectedPrismaRoundId: SCORE_MIRROR_EXPECTED_PRISMA_ROUND_ID
+  };
+}
+
+export function buildRoundMirrorDryRunRequestBody(activePrismaRoundId: string | null) {
+  return {
+    clubId: ROUND_MIRROR_CLUB_ID,
+    expectedProjectId: ROUND_MIRROR_PROJECT_ID,
+    expectedPrismaRoundId: activePrismaRoundId
   };
 }
 
@@ -149,6 +200,50 @@ export function buildScoreMirrorPublishRequestBody(dryRunResult: ScoreMirrorDryR
   };
 }
 
+function hasRoundMirrorExtras(result: RoundMirrorDryRunResult | null) {
+  return (
+    (result?.round?.counts?.extra ?? 0) > 0 ||
+    (result?.entries?.counts?.extra ?? 0) > 0 ||
+    (result?.activePointer?.counts?.extra ?? 0) > 0
+  );
+}
+
+export function canPublishRoundMirror(input: {
+  activePrismaRoundId: string | null;
+  confirmed: boolean;
+  dryRunError?: string;
+  dryRunResult: RoundMirrorDryRunResult | null;
+  isBusy: boolean;
+}) {
+  return Boolean(
+    !input.isBusy &&
+      input.confirmed &&
+      !input.dryRunError &&
+      input.activePrismaRoundId &&
+      input.dryRunResult?.ok !== false &&
+      input.dryRunResult?.mode === "dry-run" &&
+      input.dryRunResult?.prismaRoundId === input.activePrismaRoundId &&
+      input.dryRunResult?.status !== "no-active-round" &&
+      !hasRoundMirrorExtras(input.dryRunResult)
+  );
+}
+
+export function buildRoundMirrorPublishRequestBody(input: {
+  activePrismaRoundId: string | null;
+  dryRunResult: RoundMirrorDryRunResult;
+}) {
+  if (!input.activePrismaRoundId || input.dryRunResult.prismaRoundId !== input.activePrismaRoundId) {
+    throw new Error("Run a successful dry-run for the active round before publishing.");
+  }
+
+  return {
+    clubId: ROUND_MIRROR_CLUB_ID,
+    expectedProjectId: ROUND_MIRROR_PROJECT_ID,
+    expectedPrismaRoundId: input.activePrismaRoundId,
+    confirmPublish: true
+  };
+}
+
 function renderScoreAuditItems(items: ScoreMirrorAuditDisplayItem[] | undefined) {
   if (!items?.length) {
     return null;
@@ -166,7 +261,24 @@ function renderScoreAuditItems(items: ScoreMirrorAuditDisplayItem[] | undefined)
   );
 }
 
-export function FirebaseAccountPanel() {
+function renderRoundAuditIds(label: string, ids: string[] | undefined) {
+  if (!ids?.length) {
+    return null;
+  }
+
+  return (
+    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2 text-xs text-ink/75">
+      <span className="font-semibold text-ink">{label}: </span>
+      {ids.join(", ")}
+    </p>
+  );
+}
+
+export function FirebaseAccountPanel({
+  activePrismaRoundId = null
+}: {
+  activePrismaRoundId?: string | null;
+}) {
   const { user, memberships, activeClubId, loading, authError, setActiveClubId, signOut } = useFirebaseAuth();
   const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
   const [email, setEmail] = useState("");
@@ -181,6 +293,11 @@ export function FirebaseAccountPanel() {
   const [scoreMirrorPublishResult, setScoreMirrorPublishResult] = useState<ScoreMirrorPublishResult | null>(null);
   const [scoreMirrorPublishError, setScoreMirrorPublishError] = useState("");
   const [scoreMirrorPublishConfirm, setScoreMirrorPublishConfirm] = useState(false);
+  const [roundMirrorResult, setRoundMirrorResult] = useState<RoundMirrorDryRunResult | null>(null);
+  const [roundMirrorError, setRoundMirrorError] = useState("");
+  const [roundMirrorPublishResult, setRoundMirrorPublishResult] = useState<RoundMirrorPublishResult | null>(null);
+  const [roundMirrorPublishError, setRoundMirrorPublishError] = useState("");
+  const [roundMirrorPublishConfirm, setRoundMirrorPublishConfirm] = useState(false);
   const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
@@ -341,6 +458,94 @@ export function FirebaseAccountPanel() {
     });
   }
 
+  function runRoundMirrorDryRun() {
+    startTransition(async () => {
+      try {
+        setRoundMirrorError("");
+        setRoundMirrorResult(null);
+        setRoundMirrorPublishError("");
+        setRoundMirrorPublishResult(null);
+        setRoundMirrorPublishConfirm(false);
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before running this audit.");
+        }
+
+        if (!activePrismaRoundId) {
+          throw new Error("No active Prisma round is available to prepare.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/round-mirror/dry-run", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify(buildRoundMirrorDryRunRequestBody(activePrismaRoundId))
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not run round shell dry-run.");
+        }
+
+        setRoundMirrorResult(result);
+        setMessage("Round shell dry-run completed.");
+      } catch (error) {
+        setRoundMirrorError(error instanceof Error ? error.message : "Could not run round shell dry-run.");
+      }
+    });
+  }
+
+  function publishRoundMirror() {
+    startTransition(async () => {
+      try {
+        setRoundMirrorPublishError("");
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before publishing this mirror.");
+        }
+
+        if (!canPublishCurrentRoundMirror || !roundMirrorResult) {
+          throw new Error("Run a successful dry-run for the active round before publishing.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/round-mirror/publish", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify(
+            buildRoundMirrorPublishRequestBody({
+              activePrismaRoundId,
+              dryRunResult: roundMirrorResult
+            })
+          )
+        });
+        const result = await response.json();
+
+        setRoundMirrorPublishResult(result);
+        setRoundMirrorPublishConfirm(false);
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not publish round shell mirror.");
+        }
+
+        setMessage("Round shell mirror published.");
+      } catch (error) {
+        setRoundMirrorPublishConfirm(false);
+        setRoundMirrorPublishError(error instanceof Error ? error.message : "Could not publish round shell mirror.");
+      }
+    });
+  }
+
   function runScoreMirrorDryRun() {
     startTransition(async () => {
       try {
@@ -421,6 +626,12 @@ export function FirebaseAccountPanel() {
   }
 
   const dryRunCounts = dryRunResult?.counts;
+  const roundMirrorRoundCounts = roundMirrorResult?.round?.counts;
+  const roundMirrorEntryCounts = roundMirrorResult?.entries?.counts;
+  const roundMirrorPointerCounts = roundMirrorResult?.activePointer?.counts;
+  const roundMirrorPublishRoundCounts = roundMirrorPublishResult?.round?.counts;
+  const roundMirrorPublishEntryCounts = roundMirrorPublishResult?.entries?.counts;
+  const roundMirrorPublishPointerCounts = roundMirrorPublishResult?.activePointer?.counts;
   const scoreCounts = scoreMirrorResult?.scores?.counts;
   const publishScoreCounts = scoreMirrorPublishResult?.scores?.counts;
   const canSyncPlayerMirror =
@@ -435,6 +646,16 @@ export function FirebaseAccountPanel() {
     dryRunResult: scoreMirrorResult,
     isBusy: isPending || loading
   });
+  const canPublishCurrentRoundMirror = canPublishRoundMirror({
+    activePrismaRoundId,
+    confirmed: roundMirrorPublishConfirm,
+    dryRunError: roundMirrorError,
+    dryRunResult: roundMirrorResult,
+    isBusy: isPending || loading
+  });
+  const roundPublishDisabledReason = activePrismaRoundId
+    ? "Run a successful round shell dry-run and confirm before publishing."
+    : "No active Prisma round is available to prepare.";
   const scorePublishDisabledReason =
     scoreMirrorResult?.status === "active-round"
       ? "Confirm the dry-run result before publishing."
@@ -619,6 +840,180 @@ export function FirebaseAccountPanel() {
               {dryRunError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {dryRunError}
+                </p>
+              ) : null}
+            </SectionCard>
+          ) : null}
+
+          {showScoreMirrorControls ? (
+            <SectionCard className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">
+                Phase 4 Round Shell Prep
+              </p>
+              <p className="text-sm text-ink/70">
+                Active Prisma round: <span className="font-semibold text-ink">{activePrismaRoundId ?? "None"}</span>
+              </p>
+              <button
+                type="button"
+                className="club-btn-primary min-h-12 w-full disabled:opacity-50"
+                disabled={isPending || loading || !activePrismaRoundId}
+                onClick={runRoundMirrorDryRun}
+              >
+                Run Round Shell Dry-Run
+              </button>
+              {roundMirrorResult ? (
+                <div className="space-y-2 text-sm text-ink">
+                  <div className="grid grid-cols-2 gap-2">
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Status: <span className="font-bold">{roundMirrorResult.status ?? "unknown"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Prisma round: <span className="font-bold">{roundMirrorResult.prismaRoundId ?? "None"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Firestore round: <span className="font-bold">{roundMirrorResult.firestoreRoundId ?? "None"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round created: <span className="font-bold">{roundMirrorRoundCounts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round updated: <span className="font-bold">{roundMirrorRoundCounts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round unchanged: <span className="font-bold">{roundMirrorRoundCounts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round extra: <span className="font-bold">{roundMirrorRoundCounts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries created: <span className="font-bold">{roundMirrorEntryCounts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries updated: <span className="font-bold">{roundMirrorEntryCounts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries unchanged: <span className="font-bold">{roundMirrorEntryCounts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries extra: <span className="font-bold">{roundMirrorEntryCounts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer created: <span className="font-bold">{roundMirrorPointerCounts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer updated: <span className="font-bold">{roundMirrorPointerCounts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer unchanged: <span className="font-bold">{roundMirrorPointerCounts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer extra: <span className="font-bold">{roundMirrorPointerCounts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes planned: <span className="font-bold">{roundMirrorResult.writesPlanned ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes applied: <span className="font-bold">{roundMirrorResult.writesApplied ?? 0}</span>
+                    </p>
+                  </div>
+                  {renderRoundAuditIds("Round extras", roundMirrorResult.round?.extraIds)}
+                  {renderScoreAuditItems(roundMirrorResult.entries?.extra)}
+                  {renderRoundAuditIds("Pointer extras", roundMirrorResult.activePointer?.extraIds)}
+                </div>
+              ) : null}
+              <label className="flex items-start gap-3 rounded-lg border border-pine/15 bg-white px-3 py-3 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={roundMirrorPublishConfirm}
+                  disabled={
+                    isPending ||
+                    loading ||
+                    !roundMirrorResult?.prismaRoundId ||
+                    roundMirrorResult.prismaRoundId !== activePrismaRoundId ||
+                    Boolean(roundMirrorError) ||
+                    hasRoundMirrorExtras(roundMirrorResult)
+                  }
+                  onChange={(event) => setRoundMirrorPublishConfirm(event.target.checked)}
+                />
+                <span>
+                  I understand this prepares the active round shell in Firestore and does not change scoring.
+                </span>
+              </label>
+              <p className="text-sm text-ink/70">{roundPublishDisabledReason}</p>
+              <button
+                type="button"
+                className="club-btn-danger min-h-12 w-full disabled:opacity-50"
+                disabled={!canPublishCurrentRoundMirror}
+                onClick={publishRoundMirror}
+              >
+                Publish Round Shell
+              </button>
+              {roundMirrorPublishResult ? (
+                <div className="space-y-2 text-sm text-ink">
+                  <div className="grid grid-cols-2 gap-2">
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Status: <span className="font-bold">{roundMirrorPublishResult.status ?? "unknown"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Published round: <span className="font-bold">{roundMirrorPublishResult.publishedRoundId ?? "None"}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round created: <span className="font-bold">{roundMirrorPublishRoundCounts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round updated: <span className="font-bold">{roundMirrorPublishRoundCounts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round unchanged: <span className="font-bold">{roundMirrorPublishRoundCounts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Round extra: <span className="font-bold">{roundMirrorPublishRoundCounts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries created: <span className="font-bold">{roundMirrorPublishEntryCounts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries updated: <span className="font-bold">{roundMirrorPublishEntryCounts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries unchanged: <span className="font-bold">{roundMirrorPublishEntryCounts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Entries extra: <span className="font-bold">{roundMirrorPublishEntryCounts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer created: <span className="font-bold">{roundMirrorPublishPointerCounts?.created ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer updated: <span className="font-bold">{roundMirrorPublishPointerCounts?.updated ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer unchanged: <span className="font-bold">{roundMirrorPublishPointerCounts?.unchanged ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Pointer extra: <span className="font-bold">{roundMirrorPublishPointerCounts?.extra ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes planned: <span className="font-bold">{roundMirrorPublishResult.writesPlanned ?? 0}</span>
+                    </p>
+                    <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                      Writes applied: <span className="font-bold">{roundMirrorPublishResult.writesApplied ?? 0}</span>
+                    </p>
+                  </div>
+                  {renderRoundAuditIds("Round extras", roundMirrorPublishResult.round?.extraIds)}
+                  {renderScoreAuditItems(roundMirrorPublishResult.entries?.extra)}
+                  {renderRoundAuditIds("Pointer extras", roundMirrorPublishResult.activePointer?.extraIds)}
+                </div>
+              ) : null}
+              {roundMirrorError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {roundMirrorError}
+                </p>
+              ) : null}
+              {roundMirrorPublishError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {roundMirrorPublishError}
                 </p>
               ) : null}
             </SectionCard>

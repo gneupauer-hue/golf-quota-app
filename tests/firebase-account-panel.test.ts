@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  buildRoundMirrorDryRunRequestBody,
+  buildRoundMirrorPublishRequestBody,
   buildScoreMirrorPublishRequestBody,
   buildScoreMirrorDryRunRequestBody,
+  canPublishRoundMirror,
   canPublishScoreMirror,
   shouldShowScoreMirrorValidationControls,
   isActiveOwnerOrAdminMembership
@@ -11,6 +14,7 @@ import {
 import type { FirebaseUserClubMembership } from "@/lib/firebase/types";
 
 const ACCOUNT_PANEL_SOURCE = readFileSync("components/firebase-account-panel.tsx", "utf8");
+const ACCOUNT_PAGE_SOURCE = readFileSync("app/account/page.tsx", "utf8");
 
 function membership(overrides: Partial<FirebaseUserClubMembership> = {}): FirebaseUserClubMembership {
   return {
@@ -74,6 +78,149 @@ test("score mirror dry-run request body is read-only and pinned to the Irem club
     expectedProjectId: "irem-golf-quota-app",
     expectedPrismaRoundId: null
   });
+});
+
+test("round shell dry-run request uses the active Prisma round ID from the page", () => {
+  assert.deepEqual(buildRoundMirrorDryRunRequestBody("active-round-1"), {
+    clubId: "eO5PwRmRZrQJW0VbEp0B",
+    expectedProjectId: "irem-golf-quota-app",
+    expectedPrismaRoundId: "active-round-1"
+  });
+
+  assert.notEqual(ACCOUNT_PAGE_SOURCE.indexOf("selectActivePrismaRoundSetup"), -1);
+  assert.notEqual(ACCOUNT_PAGE_SOURCE.indexOf("activePrismaRoundId={activePrismaRoundId}"), -1);
+});
+
+test("round shell publish is disabled until a clean active-round dry-run is confirmed", () => {
+  const cleanDryRun = {
+    ok: true,
+    mode: "dry-run" as const,
+    status: "locked",
+    prismaRoundId: "round-1",
+    round: { counts: { created: 1, updated: 0, unchanged: 0, extra: 0 } },
+    entries: { counts: { created: 4, updated: 0, unchanged: 0, extra: 0 } },
+    activePointer: { counts: { created: 1, updated: 0, unchanged: 0, extra: 0 } }
+  };
+
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: "round-1",
+      confirmed: true,
+      dryRunResult: null,
+      isBusy: false
+    }),
+    false
+  );
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: null,
+      confirmed: true,
+      dryRunResult: cleanDryRun,
+      isBusy: false
+    }),
+    false
+  );
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: "other-round",
+      confirmed: true,
+      dryRunResult: cleanDryRun,
+      isBusy: false
+    }),
+    false
+  );
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: "round-1",
+      confirmed: false,
+      dryRunResult: cleanDryRun,
+      isBusy: false
+    }),
+    false
+  );
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: "round-1",
+      confirmed: true,
+      dryRunError: "Dry-run failed.",
+      dryRunResult: cleanDryRun,
+      isBusy: false
+    }),
+    false
+  );
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: "round-1",
+      confirmed: true,
+      dryRunResult: {
+        ...cleanDryRun,
+        entries: { counts: { created: 0, updated: 0, unchanged: 4, extra: 1 } }
+      },
+      isBusy: false
+    }),
+    false
+  );
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: "round-1",
+      confirmed: true,
+      dryRunResult: cleanDryRun,
+      isBusy: true
+    }),
+    false
+  );
+  assert.equal(
+    canPublishRoundMirror({
+      activePrismaRoundId: "round-1",
+      confirmed: true,
+      dryRunResult: cleanDryRun,
+      isBusy: false
+    }),
+    true
+  );
+});
+
+test("round shell publish request uses only the active dry-run round ID", () => {
+  assert.deepEqual(
+    buildRoundMirrorPublishRequestBody({
+      activePrismaRoundId: "round-1",
+      dryRunResult: {
+        ok: true,
+        mode: "dry-run",
+        status: "locked",
+        prismaRoundId: "round-1"
+      }
+    }),
+    {
+      clubId: "eO5PwRmRZrQJW0VbEp0B",
+      expectedProjectId: "irem-golf-quota-app",
+      expectedPrismaRoundId: "round-1",
+      confirmPublish: true
+    }
+  );
+
+  assert.throws(
+    () =>
+      buildRoundMirrorPublishRequestBody({
+        activePrismaRoundId: "round-1",
+        dryRunResult: {
+          ok: true,
+          mode: "dry-run",
+          status: "locked",
+          prismaRoundId: "other-round"
+        }
+      }),
+    /active round/
+  );
+});
+
+test("round shell control reuses round mirror APIs and has no manual ID entry", () => {
+  assert.notEqual(ACCOUNT_PANEL_SOURCE.indexOf("/api/firebase/round-mirror/dry-run"), -1);
+  assert.notEqual(ACCOUNT_PANEL_SOURCE.indexOf("/api/firebase/round-mirror/publish"), -1);
+  assert.notEqual(ACCOUNT_PANEL_SOURCE.indexOf("Run Round Shell Dry-Run"), -1);
+  assert.notEqual(ACCOUNT_PANEL_SOURCE.indexOf("Publish Round Shell"), -1);
+  assert.equal(ACCOUNT_PANEL_SOURCE.includes("manualRoundId"), false);
+  assert.equal(ACCOUNT_PANEL_SOURCE.includes("setManualRound"), false);
 });
 
 test("score mirror publish is disabled until a clean active-round dry-run is confirmed", () => {
