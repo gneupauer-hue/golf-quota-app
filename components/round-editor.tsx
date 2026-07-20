@@ -11,7 +11,10 @@ import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
 import { ScoreMirrorListenerPilot } from "@/components/score-mirror-listener-pilot";
 import { SectionCard } from "@/components/section-card";
-import { buildFirestoreTestScoreOperations } from "@/lib/firebase/score-write-operations";
+import {
+  buildFirestoreTestScoreOperations,
+  cloneFirestoreTestScoreOperationRows
+} from "@/lib/firebase/score-write-operations";
 import {
   calculateLiveLeaders,
   calculateLiveProjections,
@@ -1850,7 +1853,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
 
   async function persistScoreEntries(
     nextRows: RowState[],
-    options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
+    options: { holeIndexes?: number[]; includeAllHoles?: boolean; previousRows?: RowState[] } = {}
   ) {
     const response = await fetch(`/api/rounds/${round.id}/score-entry`, {
       method: "PATCH",
@@ -1870,13 +1873,23 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
 
   async function writeFirestoreTestScoreOperations(
     nextRows: RowState[],
-    options: { holeIndexes?: number[]; includeAllHoles?: boolean } = {}
+    options: { holeIndexes?: number[]; includeAllHoles?: boolean; previousRows?: RowState[] } = {}
   ) {
     if (!canUseFirestoreTestScoreWrite || !user || !activeClubId) {
       return;
     }
 
-    const operations = buildFirestoreTestScoreOperations(nextRows, savedRows, options);
+    const operations = buildFirestoreTestScoreOperations(nextRows, options.previousRows ?? [], options);
+    if (!operations.length) {
+      setFirestoreTestWriteDiagnostic({
+        status: "idle",
+        operationType: null,
+        scoreVersion: null,
+        message: "No Firestore mirror operation was needed."
+      });
+      return;
+    }
+
     for (const item of operations) {
       const ok = await sendFirestoreTestScoreOperation(item.playerId, item.operation);
       if (!ok) {
@@ -2707,6 +2720,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     }
 
     const submittedAt = new Date().toISOString();
+    const previousRowsForSave = cloneFirestoreTestScoreOperationRows(savedRows);
     const nextRows = rows.map((row) =>
       row.playerId === playerId
         ? {
@@ -2724,7 +2738,8 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
         await persistScoreEntries([playerRow], {
           holeIndexes: segment === "front"
             ? Array.from({ length: 9 }, (_, index) => index)
-            : Array.from({ length: 9 }, (_, index) => index + 9)
+            : Array.from({ length: 9 }, (_, index) => index + 9),
+          previousRows: previousRowsForSave
         });
         const response = await fetch(`/api/rounds/${round.id}/submit-segment`, {
           method: "POST",
@@ -2949,6 +2964,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     startTransition(async () => {
       try {
         setSaving("Saving...");
+        const previousRowsForSave = cloneFirestoreTestScoreOperationRows(savedRows);
         const rowsForSave = isQuickEntryMode && playerId
           ? rows.map((row) => (row.playerId === playerId ? markQuickEntryRowSubmitted(row) : row))
           : rows;
@@ -2957,7 +2973,10 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
           throw new Error("Could not find this player in the current round. Refresh and try again.");
         }
         if (playerId) {
-          await persistScoreEntries(rowsToSave, { includeAllHoles: true });
+          await persistScoreEntries(rowsToSave, {
+            includeAllHoles: true,
+            previousRows: previousRowsForSave
+          });
         } else {
           await persistRound(
             rowsToSave,
@@ -3456,11 +3475,13 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       return;
     }
 
+    const previousRowsForSave = cloneFirestoreTestScoreOperationRows(savedRows);
+
     if (holeNumber === 18) {
       startTransition(async () => {
         try {
           setSaving("Saving hole 18...");
-          await persistScoreEntries(rows, { holeIndexes: [holeIndex] });
+          await persistScoreEntries(rows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
           setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
           setSkinsEntryOpen(false);
           setToast("Hole 18 saved");
@@ -3481,7 +3502,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     startTransition(async () => {
       try {
         setSaving(`Saving hole ${holeNumber}...`);
-        await persistScoreEntries(rows, { holeIndexes: [holeIndex] });
+        await persistScoreEntries(rows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
         setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setSkinsActiveHole(nextHole);
         setToast("Hole saved");
@@ -3522,11 +3543,13 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       return;
     }
 
+    const previousRowsForSave = cloneFirestoreTestScoreOperationRows(savedRows);
+
     if (holeNumber === 9) {
       startTransition(async () => {
         try {
           setSaving("Saving hole 9...");
-          await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex] });
+          await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
           setSavedRows((current) => mergeSavedRowState(current, groupStateRows));
           setToast("Hole 9 saved");
           setRows(workingRows);
@@ -3560,7 +3583,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
       startTransition(async () => {
         try {
           setSaving("Saving hole 18...");
-          await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex] });
+          await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
           setSavedRows((current) => mergeSavedRowState(current, groupStateRows));
           setToast("Hole 18 saved");
           setRows(workingRows);
@@ -3593,7 +3616,7 @@ export function RoundEditor({ round, players, partnerHistory, quotaSnapshot, gro
     startTransition(async () => {
       try {
         setSaving(`Saving hole ${holeNumber}...`);
-        await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex] });
+        await persistScoreEntries(groupStateRows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
         setSavedRows((current) => mergeSavedRowState(current, groupStateRows));
         setRows(workingRows);
         setActiveHoleForGroup(groupTeams, nextHole);

@@ -14,6 +14,10 @@ export type FirestoreTestScoreOperationRow = {
   birdieHolesText: string;
 };
 
+export function cloneFirestoreTestScoreOperationRows<Row extends FirestoreTestScoreOperationRow>(rows: Row[]): Row[] {
+  return rows.map((row) => ({ ...row, holeScores: [...row.holeScores] }));
+}
+
 export function buildFirestoreTestScoreOperations(
   nextRows: FirestoreTestScoreOperationRow[],
   savedRows: FirestoreTestScoreOperationRow[],

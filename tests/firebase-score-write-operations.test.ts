@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildFirestoreTestScoreOperations, type FirestoreTestScoreOperationRow } from "@/lib/firebase/score-write-operations";
+import {
+  buildFirestoreTestScoreOperations,
+  cloneFirestoreTestScoreOperationRows,
+  type FirestoreTestScoreOperationRow
+} from "@/lib/firebase/score-write-operations";
 
 function makeRow(overrides: Partial<FirestoreTestScoreOperationRow> = {}): FirestoreTestScoreOperationRow {
   return {
@@ -91,4 +95,31 @@ test("detailed hole saves only send changed hole operations", () => {
       }
     ]
   );
+});
+
+test("captured previous snapshots are not changed by later row mutations", () => {
+  const saved = makeRow({
+    quickFrontNine: 0,
+    quickBackNine: 0,
+    holeScores: Array.from({ length: 18 }, () => null)
+  });
+  const capturedPreviousRows = cloneFirestoreTestScoreOperationRows([saved]);
+  saved.quickFrontNine = 1;
+  saved.holeScores[0] = 5;
+
+  assert.deepEqual(
+    buildFirestoreTestScoreOperations(
+      [makeRow({ quickFrontNine: 1, quickBackNine: 0 })],
+      capturedPreviousRows,
+      { includeAllHoles: true }
+    ),
+    [
+      {
+        playerId: "player-1",
+        operation: { type: "set-quick-front", value: 1 }
+      }
+    ]
+  );
+  assert.equal(capturedPreviousRows[0].quickFrontNine, 0);
+  assert.equal(capturedPreviousRows[0].holeScores[0], null);
 });

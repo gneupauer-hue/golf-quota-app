@@ -147,7 +147,35 @@ test("round editor test-write pilot is server-routed and test-round gated", () =
     ROUND_EDITOR_SOURCE.indexOf("/api/rounds/${round.id}/score-entry") <
       ROUND_EDITOR_SOURCE.indexOf("await writeFirestoreTestScoreOperations(nextRows, options);")
   );
-  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("buildFirestoreTestScoreOperations(nextRows, savedRows, options)"), -1);
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("buildFirestoreTestScoreOperations(nextRows, options.previousRows ?? [], options)"), -1);
+  assert.equal(ROUND_EDITOR_SOURCE.includes("buildFirestoreTestScoreOperations(nextRows, savedRows, options)"), false);
   assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("canSeeFirestoreTestWriteDiagnostic"), -1);
   assert.equal(/\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\b/.test(ROUND_EDITOR_SOURCE), false);
+});
+
+test("round editor player score save captures previous rows and uses granular PATCH before Firestore writes", () => {
+  const snapshotIndex = ROUND_EDITOR_SOURCE.indexOf("const previousRowsForSave = cloneFirestoreTestScoreOperationRows(savedRows);");
+  const rowsForSaveIndex = ROUND_EDITOR_SOURCE.indexOf("const rowsForSave = isQuickEntryMode && playerId");
+  const patchIndex = ROUND_EDITOR_SOURCE.indexOf("fetch(`/api/rounds/${round.id}/score-entry`");
+  const putIndex = ROUND_EDITOR_SOURCE.indexOf("fetch(`/api/rounds/${round.id}`");
+  const playerPersistIndex = ROUND_EDITOR_SOURCE.indexOf("await persistScoreEntries(rowsToSave, {");
+  const previousRowsOptionIndex = ROUND_EDITOR_SOURCE.indexOf("previousRows: previousRowsForSave", playerPersistIndex);
+  const firestoreWriteIndex = ROUND_EDITOR_SOURCE.indexOf("await writeFirestoreTestScoreOperations(nextRows, options);");
+
+  assert.ok(snapshotIndex >= 0);
+  assert.ok(rowsForSaveIndex > snapshotIndex);
+  assert.ok(patchIndex >= 0);
+  assert.ok(putIndex >= 0);
+  assert.ok(patchIndex > putIndex);
+  assert.ok(playerPersistIndex >= 0);
+  assert.ok(previousRowsOptionIndex > playerPersistIndex);
+  assert.ok(firestoreWriteIndex > patchIndex);
+});
+
+test("round editor reports zero Firestore operations without claiming a write", () => {
+  assert.notEqual(ROUND_EDITOR_SOURCE.indexOf("No Firestore mirror operation was needed."), -1);
+  assert.ok(
+    ROUND_EDITOR_SOURCE.indexOf("No Firestore mirror operation was needed.") <
+      ROUND_EDITOR_SOURCE.indexOf("Firestore test write saved.")
+  );
 });
