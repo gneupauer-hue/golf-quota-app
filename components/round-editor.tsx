@@ -6,6 +6,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } 
 import { MatchRoundView, SkinsOnlyRoundView } from "@/components/active-round-view";
 import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 import { QuickEntryRoundView } from "@/components/quick-entry-round-view";
+import { SideMatchesBoard } from "@/components/side-matches-board";
+import type { SideMatchRecord } from "@/lib/side-matches";
 import { PageTitle } from "@/components/page-title";
 import { RoundUtilityActions } from "@/components/round-utility-actions";
 import { ScoreButtonGroup } from "@/components/score-button-group";
@@ -129,6 +131,7 @@ type EditorProps = {
     teeTime: string;
     players: string[];
   }>;
+  sideMatches?: SideMatchRecord[];
   regularRoundScoreMirrorEnabled?: boolean;
   realtimeScoreDisplayEnabled?: boolean;
 };
@@ -952,6 +955,7 @@ export function RoundEditor({
   partnerHistory,
   quotaSnapshot,
   groups: initialGroups,
+  sideMatches = [],
   regularRoundScoreMirrorEnabled = false,
   realtimeScoreDisplayEnabled = false
 }: EditorProps) {
@@ -4776,6 +4780,22 @@ export function RoundEditor({
           onRefresh={refreshRoundData}
         />
       )}
+
+      {isLocked || startedAt ? (
+        <SideMatchesBoard
+          round={{
+            id: round.id,
+            roundName: displayRoundName,
+            roundDate,
+            roundMode: round.roundMode
+          }}
+          entries={calculatedRows}
+          sideMatches={sideMatches}
+          archiveHref="/side-matches/archive"
+          showArchiveLink={false}
+          autoRefresh={false}
+        />
+      ) : null}
 
       {quotaAdjustmentPreview ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-hero text-ink">

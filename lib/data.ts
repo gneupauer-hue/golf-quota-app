@@ -966,6 +966,25 @@ export async function getActiveSideMatchesData() {
   };
 }
 
+export async function getRoundSideMatches(roundId: string): Promise<SideMatchRecord[]> {
+  noStore();
+  const sideMatches = await ((prisma as any).roundSideMatch?.findMany({
+    where: { roundId },
+    orderBy: { createdAt: "asc" }
+  }) ?? Promise.resolve([]));
+  return (sideMatches as any[]).map(
+    (match): SideMatchRecord => ({
+      id: match.id,
+      roundId: match.roundId,
+      name: match.name ?? null,
+      teamAPlayerIds: match.teamAPlayerIds ?? [],
+      teamBPlayerIds: match.teamBPlayerIds ?? [],
+      createdAt:
+        match.createdAt instanceof Date ? match.createdAt.toISOString() : String(match.createdAt)
+    })
+  );
+}
+
 export async function getArchivedSideMatchesData() {
   noStore();
   const rounds = await (prisma as any).round.findMany({

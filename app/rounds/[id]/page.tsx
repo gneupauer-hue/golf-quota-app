@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { RoundEditor } from "@/components/round-editor";
-import { getRoundEditorData } from "@/lib/data";
+import { getRoundEditorData, getRoundSideMatches } from "@/lib/data";
 import { getRealtimeScoreDisplayCapability } from "@/lib/firebase/realtime-score-display-server";
 import { getRegularRoundScoreMirrorCapability } from "@/lib/firebase/score-mirror-rollout-server";
 
@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function RoundPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getRoundEditorData(id);
+  const sideMatches = await getRoundSideMatches(id);
 
   if (!data) {
     notFound();
@@ -33,6 +34,7 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
       partnerHistory={data.partnerHistory}
       quotaSnapshot={data.quotaSnapshot}
       groups={data.groups as Array<{ groupNumber: number; teeTime: string; players: string[] }>}
+      sideMatches={sideMatches}
       regularRoundScoreMirrorEnabled={getRegularRoundScoreMirrorCapability()}
       realtimeScoreDisplayEnabled={getRealtimeScoreDisplayCapability()}
     />

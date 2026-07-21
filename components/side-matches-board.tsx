@@ -24,6 +24,7 @@ type SideMatchesBoardProps = {
   readOnly?: boolean;
   showHeader?: boolean;
   showArchiveLink?: boolean;
+  autoRefresh?: boolean;
 };
 
 type MatchFormState = {
@@ -70,7 +71,8 @@ export function SideMatchesBoard({
   archiveHref,
   readOnly = false,
   showHeader = true,
-  showArchiveLink = true
+  showArchiveLink = true,
+  autoRefresh = true
 }: SideMatchesBoardProps) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
@@ -95,7 +97,7 @@ export function SideMatchesBoard({
   );
 
   useEffect(() => {
-    if (readOnly || !round) {
+    if (readOnly || !round || !autoRefresh) {
       return;
     }
 
@@ -104,7 +106,7 @@ export function SideMatchesBoard({
     }, 15000);
 
     return () => window.clearInterval(interval);
-  }, [readOnly, round, router]);
+  }, [autoRefresh, readOnly, round, router]);
 
   function openCreateForm() {
     setEditingMatchId(null);
