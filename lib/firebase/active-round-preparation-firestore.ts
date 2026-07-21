@@ -15,6 +15,20 @@ function mapTimestamp(value: unknown) {
   return null;
 }
 
+// Firestore rejects documents that contain `undefined` field values. Strip any
+// top-level undefined before writing so a stray optional field can never fail a
+// batch. (Sentinels like FieldValue.serverTimestamp() and nested null/array
+// values are preserved.)
+function dropUndefined<T extends Record<string, unknown>>(value: T): T {
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (val !== undefined) {
+      result[key] = val;
+    }
+  }
+  return result as T;
+}
+
 export function buildActiveRoundPreparationFirestoreAdapters(db: Firestore) {
   return {
     verifyClub: async (clubId: string) => {
@@ -144,10 +158,7 @@ export function buildActiveRoundPreparationFirestoreAdapters(db: Firestore) {
         .doc(clubId)
         .collection("state")
         .doc(ACTIVE_ROUND_PREPARATION_STATE_ID)
-        .set({
-          ...readiness,
-          updatedAt: FieldValue.serverTimestamp()
-        });
+        .set(dropUndefined({ ...readiness, updatedAt: FieldValue.serverTimestamp() }));
     },
     writePreparationBatch: async (clubId: string, roundId: string, input: any) => {
       const clubRef = db.collection("clubs").doc(clubId);
@@ -157,34 +168,34 @@ export function buildActiveRoundPreparationFirestoreAdapters(db: Firestore) {
       let writes = 0;
 
       if (input.round) {
-        batch.set(roundRef, { ...input.round, syncedAt: now });
+        batch.set(roundRef, dropUndefined({ ...input.round, syncedAt: now }));
         writes += 1;
       }
       for (const entry of input.entries) {
-        batch.set(roundRef.collection("entries").doc(entry.prismaPlayerId), {
-          ...entry,
-          syncedAt: now
-        });
+        batch.set(
+          roundRef.collection("entries").doc(entry.prismaPlayerId),
+          dropUndefined({ ...entry, syncedAt: now })
+        );
         writes += 1;
       }
       if (input.activePointer) {
-        batch.set(clubRef.collection("state").doc("activeRound"), {
-          ...input.activePointer,
-          syncedAt: now
-        });
+        batch.set(
+          clubRef.collection("state").doc("activeRound"),
+          dropUndefined({ ...input.activePointer, syncedAt: now })
+        );
         writes += 1;
       }
       for (const score of input.scoresToCreate) {
-        batch.set(roundRef.collection("scores").doc(score.prismaPlayerId), {
-          ...score,
-          syncedAt: now
-        });
+        batch.set(
+          roundRef.collection("scores").doc(score.prismaPlayerId),
+          dropUndefined({ ...score, syncedAt: now })
+        );
         writes += 1;
       }
-      batch.set(clubRef.collection("state").doc(ACTIVE_ROUND_PREPARATION_STATE_ID), {
-        ...input.readiness,
-        updatedAt: now
-      });
+      batch.set(
+        clubRef.collection("state").doc(ACTIVE_ROUND_PREPARATION_STATE_ID),
+        dropUndefined({ ...input.readiness, updatedAt: now })
+      );
       writes += 1;
 
       await batch.commit();

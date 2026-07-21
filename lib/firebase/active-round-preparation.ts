@@ -296,7 +296,9 @@ function readiness(input: {
   return {
     roundId: input.roundId,
     status: input.status,
-    errorCode: input.errorCode,
+    // Only include errorCode when set. Firestore rejects `undefined` field values,
+    // and an undefined errorCode on the success path was failing the batch write.
+    ...(input.errorCode ? { errorCode: input.errorCode } : {}),
     preparedBy: "server",
     operationId: input.operationId
   };

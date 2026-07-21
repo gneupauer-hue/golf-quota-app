@@ -148,6 +148,14 @@ test("preparation creates shell, entries, pointer, missing baseline score, and r
   assert.equal(result.scores?.counts.created, 1);
   assert.equal(result.writesApplied, 5);
   assert.equal(writes.length, 1);
+
+  // Firestore rejects `undefined` field values, so the readiness record written on
+  // the success path must not carry an undefined errorCode (this failed the batch).
+  const readiness = (writes[0] as { readiness: Record<string, unknown> }).readiness;
+  assert.equal("errorCode" in readiness, false);
+  for (const [key, value] of Object.entries(readiness)) {
+    assert.notEqual(value, undefined, `readiness.${key} must not be undefined`);
+  }
 });
 
 test("a stale/partial active-round pointer does NOT block preparation (it is overwritten)", async () => {
