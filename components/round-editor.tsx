@@ -984,6 +984,7 @@ export function RoundEditor({
   const [shownScoringGroupKeys, setShownScoringGroupKeys] = useState<string[]>([]);
   const [isSetupTeamEditMode, setIsSetupTeamEditMode] = useState(false);
   const [isSetupGroupEditMode, setIsSetupGroupEditMode] = useState(false);
+  const [expandedSetupPlayers, setExpandedSetupPlayers] = useState<Set<string>>(new Set());
   const [lockedAt, setLockedAt] = useState<string | null>(round.lockedAt);
   const [startedAt, setStartedAt] = useState<string | null>(round.startedAt);
   const [selectedTeam, setSelectedTeam] = useState<TeamCode | null>(null);
@@ -4137,20 +4138,35 @@ export function RoundEditor({
                       {rows.map((row) => {
                         const player = playersById.get(row.playerId);
                         const teeSummary = getRoundTeeSummary(row, playersById, quotaSnapshot);
+                        const expanded = expandedSetupPlayers.has(row.playerId);
                         return (
                           <div
                             key={`selected-${row.playerId}`}
                             className="space-y-3 rounded-2xl bg-canvas px-4 py-3"
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedSetupPlayers((current) => {
+                                    const next = new Set(current);
+                                    if (next.has(row.playerId)) {
+                                      next.delete(row.playerId);
+                                    } else {
+                                      next.add(row.playerId);
+                                    }
+                                    return next;
+                                  })
+                                }
+                                className="min-w-0 flex-1 text-left"
+                              >
                                 <p className="text-base font-semibold text-ink">
                                   {player?.name ?? "Unknown Player"}
                                 </p>
                                 <p className="mt-1 text-xs text-ink/55">
-                                  {`Default ${teeLabels[teeSummary.defaultTee]} | Playing ${teeLabels[teeSummary.playingTee]}`}
+                                  {`Playing ${teeLabels[teeSummary.playingTee]} · Quota ${teeSummary.adjustedQuota}${expanded ? "" : " · tap to edit tee"}`}
                                 </p>
-                              </div>
+                              </button>
                               <button
                                 type="button"
                                 className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink/70"
@@ -4159,6 +4175,8 @@ export function RoundEditor({
                                 Remove
                               </button>
                             </div>
+                            {expanded ? (
+                              <>
                             <div className="grid grid-cols-4 gap-1.5">
                               {teeOptions.map((tee) => (
                                 <button
@@ -4191,6 +4209,8 @@ export function RoundEditor({
                                 <p className="mt-1 text-sm font-semibold text-ink">{teeSummary.adjustedQuota}</p>
                               </div>
                             </div>
+                              </>
+                            ) : null}
                           </div>
                         );
                       })}
