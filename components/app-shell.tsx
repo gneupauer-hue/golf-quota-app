@@ -50,38 +50,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1">{children}</main>
       </div>
 
-      <nav
-        className="fixed left-1/2 z-40 w-[calc(100%-1rem)] max-w-md -translate-x-1/2 rounded-[26px] border border-mist bg-card p-1.5 shadow-card"
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-2"
         style={{
-          bottom: "max(8px, calc(env(safe-area-inset-bottom) + 4px))"
+          paddingBottom: "max(8px, calc(env(safe-area-inset-bottom) + 4px))"
         }}
       >
-        <ul className="grid grid-cols-6 gap-1.5">
-          {links.map((link) => {
-            const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
+        <nav className="pointer-events-auto mx-auto w-full max-w-md rounded-[26px] border border-mist bg-card p-1.5 shadow-card">
+          <ul className="grid grid-cols-6 gap-1.5">
+            {links.map((link) => {
+              const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
 
-            return (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className={classNames(
-                    "flex min-h-[56px] items-center justify-center rounded-2xl px-1 py-1.5 text-center text-[11px] font-bold leading-[1.05rem] transition sm:text-xs",
-                    active ? "bg-pine text-canvas" : "bg-white text-ink"
-                  )}
-                >
-                  <span className="flex flex-col items-center justify-center gap-0.5">
-                    {link.lines.map((line) => (
-                      <span key={`${link.href}-${line}`} className="block">
-                        {line}
-                      </span>
-                    ))}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+              return (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className={classNames(
+                      "flex min-h-[56px] items-center justify-center rounded-2xl px-1 py-1.5 text-center text-[11px] font-bold leading-[1.05rem] transition sm:text-xs",
+                      active ? "bg-pine text-canvas" : "bg-white text-ink"
+                    )}
+                  >
+                    <span className="flex flex-col items-center justify-center gap-0.5">
+                      {link.lines.map((line) => (
+                        <span key={`${link.href}-${line}`} className="block">
+                          {line}
+                        </span>
+                      ))}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </div>
     </div>
   );
 }
