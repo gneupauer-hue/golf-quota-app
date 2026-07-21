@@ -5,6 +5,7 @@ import { getCurrentQuotaRows, getPlayersPageData } from "@/lib/data";
 import { hasValidPlayerEditSession, PLAYER_EDIT_COOKIE } from "@/lib/player-edit-auth";
 import { buildEditedPlayerQuotaFields } from "@/lib/player-quota-state";
 import { prisma } from "@/lib/prisma";
+import { requireTee } from "@/lib/tees";
 
 async function syncConflicts(
   tx: Prisma.TransactionClient,
@@ -42,6 +43,15 @@ export async function PUT(
     const body = await request.json();
     const name = String(body.name ?? "").trim();
     const quota = Number(body.quota);
+    let defaultTee;
+    try {
+      defaultTee = requireTee(body.defaultTee ?? "GREEN", "Default tee");
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Default tee is invalid." },
+        { status: 400 }
+      );
+    }
     const isRegular = Boolean(body.isRegular);
     const isActive = Boolean(body.isActive);
     const conflictIds = Array.isArray(body.conflictIds)
@@ -73,6 +83,7 @@ export async function PUT(
         data: {
           name,
           ...buildEditedPlayerQuotaFields(quota, finalizedRoundCount),
+          defaultTee,
           isRegular,
           isActive
         }

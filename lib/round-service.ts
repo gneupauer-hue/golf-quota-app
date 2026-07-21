@@ -19,6 +19,14 @@ import { validateAllPlayerQuotas, type PlayerQuotaValidationInput } from "@/lib/
 import { getBaselineQuota2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
 import { formatRoundNameFromDate } from "@/lib/utils";
 import { getSeasonStartDate } from "@/lib/season";
+import {
+  calculateAdjustedQuota,
+  calculateTeeAdjustment,
+  defaultTee,
+  normalizeTee,
+  requireTee,
+  type Tee
+} from "@/lib/tees";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 type HoleFieldName = (typeof holeFieldNames)[number];
@@ -40,6 +48,7 @@ type HoleEntryPayload = {
   quickFrontNine?: number | null;
   quickBackNine?: number | null;
   birdieHoles?: Array<number | string>;
+  playingTee?: Tee | string | null;
   holes: Array<number | null>;
 };
 
@@ -52,6 +61,24 @@ type PlayerQuotaFallback = {
   currentQuota?: number | null;
   quota?: number | null;
 };
+
+export function buildRoundEntryTeeSnapshot(input: {
+  baseQuota: number;
+  defaultPlayerTee?: Tee | string | null;
+  playingTee?: Tee | string | null;
+}) {
+  const defaultTeeSnapshot = normalizeTee(input.defaultPlayerTee);
+  const playingTee = requireTee(input.playingTee ?? defaultTeeSnapshot, "Playing tee");
+  const teeAdjustment = calculateTeeAdjustment(defaultTeeSnapshot, playingTee);
+
+  return {
+    defaultTeeSnapshot,
+    playingTee,
+    baseQuota: input.baseQuota,
+    teeAdjustment,
+    startQuota: calculateAdjustedQuota(input.baseQuota, defaultTeeSnapshot, playingTee)
+  };
+}
 
 export type ScoreEntryPatch = {
   playerId: string;
@@ -101,13 +128,16 @@ function buildRoundRowInput(
     playerId: string;
     player: { name: string };
     startQuota?: number | null;
+    baseQuota?: number | null;
+    teeAdjustment?: number | null;
     team: string | null;
     quickFrontNine?: number | null;
     quickBackNine?: number | null;
     birdieHolesCsv?: string | null;
   } & Record<HoleFieldName, number | null>,
   startQuota: number,
-  scoringEntryMode: ScoringEntryMode
+  scoringEntryMode: ScoringEntryMode,
+  baseQuota = startQuota - (entry.teeAdjustment ?? 0)
 ) {
   return {
     playerId: entry.playerId,
@@ -115,6 +145,7 @@ function buildRoundRowInput(
     team: (entry.team as TeamCode | null) ?? null,
     holeScores: getHoleScores(entry),
     startQuota,
+    baseQuota,
     scoringEntryMode,
     quickFrontNine: entry.quickFrontNine ?? null,
     quickBackNine: entry.quickBackNine ?? null,
@@ -260,8 +291,9 @@ export async function syncRoundComputedState(tx: Tx, roundId: string) {
     round.entries.map((entry) =>
       buildRoundRowInput(
         entry,
-        quotaMap[entry.playerId] ?? entry.startQuota ?? 0,
-        scoringEntryMode
+        entry.startQuota ?? quotaMap[entry.playerId] ?? 0,
+        scoringEntryMode,
+        entry.baseQuota ?? quotaMap[entry.playerId] ?? entry.startQuota ?? 0
       )
     )
   );
@@ -293,6 +325,14 @@ export async function syncRoundComputedState(tx: Tx, roundId: string) {
   }
 
   await persistRoundSummaries(tx, roundId, recalculated);
+}
+
+function resolveAdjustedStartQuota(baseQuota: number | undefined, entry: { startQuota?: number | null; teeAdjustment?: number | null }) {
+  if (baseQuota != null) {
+    return baseQuota + (entry.teeAdjustment ?? 0);
+  }
+
+  return entry.startQuota ?? 0;
 }
 
 function validateQuickScore(value: number | null | undefined, label: string) {
@@ -530,6 +570,7 @@ async function buildQuotaValidationSummary(
       playerId: string;
       playerName: string;
       startQuota: number;
+      baseQuota?: number;
       totalPoints: number;
       quotaAdjustment: number;
       nextQuota: number;
@@ -574,6 +615,8 @@ async function buildQuotaValidationSummary(
         select: {
           totalPoints: true,
           startQuota: true,
+          baseQuota: true,
+          teeAdjustment: true,
           plusMinus: true,
           nextQuota: true,
           round: {
@@ -601,6 +644,8 @@ async function buildQuotaValidationSummary(
       createdAt: entry.round.createdAt,
       totalPoints: entry.totalPoints,
       startQuota: entry.startQuota,
+      baseQuota: entry.baseQuota,
+      teeAdjustment: entry.teeAdjustment,
       plusMinus: entry.plusMinus,
       nextQuota: entry.nextQuota
     }));
@@ -616,6 +661,8 @@ async function buildQuotaValidationSummary(
         createdAt: args.createdAt,
         totalPoints: previewRow.totalPoints,
         startQuota: previewRow.startQuota,
+        baseQuota: previewRow.baseQuota ?? previewRow.startQuota,
+        teeAdjustment: previewRow.startQuota - (previewRow.baseQuota ?? previewRow.startQuota),
         plusMinus: previewRow.totalPoints - previewRow.startQuota,
         nextQuota: previewRow.nextQuota
       });
@@ -747,6 +794,8 @@ async function buildStoredQuotaValidationSummary(tx: Tx) {
         select: {
           totalPoints: true,
           startQuota: true,
+          baseQuota: true,
+          teeAdjustment: true,
           plusMinus: true,
           nextQuota: true,
           round: {
@@ -777,6 +826,8 @@ async function buildStoredQuotaValidationSummary(tx: Tx) {
         createdAt: entry.round.createdAt,
         totalPoints: entry.totalPoints,
         startQuota: entry.startQuota,
+        baseQuota: entry.baseQuota,
+        teeAdjustment: entry.teeAdjustment,
         plusMinus: entry.plusMinus,
         nextQuota: entry.nextQuota
       }))
@@ -824,8 +875,9 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
     round.entries.map((entry) =>
       buildRoundRowInput(
         entry,
-        quotaMap[entry.playerId] ?? entry.startQuota ?? 0,
-        scoringEntryMode
+        entry.startQuota ?? quotaMap[entry.playerId] ?? 0,
+        scoringEntryMode,
+        entry.baseQuota ?? quotaMap[entry.playerId] ?? entry.startQuota ?? 0
       )
     )
   );
@@ -836,7 +888,7 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
       playerName: row.playerName,
       startQuota: row.startQuota,
       totalPoints: row.totalPoints,
-      quotaAdjustment: row.nextQuota - row.startQuota,
+      quotaAdjustment: row.nextQuota - (row.baseQuota ?? row.startQuota),
       nextQuota: row.nextQuota
     }))
     .sort((left, right) => left.playerName.localeCompare(right.playerName));
@@ -978,8 +1030,12 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
       round.entries.map((entry) =>
         buildRoundRowInput(
           entry,
-          resolveHistoricalStartQuota(quotaMap.get(entry.playerId), baseQuotaMap.get(entry.playerId)),
-          scoringEntryMode
+          resolveAdjustedStartQuota(
+            resolveHistoricalStartQuota(quotaMap.get(entry.playerId), baseQuotaMap.get(entry.playerId)),
+            entry
+          ),
+          scoringEntryMode,
+          resolveHistoricalStartQuota(quotaMap.get(entry.playerId), baseQuotaMap.get(entry.playerId))
         )
       )
     );
@@ -1000,7 +1056,7 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
           startingQuota: row.startQuota,
           pointsScored: row.totalPoints,
           resultVsQuota: row.plusMinus,
-          quotaAdjustment: row.nextQuota - row.startQuota,
+          quotaAdjustment: row.nextQuota - (row.baseQuota ?? row.startQuota),
           newQuota: row.nextQuota
         });
       }
@@ -1052,7 +1108,7 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
           startingQuota: persistedEntry.startQuota,
           pointsScored: persistedEntry.totalPoints,
           resultVsQuota: persistedEntry.plusMinus,
-          quotaAdjustment: persistedEntry.nextQuota - persistedEntry.startQuota,
+          quotaAdjustment: persistedEntry.nextQuota - (matchingEntry?.baseQuota ?? persistedEntry.startQuota),
           newQuota: persistedEntry.nextQuota
         });
       }
@@ -1068,7 +1124,7 @@ export async function recomputeHistoricalState(tx: Tx): Promise<HistoricalRecomp
           storedAfter: row.startQuota,
           points: row.totalPoints,
           result: row.plusMinus,
-          adjustment: row.nextQuota - row.startQuota,
+          adjustment: row.nextQuota - (row.baseQuota ?? row.startQuota),
           newQuota: row.nextQuota
         });
       }
@@ -1274,11 +1330,15 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
     const scoringEntryMode = normalizeScoringEntryMode((round as { scoringEntryMode?: string | null }).scoringEntryMode);
     const recalculated = calculateRoundRows(
       round.entries.map((entry) =>
-        buildRoundRowInput(
-          entry,
+      buildRoundRowInput(
+        entry,
+        resolveAdjustedStartQuota(
           resolveHistoricalStartQuota(quotaMap.get(entry.playerId), baseQuotaMap.get(entry.playerId)),
-          scoringEntryMode
-        )
+          entry
+        ),
+        scoringEntryMode,
+        resolveHistoricalStartQuota(quotaMap.get(entry.playerId), baseQuotaMap.get(entry.playerId))
+      )
       )
     );
 
@@ -1290,7 +1350,7 @@ export async function getQuotaSnapshotBeforeRound(tx: Tx, roundId: string) {
           startQuota: row.startQuota,
           totalPoints: row.totalPoints,
           result: row.plusMinus,
-          adjustment: row.nextQuota - row.startQuota,
+          adjustment: row.nextQuota - (row.baseQuota ?? row.startQuota),
           newQuota: row.nextQuota
         });
       }
@@ -1344,6 +1404,20 @@ export async function createOrReplaceRoundEntries(
   });
 
   const existingByPlayerId = new Map(existingEntries.map((entry) => [entry.playerId, entry]));
+  const previousRoundState = await tx.round.findUnique({
+    where: { id: input.roundId },
+    select: {
+      lockedAt: true,
+      startedAt: true,
+      completedAt: true,
+      canceledAt: true
+    }
+  });
+  const canUpdateRoundEntryQuota =
+    !previousRoundState?.lockedAt &&
+    !previousRoundState?.startedAt &&
+    !previousRoundState?.completedAt &&
+    !previousRoundState?.canceledAt;
 
   if (input.updateRoundMetadata !== false) {
     await tx.round.update({
@@ -1382,8 +1456,24 @@ export async function createOrReplaceRoundEntries(
   }
 
   const quotaSnapshot = await getQuotaSnapshotBeforeRound(tx, input.roundId);
+  const roundPlayers = await tx.player.findMany({
+    where: {
+      id: {
+        in: input.entries.map((entry) => entry.playerId)
+      }
+    },
+    select: {
+      id: true,
+      defaultTee: true
+    }
+  });
+  const playerDefaultTeeById = new Map(
+    roundPlayers.map((player) => [player.id, normalizeTee(player.defaultTee)])
+  );
 
   for (const entry of input.entries) {
+    const defaultTeeSnapshot = playerDefaultTeeById.get(entry.playerId) ?? defaultTee;
+    const playingTee = requireTee(entry.playingTee ?? defaultTeeSnapshot, "Playing tee");
     const quickFrontNine = isQuickEntry ? entry.quickFrontNine ?? null : null;
     const quickBackNine = isQuickEntry ? entry.quickBackNine ?? null : null;
     const goodSkinEntries = isQuickEntry ? parseGoodSkinEntriesInput(entry.birdieHoles ?? []) : [];
@@ -1421,16 +1511,29 @@ export async function createOrReplaceRoundEntries(
       totalPoints
     };
 
-    const startQuota = quotaSnapshot[entry.playerId] ?? 0;
+    const baseQuota = quotaSnapshot[entry.playerId] ?? 0;
+    const teeSnapshot = buildRoundEntryTeeSnapshot({
+      baseQuota,
+      defaultPlayerTee: defaultTeeSnapshot,
+      playingTee
+    });
+    const { teeAdjustment, startQuota } = teeSnapshot;
     const { frontQuota, backQuota } = splitQuota(startQuota);
+    const teeData = {
+      defaultTeeSnapshot: teeSnapshot.defaultTeeSnapshot,
+      playingTee: teeSnapshot.playingTee,
+      baseQuota,
+      teeAdjustment
+    };
 
     if (existingEntry) {
       await tx.roundEntry.update({
         where: { id: existingEntry.id },
         data:
-          existingEntry.startQuota === 0
+          existingEntry.startQuota === 0 || canUpdateRoundEntryQuota
             ? {
                 ...baseData,
+                ...teeData,
                 startQuota,
                 frontQuota,
                 backQuota,
@@ -1446,6 +1549,7 @@ export async function createOrReplaceRoundEntries(
         data: {
           roundId: input.roundId,
           playerId: entry.playerId,
+          ...teeData,
           startQuota,
           frontQuota,
           backQuota,

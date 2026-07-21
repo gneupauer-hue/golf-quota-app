@@ -9,6 +9,8 @@ export type QuotaHistoryRoundInput = {
   createdAt?: string | Date | null;
   totalPoints: number;
   startQuota: number;
+  baseQuota?: number | null;
+  teeAdjustment?: number | null;
   plusMinus: number;
   nextQuota: number;
 };
@@ -98,6 +100,10 @@ function formatSignedValue(value: number) {
   return `${value}`;
 }
 
+function getRoundBaseQuota(round: QuotaHistoryRoundInput) {
+  return round.baseQuota ?? round.startQuota - (round.teeAdjustment ?? 0);
+}
+
 function buildRoundIssue(args: {
   playerId: string;
   playerName: string;
@@ -138,10 +144,12 @@ export function rebuildPlayerQuotaHistory<T extends QuotaHistoryRoundInput>(inpu
   let runningQuota = baseQuota;
 
   const rebuiltChronological = chronologicalRounds.map((round) => {
-    const calculated = calculateNextQuota(runningQuota, round.totalPoints);
+    const adjustedStartQuota = runningQuota + (round.teeAdjustment ?? 0);
+    const calculated = calculateNextQuota(adjustedStartQuota, round.totalPoints, runningQuota);
     const rebuiltRound: RebuiltQuotaHistoryRound = {
       ...round,
-      startQuota: runningQuota,
+      baseQuota: runningQuota,
+      startQuota: adjustedStartQuota,
       plusMinus: calculated.plusMinus,
       nextQuota: calculated.nextQuota,
       quotaMovement: calculated.nextQuota - runningQuota
@@ -207,7 +215,7 @@ export function validatePlayerQuotaHistory<T extends QuotaHistoryRoundInput>(
       );
     }
 
-    if (round.nextQuota - round.startQuota !== rebuiltRound.quotaMovement) {
+    if (round.nextQuota - getRoundBaseQuota(round) !== rebuiltRound.quotaMovement) {
       issues.push(
         buildRoundIssue({
           playerId: input.playerId,
@@ -215,7 +223,7 @@ export function validatePlayerQuotaHistory<T extends QuotaHistoryRoundInput>(
           round,
           fieldLabel: "Quota adjustment",
           expected: formatSignedValue(rebuiltRound.quotaMovement),
-          actual: formatSignedValue(round.nextQuota - round.startQuota)
+          actual: formatSignedValue(round.nextQuota - getRoundBaseQuota(round))
         })
       );
     }

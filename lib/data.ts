@@ -23,6 +23,7 @@ import { formatDisplayDate } from "@/lib/utils";
 import { baseline_quotas_2026 } from "@/lib/baseline-quotas-2026";
 import { resolvePlayerBaselineQuota } from "@/lib/player-quota-state";
 import { rebuildPlayerQuotaHistory, validateAllPlayerQuotas, validatePlayerQuotaHistory, type QuotaValidationSummary } from "@/lib/quota-history";
+import { normalizeTee } from "@/lib/tees";
 
 function getSafeBaselineQuota(player: {
   name: string;
@@ -73,6 +74,10 @@ function mapStoredRoundEntry(entry: any, scoringEntryMode: ScoringEntryMode) {
     quickBackNine: entry.quickBackNine ?? null,
     birdieHoles: parseBirdieHolesInput(entry.birdieHolesCsv ?? ""),
     goodSkinEntries: parseTypedGoodSkinEntriesForDisplay(entry.birdieHolesCsv ?? ""),
+    defaultTeeSnapshot: normalizeTee(entry.defaultTeeSnapshot),
+    playingTee: normalizeTee(entry.playingTee),
+    baseQuota: entry.baseQuota ?? entry.startQuota,
+    teeAdjustment: entry.teeAdjustment ?? 0,
     frontQuota: entry.frontQuota,
     backQuota: entry.backQuota,
     frontNine: entry.frontNine,
@@ -116,6 +121,7 @@ export async function getPlayersForSelection() {
       quota: true,
       currentQuota: true,
       startingQuota: true,
+      defaultTee: true,
       isRegular: true,
       isActive: true,
       conflictsFrom: {
@@ -129,6 +135,7 @@ export async function getPlayersForSelection() {
       id: player.id,
       name: player.name,
       quota: player.currentQuota ?? player.quota ?? player.startingQuota,
+      defaultTee: normalizeTee(player.defaultTee),
       isRegular: player.isRegular,
       isActive: player.isActive,
       conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId)
@@ -147,6 +154,7 @@ export async function getPlayersPageData() {
       quota: true,
       currentQuota: true,
       startingQuota: true,
+      defaultTee: true,
       isRegular: true,
       isActive: true,
       conflictsFrom: {
@@ -245,6 +253,7 @@ export async function getPlayersPageData() {
         id: player.id,
         name: player.name,
         quota: rebuiltHistory.currentQuota,
+        defaultTee: normalizeTee(player.defaultTee),
         isRegular: player.isRegular,
         isActive: player.isActive,
         conflictIds: player.conflictsFrom.map((conflict) => conflict.conflictPlayerId),

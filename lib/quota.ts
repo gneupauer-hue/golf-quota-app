@@ -46,6 +46,7 @@ export type RoundRowInput = {
   team: TeamCode | null;
   holeScores: Array<number | null>;
   startQuota: number;
+  baseQuota?: number;
   scoringEntryMode?: ScoringEntryMode;
   quickFrontNine?: number | null;
   quickBackNine?: number | null;
@@ -552,7 +553,7 @@ export function splitQuota(startQuota: number) {
   };
 }
 
-export function calculateNextQuota(startQuota: number, totalPoints: number) {
+export function calculateNextQuota(startQuota: number, totalPoints: number, baseQuota = startQuota) {
   const plusMinus = totalPoints - startQuota;
 
   let quotaMovement = 0;
@@ -564,7 +565,7 @@ export function calculateNextQuota(startQuota: number, totalPoints: number) {
 
   return {
     plusMinus,
-    nextQuota: startQuota + quotaMovement
+    nextQuota: baseQuota + quotaMovement
   };
 }
 
@@ -601,7 +602,7 @@ export function calculateRoundRows(rows: RoundRowInput[]): CalculatedRoundRow[] 
   const withScores = rows.map((row) => {
     const { frontNine, backNine, totalPoints } = calculateRowTotals(row);
     const { frontQuota, backQuota } = splitQuota(row.startQuota);
-    const { plusMinus, nextQuota } = calculateNextQuota(row.startQuota, totalPoints);
+    const { plusMinus, nextQuota } = calculateNextQuota(row.startQuota, totalPoints, row.baseQuota ?? row.startQuota);
     const frontPlusMinus = frontNine - frontQuota;
     const backPlusMinus = backNine - backQuota;
 

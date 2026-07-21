@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import type { QuotaValidationSummary } from "@/lib/quota-history";
+import { defaultTee, normalizeTee, teeLabels, teeOptions, type Tee } from "@/lib/tees";
 import { classNames, formatDisplayDate, getRoundDisplayDate } from "@/lib/utils";
 
 type PlayerHistoryItem = {
@@ -23,6 +24,7 @@ type PlayerItem = {
   id: string;
   name: string;
   quota: number;
+  defaultTee: Tee;
   isRegular: boolean;
   isActive: boolean;
   conflictIds: string[];
@@ -43,6 +45,7 @@ type FormState = {
   id?: string;
   name: string;
   quota: string;
+  defaultTee: Tee;
   isRegular: boolean;
   isActive: boolean;
   conflictIds: string[];
@@ -51,6 +54,7 @@ type FormState = {
 const emptyForm: FormState = {
   name: "",
   quota: "",
+  defaultTee,
   isRegular: true,
   isActive: true,
   conflictIds: []
@@ -479,6 +483,7 @@ export function PlayersManager({
       id: player.id,
       name: player.name,
       quota: String(player.quota),
+      defaultTee: normalizeTee(player.defaultTee),
       isRegular: player.isRegular,
       isActive: player.isActive,
       conflictIds: player.conflictIds
@@ -621,6 +626,7 @@ function handleRepairButtonPress() {
       const payload = {
         name: form.name.trim(),
         quota: Number(form.quota),
+        defaultTee: form.defaultTee,
         isRegular: form.isRegular,
         isActive: form.isActive,
         conflictIds: form.conflictIds
@@ -941,6 +947,23 @@ function handleRepairButtonPress() {
                     }
                     placeholder="27"
                   />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-ink">Default Tee</span>
+                  <select
+                    className="club-input h-14"
+                    value={form.defaultTee}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, defaultTee: normalizeTee(event.target.value) }))
+                    }
+                  >
+                    {teeOptions.map((tee) => (
+                      <option key={tee} value={tee}>
+                        {teeLabels[tee]}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <div className="space-y-2">

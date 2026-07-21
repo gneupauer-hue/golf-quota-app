@@ -16,6 +16,7 @@ import {
 import { isActiveRoundAutoPreparationEnabled } from "@/lib/firebase/active-round-preparation-rollout";
 import { selectActivePrismaRoundSetup } from "@/lib/firebase/round-mirror-prisma";
 import { selectActivePrismaRoundScores } from "@/lib/firebase/score-mirror-prisma";
+import { requireTee } from "@/lib/tees";
 
 const ACTIVE_ROUND_PREPARATION_TIMEOUT_MS = 4500;
 
@@ -214,6 +215,14 @@ export async function PUT(
       const rawBirdieHoles = Array.isArray(entry.birdieHoles)
         ? (entry.birdieHoles as unknown[]).map((value: unknown) => String(value))
         : [];
+      try {
+        requireTee(entry.playingTee ?? "GREEN", "Playing tee");
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "Playing tee is invalid." },
+          { status: 400 }
+        );
+      }
 
       if (
         !playerId ||
@@ -365,6 +374,10 @@ export async function PUT(
           birdieHoles: Array.isArray(entry.birdieHoles)
             ? (entry.birdieHoles as unknown[]).map((value: unknown) => String(value))
             : [],
+          playingTee:
+            entry.playingTee == null || entry.playingTee === ""
+              ? undefined
+              : String(entry.playingTee),
           holes: Array.isArray(entry.holes)
             ? (entry.holes as unknown[]).map((value: unknown) =>
                 value == null || value === "" ? null : Number(value)

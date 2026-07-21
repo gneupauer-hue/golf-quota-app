@@ -13,6 +13,7 @@ model Player {
   quota            Int?
   startingQuota    Int
   currentQuota     Int
+  defaultTee       String           @default("GREEN")
   isRegular        Boolean          @default(false)
   isActive         Boolean          @default(true)
   createdAt        DateTime         @default(now())
@@ -67,6 +68,10 @@ model RoundEntry {
     quickFrontNine  Int?
     quickBackNine   Int?
     birdieHolesCsv  String?
+    defaultTeeSnapshot String @default("GREEN")
+    playingTee     String @default("GREEN")
+    baseQuota      Int @default(0)
+    teeAdjustment  Int @default(0)
     startQuota     Int
   hole1          Int?
   hole2          Int?

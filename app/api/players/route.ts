@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentQuotaRows, getPlayersPageData } from "@/lib/data";
 import { buildNewPlayerQuotaFields } from "@/lib/player-quota-state";
 import { prisma } from "@/lib/prisma";
+import { requireTee } from "@/lib/tees";
 
 async function syncConflicts(
   tx: Prisma.TransactionClient,
@@ -36,6 +37,15 @@ export async function POST(request: Request) {
     const body = await request.json();
     const name = String(body.name ?? "").trim();
     const quota = Number(body.quota);
+    let defaultTee;
+    try {
+      defaultTee = requireTee(body.defaultTee ?? "GREEN", "Default tee");
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Default tee is invalid." },
+        { status: 400 }
+      );
+    }
     const conflictIds = Array.isArray(body.conflictIds)
       ? body.conflictIds.map((value: unknown) => String(value))
       : [];
@@ -53,6 +63,7 @@ export async function POST(request: Request) {
         data: {
           name,
           ...buildNewPlayerQuotaFields(quota),
+          defaultTee,
           isRegular: true,
           isActive: true
         }

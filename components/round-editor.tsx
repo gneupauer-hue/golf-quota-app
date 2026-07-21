@@ -52,6 +52,18 @@ import {
   getTeamFormatKey,
   getTeamFormats
 } from "@/lib/round-setup";
+import {
+  calculateAdjustedQuota,
+  calculateTeeAdjustment,
+  defaultTee,
+  formatTeeAdjustment,
+  moveTeeBack,
+  moveTeeForward,
+  normalizeTee,
+  teeLabels,
+  teeOptions,
+  type Tee
+} from "@/lib/tees";
 import { classNames, formatDateInput, formatRoundNameFromDate, getPreferredRoundName } from "@/lib/utils";
 import type { ScoreMirrorListenerSnapshot } from "@/lib/firebase/score-listener";
 
@@ -59,6 +71,7 @@ type PlayerOption = {
   id: string;
   name: string;
   quota: number;
+  defaultTee: Tee;
   isRegular: boolean;
   isActive: boolean;
   conflictIds: string[];
@@ -82,6 +95,10 @@ type EditorEntry = {
   backNine: number;
   totalPoints: number;
   startQuota: number;
+  defaultTeeSnapshot: Tee;
+  playingTee: Tee;
+  baseQuota: number;
+  teeAdjustment: number;
   plusMinus: number;
   nextQuota: number;
   rank: number;
@@ -120,6 +137,7 @@ type RowState = {
   team: TeamCode | null;
   groupNumber: number | null;
   teeTime: string | null;
+  playingTee: Tee;
   holeScores: Array<number | null>;
   quickFrontNine: number | null;
   quickBackNine: number | null;
@@ -318,6 +336,7 @@ function mapEditorEntriesToRows(entries: EditorEntry[]): RowState[] {
     team: entry.team,
     groupNumber: entry.groupNumber,
     teeTime: entry.teeTime,
+    playingTee: normalizeTee(entry.playingTee),
     quickFrontNine: entry.quickFrontNine ?? null,
     quickBackNine: entry.quickBackNine ?? null,
     birdieHolesText: formatBirdieHolesInput(entry.birdieHoles),
@@ -353,7 +372,8 @@ function getSetupAutosaveSignature(input: {
         playerId: row.playerId,
         team: row.team,
         groupNumber: row.groupNumber,
-        teeTime: row.teeTime
+        teeTime: row.teeTime,
+        playingTee: row.playingTee
       }))
       .sort((left, right) => left.playerId.localeCompare(right.playerId))
   });
@@ -372,6 +392,30 @@ function formatGoalProgress(value: number) {
 
 function getSetupTeamLabel(team: TeamCode) {
   return `Team ${team}`;
+}
+
+function getPlayerDefaultTee(player: Pick<PlayerOption, "defaultTee"> | undefined) {
+  return normalizeTee(player?.defaultTee);
+}
+
+function getBaseQuotaForPlayer(playerId: string, playersById: Map<string, PlayerOption>, quotaSnapshot: Record<string, number>) {
+  const player = playersById.get(playerId);
+  return quotaSnapshot[playerId] ?? player?.quota ?? 0;
+}
+
+function getRoundTeeSummary(row: Pick<RowState, "playerId" | "playingTee">, playersById: Map<string, PlayerOption>, quotaSnapshot: Record<string, number>) {
+  const player = playersById.get(row.playerId);
+  const defaultPlayerTee = getPlayerDefaultTee(player);
+  const playingTee = normalizeTee(row.playingTee);
+  const baseQuota = getBaseQuotaForPlayer(row.playerId, playersById, quotaSnapshot);
+  const teeAdjustment = calculateTeeAdjustment(defaultPlayerTee, playingTee);
+  return {
+    defaultTee: defaultPlayerTee,
+    playingTee,
+    baseQuota,
+    teeAdjustment,
+    adjustedQuota: calculateAdjustedQuota(baseQuota, defaultPlayerTee, playingTee)
+  };
 }
 
 function getGoalProgressTone(value: number) {
@@ -874,8 +918,8 @@ function buildIndividualScoringGroups(
   const orderedRows = [...rows].sort((left, right) => {
     const leftPlayer = playersById.get(left.playerId);
     const rightPlayer = playersById.get(right.playerId);
-    const leftQuota = quotaSnapshot[left.playerId] ?? leftPlayer?.quota ?? 0;
-    const rightQuota = quotaSnapshot[right.playerId] ?? rightPlayer?.quota ?? 0;
+    const leftQuota = getRoundTeeSummary(left, playersById, quotaSnapshot).adjustedQuota;
+    const rightQuota = getRoundTeeSummary(right, playersById, quotaSnapshot).adjustedQuota;
     if (rightQuota !== leftQuota) return rightQuota - leftQuota;
     return (leftPlayer?.name ?? "").localeCompare(rightPlayer?.name ?? "");
   });
@@ -1025,11 +1069,22 @@ export function RoundEditor({
   }, [playersById, round.entries]);
   const roundPlayerQuotasById = useMemo(() => {
     const map = new Map<string, number>();
+    const persistedStartQuotaByPlayerId = new Map(round.entries.map((entry) => [entry.playerId, entry.startQuota]));
     for (const entry of round.entries) {
-      map.set(entry.playerId, quotaSnapshot[entry.playerId] ?? entry.startQuota ?? playersById.get(entry.playerId)?.quota ?? 0);
+      map.set(entry.playerId, entry.startQuota ?? getBaseQuotaForPlayer(entry.playerId, playersById, quotaSnapshot));
+    }
+    if (!isLocked && !startedAt && !round.completedAt) {
+      for (const row of rows) {
+        map.set(
+          row.playerId,
+          getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota ??
+            persistedStartQuotaByPlayerId.get(row.playerId) ??
+            0
+        );
+      }
     }
     return map;
-  }, [playersById, quotaSnapshot, round.entries]);
+  }, [isLocked, playersById, quotaSnapshot, round.completedAt, round.entries, rows, startedAt]);
 
   const filteredPlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1356,8 +1411,7 @@ export function RoundEditor({
     return setupTeamCodes.map((team) => {
       const teamRows = rows.filter((row) => row.team === team);
       const totalQuota = teamRows.reduce((sum, row) => {
-        const player = playersById.get(row.playerId);
-      return sum + (player ? quotaSnapshot[row.playerId] ?? player.quota : 0);
+        return sum + getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota;
       }, 0);
 
       return {
@@ -1367,9 +1421,7 @@ export function RoundEditor({
           return {
             playerId: row.playerId,
             playerName: player?.name ?? "Unknown Player",
-            quota: player
-        ? quotaSnapshot[row.playerId] ?? player.quota
-              : 0
+            quota: getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota
           };
         }),
         totalQuota
@@ -1542,13 +1594,14 @@ export function RoundEditor({
         const playersText = group.playerIds
           .map((playerId) => {
             const player = playersById.get(playerId);
-            const quota = player ? quotaSnapshot[playerId] ?? player.quota : 0;
+            const row = rows.find((candidate) => candidate.playerId === playerId);
+            const quota = row ? getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota : 0;
             return `${player?.name ?? "Unknown Player"} (${quota})`;
           })
           .join(" + ");
         const totalQuota = group.playerIds.reduce((sum, playerId) => {
-          const player = playersById.get(playerId);
-          return sum + (player ? quotaSnapshot[playerId] ?? player.quota : 0);
+          const row = rows.find((candidate) => candidate.playerId === playerId);
+          return sum + (row ? getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota : 0);
         }, 0);
         lines.push(group.label);
         lines.push(`${playersText} ${arrow} ${totalQuota}`);
@@ -1874,6 +1927,7 @@ export function RoundEditor({
           team: row.team,
           groupNumber: row.groupNumber,
           teeTime: row.teeTime,
+          playingTee: row.playingTee,
           frontSubmittedAt: row.frontSubmittedAt,
           backSubmittedAt: row.backSubmittedAt,
           quickFrontNine: row.quickFrontNine,
@@ -2061,6 +2115,7 @@ export function RoundEditor({
   }
 
   function addPlayer(playerId: string) {
+    const player = playersById.get(playerId);
     setRows((current) => [
       ...current,
       {
@@ -2068,6 +2123,7 @@ export function RoundEditor({
         team: null,
         groupNumber: null,
         teeTime: null,
+        playingTee: getPlayerDefaultTee(player),
         quickFrontNine: null,
         quickBackNine: null,
         birdieHolesText: "",
@@ -2112,7 +2168,7 @@ export function RoundEditor({
         return {
           playerId: row.playerId,
           playerName: player.name,
-          quota: quotaSnapshot[row.playerId] ?? player.quota,
+          quota: getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota,
           conflictIds: player.conflictIds
         };
       })
@@ -2260,6 +2316,7 @@ export function RoundEditor({
           team: destinationTeam,
           groupNumber: null,
           teeTime: null,
+          playingTee: getPlayerDefaultTee(playersById.get(playerId)),
           quickFrontNine: null,
           quickBackNine: null,
           birdieHolesText: "",
@@ -2580,6 +2637,41 @@ export function RoundEditor({
     setSavedRows((current) => current.filter((row) => row.playerId !== playerId).map((row) => ({ ...row, groupNumber: null, teeTime: null })));
     setTeamBuildVariant(0);
     setMessage(`${targetPlayer?.name ?? "Player"} removed from the round.`);
+  }
+
+  function updatePlayerTee(playerId: string, playingTee: Tee) {
+    if (isLocked || startedAt) return;
+    setRows((current) =>
+      current.map((row) => (row.playerId === playerId ? { ...row, playingTee } : row))
+    );
+    setMessage("Playing tee updated for this round only.");
+  }
+
+  function moveEveryoneForwardOneTee() {
+    if (isLocked || startedAt) return;
+    setRows((current) =>
+      current.map((row) => ({ ...row, playingTee: moveTeeForward(normalizeTee(row.playingTee)) }))
+    );
+    setMessage("Selected players moved up one tee for this round only.");
+  }
+
+  function moveEveryoneBackOneTee() {
+    if (isLocked || startedAt) return;
+    setRows((current) =>
+      current.map((row) => ({ ...row, playingTee: moveTeeBack(normalizeTee(row.playingTee)) }))
+    );
+    setMessage("Selected players moved back one tee for this round only.");
+  }
+
+  function resetEveryoneToDefaultTees() {
+    if (isLocked || startedAt) return;
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        playingTee: getPlayerDefaultTee(playersById.get(row.playerId))
+      }))
+    );
+    setMessage("Selected players reset to their default tees.");
   }
 
   function updateHole(playerId: string, holeIndex: number, value: number | null) {
@@ -4009,30 +4101,93 @@ export function RoundEditor({
                 </div>
                 {rows.length ? (
                   <div className="space-y-2">
-                    <p className="text-sm font-semibold text-ink">Selected players</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-ink">Selected players</p>
+                      <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-3">
+                        <button
+                          type="button"
+                          disabled={Boolean(isLocked || startedAt)}
+                          className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink/75 disabled:opacity-50"
+                          onClick={moveEveryoneForwardOneTee}
+                        >
+                          Move Everyone Up One Tee
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(isLocked || startedAt)}
+                          className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink/75 disabled:opacity-50"
+                          onClick={moveEveryoneBackOneTee}
+                        >
+                          Move Everyone Back One Tee
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(isLocked || startedAt)}
+                          className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink/75 disabled:opacity-50"
+                          onClick={resetEveryoneToDefaultTees}
+                        >
+                          Reset Everyone to Default Tees
+                        </button>
+                      </div>
+                    </div>
                     <div className="space-y-2">
                       {rows.map((row) => {
                         const player = playersById.get(row.playerId);
+                        const teeSummary = getRoundTeeSummary(row, playersById, quotaSnapshot);
                         return (
                           <div
                             key={`selected-${row.playerId}`}
-                            className="flex items-center justify-between gap-3 rounded-2xl bg-canvas px-4 py-3"
+                            className="space-y-3 rounded-2xl bg-canvas px-4 py-3"
                           >
-                            <div>
-                              <p className="text-base font-semibold text-ink">
-                                {player?.name ?? "Unknown Player"}
-                              </p>
-                              <p className="mt-1 text-xs text-ink/55">
-                                {`Quota ${player ? quotaSnapshot[row.playerId] ?? player.quota : 0}`}
-                              </p>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-base font-semibold text-ink">
+                                  {player?.name ?? "Unknown Player"}
+                                </p>
+                                <p className="mt-1 text-xs text-ink/55">
+                                  {`Default ${teeLabels[teeSummary.defaultTee]} | Playing ${teeLabels[teeSummary.playingTee]}`}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink/70"
+                                onClick={() => removePlayer(row.playerId)}
+                              >
+                                Remove
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-ink/70"
-                              onClick={() => removePlayer(row.playerId)}
-                            >
-                              Remove
-                            </button>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {teeOptions.map((tee) => (
+                                <button
+                                  key={`${row.playerId}-${tee}`}
+                                  type="button"
+                                  disabled={Boolean(isLocked || startedAt)}
+                                  className={classNames(
+                                    "min-h-9 rounded-full px-2 text-xs font-semibold disabled:opacity-50",
+                                    teeSummary.playingTee === tee ? "bg-pine text-white" : "bg-white text-ink/75"
+                                  )}
+                                  onClick={() => updatePlayerTee(row.playerId, tee)}
+                                >
+                                  {teeLabels[tee]}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="rounded-2xl bg-white px-3 py-2">
+                                <p className="font-semibold uppercase tracking-[0.14em] text-ink/45">Base</p>
+                                <p className="mt-1 text-sm font-semibold text-ink">{teeSummary.baseQuota}</p>
+                              </div>
+                              <div className="rounded-2xl bg-white px-3 py-2">
+                                <p className="font-semibold uppercase tracking-[0.14em] text-ink/45">Tee Adj</p>
+                                <p className="mt-1 text-sm font-semibold text-ink">
+                                  {formatTeeAdjustment(teeSummary.teeAdjustment)}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl bg-white px-3 py-2">
+                                <p className="font-semibold uppercase tracking-[0.14em] text-ink/45">Round Quota</p>
+                                <p className="mt-1 text-sm font-semibold text-ink">{teeSummary.adjustedQuota}</p>
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
@@ -4175,7 +4330,7 @@ export function RoundEditor({
                         <div className="space-y-2">
                           {rows.map((row) => {
                             const player = playersById.get(row.playerId);
-                            const quota = player ? quotaSnapshot[row.playerId] ?? player.quota : 0;
+                            const quota = getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota;
                             return (
                               <div key={`manual-team-${row.playerId}`} className="grid gap-2 rounded-2xl bg-canvas px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                                 <div className="min-w-0">
@@ -4296,8 +4451,7 @@ export function RoundEditor({
                               const teamRows = rows.filter((row) => row.team === team);
                               const currentGroupNumber = teamRows.find((row) => row.groupNumber != null)?.groupNumber ?? null;
                               const totalQuota = teamRows.reduce((sum, row) => {
-                                const player = playersById.get(row.playerId);
-                                return sum + (player ? quotaSnapshot[row.playerId] ?? player.quota : 0);
+                                return sum + getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota;
                               }, 0);
 
                               return (
@@ -4387,7 +4541,7 @@ export function RoundEditor({
                                       </p>
                                       {teamRows.map((row) => {
                                         const player = playersById.get(row.playerId);
-                                        const quota = player ? quotaSnapshot[row.playerId] ?? player.quota : 0;
+                                        const quota = getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota;
                                         return (
                                           <p key={`group-${group.key}-${row.playerId}`} className="truncate text-sm font-semibold text-ink">
                                             {player?.name ?? "Unknown Player"}
@@ -4478,14 +4632,15 @@ export function RoundEditor({
                             <p className="text-base font-semibold text-ink">{group.label}</p>
                             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-card px-4 py-3">
                               {[...group.playerIds].sort((a, b) => {
-                                const playerA = playersById.get(a);
-                                const playerB = playersById.get(b);
-                                const quotaA = playerA ? quotaSnapshot[a] ?? playerA.quota : 0;
-                                const quotaB = playerB ? quotaSnapshot[b] ?? playerB.quota : 0;
+                                const rowA = rows.find((row) => row.playerId === a);
+                                const rowB = rows.find((row) => row.playerId === b);
+                                const quotaA = rowA ? getRoundTeeSummary(rowA, playersById, quotaSnapshot).adjustedQuota : 0;
+                                const quotaB = rowB ? getRoundTeeSummary(rowB, playersById, quotaSnapshot).adjustedQuota : 0;
                                 return quotaB - quotaA;
                               }).map((playerId, playerIndex) => {
                                 const player = playersById.get(playerId);
-                                const quota = player ? quotaSnapshot[playerId] ?? player.quota : 0;
+                                const row = rows.find((candidate) => candidate.playerId === playerId);
+                                const quota = row ? getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota : 0;
                                 return (
                                   <div
                                     key={`individual-group-${group.key}-${playerId}`}
