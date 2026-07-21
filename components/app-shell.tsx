@@ -28,12 +28,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       (pathname.endsWith("/results") || pathname.split("/").filter(Boolean).length === 2));
 
   return (
-    <div className="min-h-[100dvh] bg-hero text-ink">
+    <div className="flex min-h-[100dvh] flex-col bg-hero text-ink">
       <div
-        className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col px-3.5 sm:px-4"
+        className="mx-auto flex w-full max-w-md flex-1 flex-col px-3.5 sm:px-4"
         style={{
           paddingTop: "max(24px, calc(env(safe-area-inset-top) + 16px))",
-          paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom))"
+          paddingBottom: "1.5rem"
         }}
       >
         {hideHeader ? null : (
@@ -51,12 +51,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-2"
+        className="mt-auto w-full px-2"
         style={{
           paddingBottom: "max(8px, calc(env(safe-area-inset-bottom) + 4px))"
         }}
       >
-        <nav className="pointer-events-auto mx-auto w-full max-w-md rounded-[26px] border border-mist bg-card p-1.5 shadow-card">
+        <nav className="mx-auto w-full max-w-md rounded-[26px] border border-mist bg-card p-1.5 shadow-card">
           <ul className="grid grid-cols-6 gap-1.5">
             {links.map((link) => {
               const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
