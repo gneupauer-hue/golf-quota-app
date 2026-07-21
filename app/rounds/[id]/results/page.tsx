@@ -1,6 +1,7 @@
 import { RoundResults } from "@/components/round-results";
+import { SideMatchesBoard } from "@/components/side-matches-board";
 import { SectionCard } from "@/components/section-card";
-import { getRoundResultsData } from "@/lib/data";
+import { getRoundEditorData, getRoundResultsData, getRoundSideMatches } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function RoundResultsPage({
     console.error("[results] Could not load round results", { id, error });
     return null;
   });
+  const sideMatches = await getRoundSideMatches(id).catch(() => []);
+  const editorData = sideMatches.length ? await getRoundEditorData(id).catch(() => null) : null;
 
   if (!data) {
     return (
@@ -24,5 +27,26 @@ export default async function RoundResultsPage({
     );
   }
 
-  return <RoundResults data={data} />;
+  return (
+    <div className="space-y-4">
+      <RoundResults data={data} />
+      {editorData && sideMatches.length ? (
+        <SideMatchesBoard
+          round={{
+            id: editorData.round.id,
+            roundName: editorData.round.roundName,
+            roundDate: editorData.round.roundDate,
+            roundMode: editorData.round.roundMode
+          }}
+          entries={editorData.round.entries}
+          sideMatches={sideMatches}
+          archiveHref="/side-matches/archive"
+          readOnly
+          showHeader={false}
+          showArchiveLink={false}
+          autoRefresh={false}
+        />
+      ) : null}
+    </div>
+  );
 }
