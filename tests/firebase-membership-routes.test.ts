@@ -21,13 +21,18 @@ function makeRequest(body: Record<string, unknown>, options: { token?: string } 
 
 function baseRequestAdapters() {
   const writes: Array<{ uid: string; status: string; fullName: string | null }> = [];
+  const notified: Array<{ fullName: string; phoneNumber: string | null }> = [];
   return {
     writes,
+    notified,
     verifyIdToken: async () => ({ uid: "uid-new", phoneNumber: "+15705551234", email: null }),
     verifyClub: async () => ({ id: CLUB_ID, name: "Irem Golf Quota" }),
     readMembership: async () => null as { status?: string } | null,
     writePendingMembership: async (_clubId: string, uid: string, docs: { member: { status: string; displayName: string | null } }) => {
       writes.push({ uid, status: docs.member.status, fullName: docs.member.displayName });
+    },
+    onMembershipRequested: async (info: { fullName: string; phoneNumber: string | null }) => {
+      notified.push(info);
     },
     now: () => "NOW"
   };
@@ -44,13 +49,34 @@ test("request: new phone user creates a requested membership", async () => {
   assert.equal(adapters.writes[0].fullName, "Bob Lipski");
 });
 
-test("request: an existing active member is left untouched", async () => {
+test("request: new request notifies the owner once with the name", async () => {
+  const adapters = baseRequestAdapters();
+  await handleMembershipRequest(makeRequest({ fullName: "Bob Lipski" }, { token: "t" }), adapters);
+  assert.equal(adapters.notified.length, 1);
+  assert.equal(adapters.notified[0].fullName, "Bob Lipski");
+  assert.equal(adapters.notified[0].phoneNumber, "+15705551234");
+});
+
+test("request: an existing active member is left untouched and not notified", async () => {
   const adapters = baseRequestAdapters();
   adapters.readMembership = async () => ({ status: "active" });
   const res = await handleMembershipRequest(makeRequest({ fullName: "Bob Lipski" }, { token: "t" }), adapters);
   const data = await res.json();
   assert.equal(data.status, "already-member");
   assert.equal(adapters.writes.length, 0);
+  assert.equal(adapters.notified.length, 0);
+});
+
+test("request: a failing notification never blocks the signup", async () => {
+  const adapters = baseRequestAdapters();
+  adapters.onMembershipRequested = async () => {
+    throw new Error("email provider down");
+  };
+  const res = await handleMembershipRequest(makeRequest({ fullName: "Bob Lipski" }, { token: "t" }), adapters);
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.status, "requested");
+  assert.equal(adapters.writes.length, 1);
 });
 
 test("request: missing name is rejected", async () => {

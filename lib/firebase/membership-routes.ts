@@ -25,6 +25,11 @@ export type MembershipRequestAdapters = {
     uid: string,
     docs: PendingMembershipDocs
   ) => Promise<void>;
+  // Best-effort owner notification (e.g. email). Failure never blocks the request.
+  onMembershipRequested?: (info: {
+    fullName: string;
+    phoneNumber: string | null;
+  }) => Promise<void>;
   now?: () => unknown;
 };
 
@@ -133,6 +138,16 @@ export async function handleMembershipRequest(
     });
 
     await adapters.writePendingMembership(clubId, decoded.uid, docs);
+
+    try {
+      await adapters.onMembershipRequested?.({
+        fullName: normalized.fullName,
+        phoneNumber: decoded.phoneNumber ?? null
+      });
+    } catch {
+      // Notification is best-effort — the request already succeeded.
+    }
+
     return NextResponse.json({ ok: true, status: "requested" });
   } catch (error) {
     return jsonError(
