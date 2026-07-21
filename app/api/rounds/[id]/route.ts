@@ -8,6 +8,25 @@ import {
 } from "@/lib/round-score-edit-auth";
 import { createOrReplaceRoundEntries } from "@/lib/round-service";
 import { formatRoundNameFromDate } from "@/lib/utils";
+import {
+  IREM_FIREBASE_CLUB_ID,
+  didRoundTransitionDraftToLive,
+  prepareActiveRoundFirestoreMirror
+} from "@/lib/firebase/active-round-preparation";
+import { isActiveRoundAutoPreparationEnabled } from "@/lib/firebase/active-round-preparation-rollout";
+import { selectActivePrismaRoundSetup } from "@/lib/firebase/round-mirror-prisma";
+import { selectActivePrismaRoundScores } from "@/lib/firebase/score-mirror-prisma";
+
+const ACTIVE_ROUND_PREPARATION_TIMEOUT_MS = 4500;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("active-round-preparation-timeout")), timeoutMs);
+    })
+  ]);
+}
 
 export async function GET(
   _request: Request,
@@ -291,7 +310,17 @@ export async function PUT(
       }
     }
 
+    let transitionedToLive = false;
+
     await prisma.$transaction(async (tx) => {
+      const previousRoundState = await tx.round.findUnique({
+        where: { id },
+        select: {
+          lockedAt: true,
+          startedAt: true
+        }
+      });
+
       await createOrReplaceRoundEntries(tx, {
         roundId: id,
         roundName: resolvedRoundName,
@@ -343,6 +372,11 @@ export async function PUT(
             : []
         }))
       });
+
+      transitionedToLive = didRoundTransitionDraftToLive(previousRoundState, {
+        lockedAt,
+        startedAt
+      });
     });
 
     console.info("[live-round] saved-round-payload", {
@@ -378,7 +412,51 @@ export async function PUT(
       }))
     });
 
-    return NextResponse.json({ ok: true });
+    let firestorePreparation: unknown = undefined;
+
+    if (transitionedToLive && isActiveRoundAutoPreparationEnabled()) {
+      try {
+        const { getFirebaseAdminDb } = await import("@/lib/firebase/admin");
+        const { buildActiveRoundPreparationFirestoreAdapters } = await import(
+          "@/lib/firebase/active-round-preparation-firestore"
+        );
+        const db = await getFirebaseAdminDb();
+        const preparation = await withTimeout(
+          prepareActiveRoundFirestoreMirror({
+            adapters: {
+              ...buildActiveRoundPreparationFirestoreAdapters(db),
+              readActivePrismaRoundSetup: async () => selectActivePrismaRoundSetup(prisma),
+              readActivePrismaRoundScores: async () => selectActivePrismaRoundScores(prisma)
+            },
+            clubId: IREM_FIREBASE_CLUB_ID,
+            expectedPrismaRoundId: id,
+            mode: "auto"
+          }),
+          ACTIVE_ROUND_PREPARATION_TIMEOUT_MS
+        );
+
+        if (!preparation.ok) {
+          firestorePreparation = {
+            status: preparation.status,
+            errorCode: preparation.errorCode,
+            message: preparation.message ?? "Round started, but realtime sync needs repair."
+          };
+        } else {
+          firestorePreparation = {
+            status: "ready",
+            writesApplied: preparation.writesApplied
+          };
+        }
+      } catch {
+        firestorePreparation = {
+          status: "repair-needed",
+          errorCode: "unknown",
+          message: "Round started, but realtime sync needs repair."
+        };
+      }
+    }
+
+    return NextResponse.json({ ok: true, ...(firestorePreparation ? { firestorePreparation } : {}) });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not save round." },

@@ -129,6 +129,33 @@ type ScoreMirrorPublishResult = {
   error?: string;
 };
 
+type ActiveRoundPreparationRepairResult = {
+  ok?: boolean;
+  status?: string;
+  roundId?: string | null;
+  operationId?: string;
+  errorCode?: string;
+  message?: string;
+  round?: RoundMirrorAuditSection;
+  entries?: RoundMirrorAuditSection;
+  activePointer?: RoundMirrorAuditSection;
+  scores?: {
+    counts?: {
+      created?: number;
+      updated?: number;
+      unchanged?: number;
+      extra?: number;
+    };
+    created?: ScoreMirrorAuditDisplayItem[];
+    updated?: ScoreMirrorAuditDisplayItem[];
+    unchanged?: ScoreMirrorAuditDisplayItem[];
+    extra?: ScoreMirrorAuditDisplayItem[];
+  };
+  writesPlanned?: number;
+  writesApplied?: number;
+  error?: string;
+};
+
 export function isActiveOwnerOrAdminMembership(
   membership: FirebaseUserClubMembership,
   clubId: string
@@ -297,6 +324,9 @@ export function FirebaseAccountPanel({
   const [roundMirrorPublishResult, setRoundMirrorPublishResult] = useState<RoundMirrorPublishResult | null>(null);
   const [roundMirrorPublishError, setRoundMirrorPublishError] = useState("");
   const [roundMirrorPublishConfirm, setRoundMirrorPublishConfirm] = useState(false);
+  const [roundPrepRepairResult, setRoundPrepRepairResult] = useState<ActiveRoundPreparationRepairResult | null>(null);
+  const [roundPrepRepairError, setRoundPrepRepairError] = useState("");
+  const [roundPrepRepairConfirm, setRoundPrepRepairConfirm] = useState(false);
   const [syncConfirm, setSyncConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const activeOwnerMembership = memberships.find(
@@ -545,6 +575,52 @@ export function FirebaseAccountPanel({
     });
   }
 
+  function repairActiveRoundPreparation() {
+    startTransition(async () => {
+      try {
+        setRoundPrepRepairError("");
+        setRoundPrepRepairResult(null);
+        setMessage("");
+
+        const currentUser = getFirebaseAuth().currentUser;
+        if (!currentUser || !activeOwnerAdminMembership) {
+          throw new Error("Sign in as an active club owner or admin before repairing round preparation.");
+        }
+        if (!roundPrepRepairConfirm) {
+          throw new Error("Confirm before repairing active round preparation.");
+        }
+
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch("/api/firebase/active-round-preparation/repair", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            clubId: ROUND_MIRROR_CLUB_ID,
+            expectedProjectId: ROUND_MIRROR_PROJECT_ID
+          })
+        });
+        const result = await response.json();
+
+        setRoundPrepRepairResult(result);
+        setRoundPrepRepairConfirm(false);
+
+        if (!response.ok) {
+          throw new Error(result.error ?? result.message ?? "Could not repair active round preparation.");
+        }
+
+        setMessage("Active round realtime preparation repaired.");
+      } catch (error) {
+        setRoundPrepRepairConfirm(false);
+        setRoundPrepRepairError(
+          error instanceof Error ? error.message : "Could not repair active round preparation."
+        );
+      }
+    });
+  }
+
   function runScoreMirrorDryRun() {
     startTransition(async () => {
       try {
@@ -631,6 +707,10 @@ export function FirebaseAccountPanel({
   const roundMirrorPublishRoundCounts = roundMirrorPublishResult?.round?.counts;
   const roundMirrorPublishEntryCounts = roundMirrorPublishResult?.entries?.counts;
   const roundMirrorPublishPointerCounts = roundMirrorPublishResult?.activePointer?.counts;
+  const roundPrepRoundCounts = roundPrepRepairResult?.round?.counts;
+  const roundPrepEntryCounts = roundPrepRepairResult?.entries?.counts;
+  const roundPrepPointerCounts = roundPrepRepairResult?.activePointer?.counts;
+  const roundPrepScoreCounts = roundPrepRepairResult?.scores?.counts;
   const scoreCounts = scoreMirrorResult?.scores?.counts;
   const publishScoreCounts = scoreMirrorPublishResult?.scores?.counts;
   const canSyncPlayerMirror =
@@ -1013,6 +1093,82 @@ export function FirebaseAccountPanel({
               {roundMirrorPublishError ? (
                 <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
                   {roundMirrorPublishError}
+                </p>
+              ) : null}
+            </SectionCard>
+          ) : null}
+
+          {showScoreMirrorControls ? (
+            <SectionCard className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-pine">
+                Active Round Realtime Repair
+              </p>
+              <p className="text-sm text-ink/70">
+                Repairs the active round shell and missing baseline score mirrors. Existing score mirrors are preserved.
+              </p>
+              <label className="flex items-start gap-3 rounded-lg border border-pine/15 bg-white px-3 py-3 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={roundPrepRepairConfirm}
+                  disabled={isPending || loading || !activePrismaRoundId}
+                  onChange={(event) => setRoundPrepRepairConfirm(event.target.checked)}
+                />
+                <span>
+                  I understand this repairs the active round realtime mirror and does not change Prisma scoring.
+                </span>
+              </label>
+              <button
+                type="button"
+                className="club-btn-danger min-h-12 w-full disabled:opacity-50"
+                disabled={isPending || loading || !activePrismaRoundId || !roundPrepRepairConfirm}
+                onClick={repairActiveRoundPreparation}
+              >
+                Repair Active Round Realtime Prep
+              </button>
+              {roundPrepRepairResult ? (
+                <div className="grid grid-cols-2 gap-2 text-sm text-ink">
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Status: <span className="font-bold">{roundPrepRepairResult.status ?? "unknown"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Round: <span className="font-bold">{roundPrepRepairResult.roundId ?? "None"}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Round created: <span className="font-bold">{roundPrepRoundCounts?.created ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Round updated: <span className="font-bold">{roundPrepRoundCounts?.updated ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Entries created: <span className="font-bold">{roundPrepEntryCounts?.created ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Entries updated: <span className="font-bold">{roundPrepEntryCounts?.updated ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Pointer updated: <span className="font-bold">{roundPrepPointerCounts?.updated ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Scores created: <span className="font-bold">{roundPrepScoreCounts?.created ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Scores unchanged: <span className="font-bold">{roundPrepScoreCounts?.unchanged ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Scores extra: <span className="font-bold">{roundPrepScoreCounts?.extra ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Writes planned: <span className="font-bold">{roundPrepRepairResult.writesPlanned ?? 0}</span>
+                  </p>
+                  <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
+                    Writes applied: <span className="font-bold">{roundPrepRepairResult.writesApplied ?? 0}</span>
+                  </p>
+                </div>
+              ) : null}
+              {roundPrepRepairError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+                  {roundPrepRepairError}
                 </p>
               ) : null}
             </SectionCard>

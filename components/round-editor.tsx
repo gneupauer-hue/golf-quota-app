@@ -1892,6 +1892,7 @@ export function RoundEditor({
     if (!response.ok) {
       throw new Error(result.error ?? "Could not save round.");
     }
+    return result;
   }
 
   function buildScoreEntryPayload(
@@ -3393,13 +3394,18 @@ export function RoundEditor({
     startTransition(async () => {
       try {
         setMessage("");
-        await persistRound(nextRows, now, now, String(count));
+        const saveResult = await persistRound(nextRows, now, now, String(count));
         setRows(nextRows);
         setSavedRows(nextRows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setLockedAt(now);
         setStartedAt(now);
         setSelectedTeam(null);
-        setMessage(isSkinsOnly ? "Individual Quota + Skins is ready for scorecard entry." : "This round is ready for scorecard entry in Current Round.");
+        setMessage(
+          saveResult?.firestorePreparation?.message ??
+            (isSkinsOnly
+              ? "Individual Quota + Skins is ready for scorecard entry."
+              : "This round is ready for scorecard entry in Current Round.")
+        );
         router.push("/current-round");
         router.refresh();
       } catch (error) {

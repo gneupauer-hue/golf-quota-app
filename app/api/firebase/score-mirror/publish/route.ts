@@ -47,6 +47,11 @@ function buildFirestoreAdapters(db: Firestore) {
           prismaPlayerId?: unknown;
           playerName?: unknown;
           checksum?: unknown;
+          source?: unknown;
+          scoreVersion?: unknown;
+          lastOperationId?: unknown;
+          lastEditedByUid?: unknown;
+          lastClientRequestId?: unknown;
         };
 
         return {
@@ -54,7 +59,12 @@ function buildFirestoreAdapters(db: Firestore) {
           prismaEntryId: typeof data.prismaEntryId === "string" ? data.prismaEntryId : undefined,
           prismaPlayerId: typeof data.prismaPlayerId === "string" ? data.prismaPlayerId : doc.id,
           playerName: typeof data.playerName === "string" ? data.playerName : null,
-          checksum: typeof data.checksum === "string" ? data.checksum : ""
+          checksum: typeof data.checksum === "string" ? data.checksum : "",
+          source: data.source,
+          scoreVersion: data.scoreVersion,
+          lastOperationId: data.lastOperationId,
+          lastEditedByUid: data.lastEditedByUid,
+          lastClientRequestId: data.lastClientRequestId
         };
       });
     }

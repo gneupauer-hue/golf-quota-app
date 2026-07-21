@@ -28,6 +28,11 @@ export type ScoreMirrorPublishMembership = {
 
 export type ScoreMirrorFirestoreComparison = FirestoreScoreMirrorComparisonInput & {
   prismaEntryId?: string;
+  source?: unknown;
+  scoreVersion?: unknown;
+  lastOperationId?: unknown;
+  lastEditedByUid?: unknown;
+  lastClientRequestId?: unknown;
 };
 
 export type ScoreMirrorPublishWriteInput = {
@@ -194,6 +199,29 @@ function assertFirestoreScoreIdsMatchExpected(
   }
 }
 
+function hasGranularScoreOperationState(score: ScoreMirrorFirestoreComparison) {
+  return (
+    score.source === "firestore-test" ||
+    typeof score.lastOperationId === "string" ||
+    typeof score.lastEditedByUid === "string" ||
+    typeof score.lastClientRequestId === "string" ||
+    (typeof score.scoreVersion === "number" && score.scoreVersion > 1)
+  );
+}
+
+function assertNoGranularScoreOperationState(scores: ScoreMirrorFirestoreComparison[]) {
+  const protectedScore = scores.find(hasGranularScoreOperationState);
+
+  if (protectedScore) {
+    throw Object.assign(
+      new Error(
+        "Score mirror contains granular score-write history. Use active round preparation repair instead of legacy score publish."
+      ),
+      { status: 409 }
+    );
+  }
+}
+
 function buildWritableScores(expected: ScoreMirrorMappingResult, audit: ScoreMirrorAuditResult) {
   const writableIds = new Set([
     ...audit.created.map((item) => item.playerId),
@@ -287,6 +315,7 @@ export async function handleScoreMirrorPublishRequest(
 
     assertValidFirestoreScores(firestoreScores);
     assertFirestoreScoreIdsMatchExpected(expected, firestoreScores);
+    assertNoGranularScoreOperationState(firestoreScores);
 
     const audit = auditFirebaseScoreMirror(expected, firestoreScores);
 

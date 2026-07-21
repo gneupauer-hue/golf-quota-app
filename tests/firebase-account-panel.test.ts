@@ -223,6 +223,19 @@ test("round shell control reuses round mirror APIs and has no manual ID entry", 
   assert.equal(ACCOUNT_PANEL_SOURCE.includes("setManualRound"), false);
 });
 
+test("active round preparation repair control is owner/admin-only and has no manual round ID", () => {
+  assert.notEqual(
+    ACCOUNT_PANEL_SOURCE.indexOf("/api/firebase/active-round-preparation/repair"),
+    -1
+  );
+  assert.notEqual(ACCOUNT_PANEL_SOURCE.indexOf("Repair Active Round Realtime Prep"), -1);
+  assert.notEqual(ACCOUNT_PANEL_SOURCE.indexOf("roundPrepRepairConfirm"), -1);
+  assert.notEqual(ACCOUNT_PANEL_SOURCE.indexOf("activeOwnerAdminMembership"), -1);
+  assert.equal(ACCOUNT_PANEL_SOURCE.includes("expectedPrismaRoundId"), true);
+  assert.equal(ACCOUNT_PANEL_SOURCE.includes("manualRepairRoundId"), false);
+  assert.equal(ACCOUNT_PANEL_SOURCE.includes("setManualRepairRound"), false);
+});
+
 test("score mirror publish is disabled until a clean active-round dry-run is confirmed", () => {
   const activeDryRun = {
     ok: true,

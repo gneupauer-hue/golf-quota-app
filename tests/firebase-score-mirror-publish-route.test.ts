@@ -230,6 +230,30 @@ test("expected round mismatch is denied", async () => {
   assert.equal(json.writesApplied, 0);
 });
 
+test("legacy score publish blocks existing granular score-write history", async () => {
+  const expectedScore = mapPrismaScoresToFirebaseMirror(makeRound()).scores[0];
+  const response = await handleScoreMirrorPublishRequest(
+    makeRequest(),
+    makeAdapters({
+      readFirestoreScores: async () => [
+        {
+          docId: expectedScore.prismaPlayerId,
+          prismaPlayerId: expectedScore.prismaPlayerId,
+          prismaEntryId: expectedScore.prismaEntryId,
+          checksum: expectedScore.checksum,
+          source: "firestore-test",
+          scoreVersion: 2,
+          lastOperationId: "op-1"
+        }
+      ]
+    })
+  );
+  const json = await readJson(response);
+
+  assert.equal(response.status, 409);
+  assert.match(String(json.error), /granular score-write history/);
+});
+
 test("publish requires confirmPublish", async () => {
   const response = await handleScoreMirrorPublishRequest(
     makeRequest({
