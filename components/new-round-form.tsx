@@ -6,18 +6,31 @@ import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import type { RoundMode } from "@/lib/quota";
 
-export function buildCreateRoundRequestBody(roundMode: RoundMode, isTestRound: boolean) {
+export function buildCreateRoundRequestBody(
+  roundMode: RoundMode,
+  isTestRound: boolean,
+  roundDate?: string
+) {
   return {
     roundMode,
     scoringEntryMode: "QUICK" as const,
-    isTestRound
+    isTestRound,
+    ...(roundDate ? { roundDate } : {})
   };
+}
+
+// Local "today" as YYYY-MM-DD for the date input (avoids UTC day-shift).
+function todayInputValue() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
 }
 
 export function NewRoundForm() {
   const router = useRouter();
   const [roundMode, setRoundMode] = useState<RoundMode>("MATCH_QUOTA");
   const [isTestRound, setIsTestRound] = useState(false);
+  const [gameDate, setGameDate] = useState(todayInputValue());
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -52,6 +65,19 @@ export function NewRoundForm() {
         </div>
 
 
+        <label className="block">
+          <span className="mb-2 block text-sm font-semibold">Game date</span>
+          <input
+            type="date"
+            value={gameDate}
+            onChange={(event) => setGameDate(event.target.value)}
+            className="h-14 w-full rounded-2xl border border-ink/10 bg-canvas px-4 text-base outline-none"
+          />
+          <span className="mt-1 block text-xs text-ink/60">
+            The day this game is played. You can set one up for a future date — it keeps this date when posted.
+          </span>
+        </label>
+
         <label className="flex items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-canvas px-4 py-3">
           <span>
             <span className="block text-sm font-semibold">Test Round</span>
@@ -79,7 +105,7 @@ export function NewRoundForm() {
                 headers: {
                   "Content-Type": "application/json"
                 },
-                body: JSON.stringify(buildCreateRoundRequestBody(roundMode, isTestRound))
+                body: JSON.stringify(buildCreateRoundRequestBody(roundMode, isTestRound, gameDate))
               });
 
               const result = await response.json();

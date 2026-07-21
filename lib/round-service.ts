@@ -17,7 +17,6 @@ import {
 } from "@/lib/quota";
 import { validateAllPlayerQuotas, type PlayerQuotaValidationInput } from "@/lib/quota-history";
 import { getBaselineQuota2026, requireBaselineQuota2026 } from "@/lib/baseline-quotas-2026";
-import { formatRoundNameFromDate } from "@/lib/utils";
 import { getSeasonStartDate } from "@/lib/season";
 import {
   calculateAdjustedQuota,
@@ -966,9 +965,10 @@ export async function finalizeRound(tx: Tx, roundId: string) {
   await tx.round.update({
     where: { id: roundId },
     data: {
-      completedAt: finalizedAt,
-      roundDate: finalizedAt,
-      roundName: formatRoundNameFromDate(finalizedAt)
+      // Preserve the game date/name the owner chose at setup — do NOT re-stamp
+      // them to the posting time. Quota-history ordering uses completedAt, so
+      // keeping the chosen roundDate is safe and avoids "posted as today".
+      completedAt: finalizedAt
     }
   });
 

@@ -29,6 +29,15 @@ test("existing game modes still use the selected round mode", () => {
   assert.equal(buildCreateRoundRequestBody("SKINS_ONLY", false).roundMode, "SKINS_ONLY");
 });
 
+test("a chosen game date is sent as roundDate", () => {
+  const body = buildCreateRoundRequestBody("MATCH_QUOTA", false, "2026-07-22");
+  assert.equal(body.roundDate, "2026-07-22");
+});
+
+test("no chosen game date omits roundDate (server defaults to today)", () => {
+  assert.equal("roundDate" in buildCreateRoundRequestBody("MATCH_QUOTA", false), false);
+});
+
 test("create request remains setup-only and does not include score fields", () => {
   const bodyText = JSON.stringify(buildCreateRoundRequestBody("MATCH_QUOTA", true));
 
