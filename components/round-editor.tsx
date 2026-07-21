@@ -7,6 +7,7 @@ import { MatchRoundView, SkinsOnlyRoundView } from "@/components/active-round-vi
 import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 import { QuickEntryRoundView } from "@/components/quick-entry-round-view";
 import { SideMatchesBoard } from "@/components/side-matches-board";
+import { DeleteTestRoundButton } from "@/components/delete-test-round-button";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { PageTitle } from "@/components/page-title";
 import { RoundUtilityActions } from "@/components/round-utility-actions";
@@ -4817,6 +4818,10 @@ export function RoundEditor({
           showArchiveLink={false}
           autoRefresh={false}
         />
+      ) : null}
+
+      {(isLocked || startedAt) && isTestRound ? (
+        <DeleteTestRoundButton roundId={round.id} />
       ) : null}
 
       {quotaAdjustmentPreview ? (
