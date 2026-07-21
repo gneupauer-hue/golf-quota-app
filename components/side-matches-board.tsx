@@ -79,7 +79,20 @@ export function SideMatchesBoard({
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
   const [formState, setFormState] = useState<MatchFormState>(emptyFormState);
   const [message, setMessage] = useState("");
+  const [expandedMatches, setExpandedMatches] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+
+  function toggleExpanded(matchId: string) {
+    setExpandedMatches((current) => {
+      const next = new Set(current);
+      if (next.has(matchId)) {
+        next.delete(matchId);
+      } else {
+        next.add(matchId);
+      }
+      return next;
+    });
+  }
   const playerNameById = useMemo(
     () => new Map(entries.map((entry) => [entry.playerId, entry.playerName])),
     [entries]
@@ -367,16 +380,32 @@ export function SideMatchesBoard({
 
       {derivedMatches.length ? (
         <div className="space-y-4">
-          {derivedMatches.map((match) => (
+          {derivedMatches.map((match) => {
+            const expanded = expandedMatches.has(match.match.id);
+            const moneyText =
+              match.payout.net === 0
+                ? "All square"
+                : match.payout.net > 0
+                  ? `${match.teamAShortLabel} up $${match.payout.net}`
+                  : `${match.teamBShortLabel} up $${Math.abs(match.payout.net)}`;
+            return (
             <SectionCard key={match.match.id} className="space-y-4">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(match.match.id)}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">
                     Side Match
                   </p>
-                  <h3 className="mt-1 text-xl font-semibold text-ink">{match.title}</h3>
-                </div>
-                {!readOnly ? (
+                  <h3 className="mt-1 text-lg font-semibold text-ink">{match.title}</h3>
+                  <p className="mt-1 text-sm font-semibold text-pine">{moneyText}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-ink/45">
+                    {expanded ? "Tap to collapse ▲" : "Tap for details ▼"}
+                  </p>
+                </button>
+                {!readOnly && expanded ? (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -396,6 +425,8 @@ export function SideMatchesBoard({
                 ) : null}
               </div>
 
+              {expanded ? (
+                <>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-[22px] bg-canvas px-4 py-3">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Team A</p>
@@ -501,8 +532,11 @@ export function SideMatchesBoard({
                   </div>
                 </div>
               </div>
+                </>
+              ) : null}
             </SectionCard>
-          ))}
+          );
+          })}
         </div>
       ) : (
         <SectionCard className="space-y-3 text-center">
