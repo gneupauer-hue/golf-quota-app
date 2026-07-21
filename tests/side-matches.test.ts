@@ -1,21 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_SIDE_MATCH_STAKE, deriveSideMatch, type SideMatchRecord } from "@/lib/side-matches";
-import type { CalculatedRoundRow, GoodSkinEntry } from "@/lib/quota";
+import type { CalculatedRoundRow } from "@/lib/quota";
 
-function skins(count: number): GoodSkinEntry[] {
-  return Array.from({ length: count }, (_, index) => ({
-    holeNumber: index + 1,
-    type: "birdie" as const,
-    score: 4
-  }));
+// Per-hole points: 6=eagle, 4=birdie, 2=par, 1=bogey, 0=double, -1=worse.
+// A "skin" = birdie or better (a hole scored 4 or 6).
+function makeHoles(base: number, overrides: Record<number, number> = {}, to = 18): Array<number | null> {
+  return Array.from({ length: 18 }, (_, index) => (index < to ? overrides[index] ?? base : null));
 }
 
 function makeRow(
   playerId: string,
   playerName: string,
-  holeScores: Array<number | null>,
-  goodSkinEntries: GoodSkinEntry[] = []
+  holeScores: Array<number | null>
 ): CalculatedRoundRow {
   return {
     playerId,
@@ -23,7 +20,6 @@ function makeRow(
     team: null,
     holeScores,
     startQuota: 0,
-    goodSkinEntries,
     frontQuota: 0,
     backQuota: 0,
     frontNine: 0,
@@ -46,20 +42,18 @@ const MATCH: SideMatchRecord = {
   createdAt: "2026-07-21T00:00:00.000Z"
 };
 
-function fill(value: number | null, from = 0, to = 18): Array<number | null> {
-  return Array.from({ length: 18 }, (_, index) => (index >= from && index < to ? value : null));
-}
-
 test("stake defaults to $5 per bet", () => {
   assert.equal(DEFAULT_SIDE_MATCH_STAKE, 5);
 });
 
-test("team A sweeping all 18 holes + more skins wins all four bets ($20)", () => {
+test("skins derive from hole points (birdie/eagle), and team A sweeps for $20", () => {
   const rows = [
-    makeRow("p1", "Al A", fill(2), skins(3)),
-    makeRow("p2", "Bo A", fill(0)),
-    makeRow("p3", "Cy B", fill(1), skins(1)),
-    makeRow("p4", "Di B", fill(0))
+    // three eagles (6) → 3 skins; rest pars (2)
+    makeRow("p1", "Al A", makeHoles(2, { 0: 6, 1: 6, 2: 6 })),
+    makeRow("p2", "Bo A", makeHoles(0)),
+    // one birdie (4) on hole 1 (< A's 6, so A still wins it) → 1 skin; rest bogeys
+    makeRow("p3", "Cy B", makeHoles(1, { 0: 4 })),
+    makeRow("p4", "Di B", makeHoles(0))
   ];
   const derived = deriveSideMatch(MATCH, rows);
 
@@ -69,50 +63,44 @@ test("team A sweeping all 18 holes + more skins wins all four bets ($20)", () =>
   assert.equal(derived.skins.teamACount, 3);
   assert.equal(derived.skins.teamBCount, 1);
   assert.equal(derived.skins.winner, "A");
-  assert.equal(derived.payout.teamAWon, 20);
-  assert.equal(derived.payout.teamBWon, 0);
   assert.equal(derived.payout.net, 20);
 });
 
-test("a tied skins count is a push (no money for skins)", () => {
+test("a tied skins count is a push (front/back/total to A = $15)", () => {
   const rows = [
-    makeRow("p1", "Al A", fill(2), skins(2)),
-    makeRow("p2", "Bo A", fill(0)),
-    makeRow("p3", "Cy B", fill(1), skins(2)),
-    makeRow("p4", "Di B", fill(0))
+    makeRow("p1", "Al A", makeHoles(2, { 0: 6, 1: 6 })), // 2 skins, wins holes 0/1 at 6
+    makeRow("p2", "Bo A", makeHoles(0)),
+    makeRow("p3", "Cy B", makeHoles(1, { 0: 4, 1: 4 })), // 2 skins (4<6 so A still wins)
+    makeRow("p4", "Di B", makeHoles(0))
   ];
   const derived = deriveSideMatch(MATCH, rows);
   assert.equal(derived.skins.winner, null);
-  const skinsBet = derived.payout.bets.find((bet) => bet.key === "skins");
-  assert.equal(skinsBet?.winner, null);
-  // front/back/total still go to A ($15), skins is a push.
+  assert.equal(derived.payout.bets.find((bet) => bet.key === "skins")?.winner, null);
   assert.equal(derived.payout.net, 15);
 });
 
-test("unfinished back nine leaves back/total/skins unsettled", () => {
+test("unfinished back nine leaves back/total/skins unsettled (front pays only)", () => {
   const rows = [
-    makeRow("p1", "Al A", fill(2, 0, 9), skins(3)),
-    makeRow("p2", "Bo A", fill(0, 0, 9)),
-    makeRow("p3", "Cy B", fill(1, 0, 9), skins(1)),
-    makeRow("p4", "Di B", fill(0, 0, 9))
+    makeRow("p1", "Al A", makeHoles(2, { 0: 6 }, 9)),
+    makeRow("p2", "Bo A", makeHoles(0, {}, 9)),
+    makeRow("p3", "Cy B", makeHoles(1, {}, 9)),
+    makeRow("p4", "Di B", makeHoles(0, {}, 9))
   ];
   const derived = deriveSideMatch(MATCH, rows);
-
   const byKey = Object.fromEntries(derived.payout.bets.map((bet) => [bet.key, bet]));
   assert.equal(byKey.front.settled, true);
   assert.equal(byKey.front.winner, "A");
   assert.equal(byKey.back.settled, false);
   assert.equal(byKey.total.settled, false);
   assert.equal(byKey.skins.settled, false);
-  // Only the finished front bet pays out.
   assert.equal(derived.payout.net, 5);
 });
 
 test("supports a 1v1 individual match (one player per side)", () => {
   const oneVsOne: SideMatchRecord = { ...MATCH, teamAPlayerIds: ["p1"], teamBPlayerIds: ["p3"] };
   const rows = [
-    makeRow("p1", "Al A", fill(2), skins(2)),
-    makeRow("p3", "Cy B", fill(1), skins(0))
+    makeRow("p1", "Al A", makeHoles(2, { 0: 6, 1: 6 })), // 2 skins
+    makeRow("p3", "Cy B", makeHoles(1)) // 0 skins
   ];
   const derived = deriveSideMatch(oneVsOne, rows);
   assert.equal(derived.total.winner, "A");
@@ -123,12 +111,12 @@ test("supports a 1v1 individual match (one player per side)", () => {
 
 test("custom stake scales the payouts", () => {
   const rows = [
-    makeRow("p1", "Al A", fill(2), skins(1)),
-    makeRow("p2", "Bo A", fill(0)),
-    makeRow("p3", "Cy B", fill(1)),
-    makeRow("p4", "Di B", fill(0))
+    makeRow("p1", "Al A", makeHoles(2, { 0: 6 })),
+    makeRow("p2", "Bo A", makeHoles(0)),
+    makeRow("p3", "Cy B", makeHoles(1)),
+    makeRow("p4", "Di B", makeHoles(0))
   ];
   const derived = deriveSideMatch(MATCH, rows, 10);
   assert.equal(derived.payout.stake, 10);
-  assert.equal(derived.payout.net, 40); // all four bets to A at $10
+  assert.equal(derived.payout.net, 40);
 });

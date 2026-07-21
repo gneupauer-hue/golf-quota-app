@@ -250,6 +250,16 @@ function buildSegmentStatus({
   };
 }
 
+// A "skin" is a birdie or better, read straight from the per-hole points
+// (4 = birdie, 6 = eagle). In hole-by-hole scoring these derive automatically —
+// no separate birdie/eagle/ace entry needed.
+function countHoleSkins(row: CalculatedRoundRow): number {
+  return row.holeScores.reduce<number>(
+    (count, score) => (score != null && score >= 4 ? count + 1 : count),
+    0
+  );
+}
+
 function buildSkinsStatus(
   teamARows: CalculatedRoundRow[],
   teamBRows: CalculatedRoundRow[],
@@ -257,8 +267,8 @@ function buildSkinsStatus(
   teamBShortLabel: string,
   settled: boolean
 ): SideMatchSkinsStatus {
-  const teamACount = teamARows.reduce((sum, row) => sum + (row.goodSkinEntries?.length ?? 0), 0);
-  const teamBCount = teamBRows.reduce((sum, row) => sum + (row.goodSkinEntries?.length ?? 0), 0);
+  const teamACount = teamARows.reduce((sum, row) => sum + countHoleSkins(row), 0);
+  const teamBCount = teamBRows.reduce((sum, row) => sum + countHoleSkins(row), 0);
   const winner = teamACount > teamBCount ? "A" : teamBCount > teamACount ? "B" : null;
   const summary = winner
     ? `${winner === "A" ? teamAShortLabel : teamBShortLabel} win skins ${Math.max(teamACount, teamBCount)}-${Math.min(teamACount, teamBCount)}`

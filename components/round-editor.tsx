@@ -973,7 +973,9 @@ export function RoundEditor({
   const [toast, setToast] = useState("");
   const [isPending, startTransition] = useTransition();
   const [gameMode, setGameMode] = useState<RoundMode>(round.roundMode ?? "MATCH_QUOTA");
-  const [scoringEntryMode, setScoringEntryMode] = useState<ScoringEntryMode>("QUICK");
+  const [scoringEntryMode, setScoringEntryMode] = useState<ScoringEntryMode>(
+    round.scoringEntryMode ?? "QUICK"
+  );
   const [setupTeamCount, setSetupTeamCount] = useState<number | null>(null);
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
   const [teamBuildVariant, setTeamBuildVariant] = useState(0);
