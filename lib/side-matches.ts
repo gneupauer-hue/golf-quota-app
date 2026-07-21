@@ -42,6 +42,38 @@ export type DerivedSideMatch = {
   front: SideMatchSegmentStatus;
   back: SideMatchSegmentStatus;
   total: SideMatchSegmentStatus;
+  skins: SideMatchSkinsStatus;
+  payout: SideMatchPayout;
+};
+
+export const DEFAULT_SIDE_MATCH_STAKE = 5;
+
+// Skins bet: count each team's birdies + eagles + aces (each = 1 skin, summed
+// across the 2 partners). Higher total wins the stake; equal is a push.
+export type SideMatchSkinsStatus = {
+  teamACount: number;
+  teamBCount: number;
+  winner: "A" | "B" | null;
+  settled: boolean;
+  summary: string;
+};
+
+export type SideMatchBetKey = "front" | "back" | "total" | "skins";
+
+export type SideMatchBetResult = {
+  key: SideMatchBetKey;
+  label: string;
+  stake: number;
+  winner: "A" | "B" | null; // null = push or not yet decided
+  settled: boolean;
+};
+
+export type SideMatchPayout = {
+  stake: number;
+  bets: SideMatchBetResult[];
+  teamAWon: number;
+  teamBWon: number;
+  net: number; // > 0: team A up by net; < 0: team B up by |net|
 };
 
 function firstName(name: string) {
@@ -218,9 +250,54 @@ function buildSegmentStatus({
   };
 }
 
+function buildSkinsStatus(
+  teamARows: CalculatedRoundRow[],
+  teamBRows: CalculatedRoundRow[],
+  teamAShortLabel: string,
+  teamBShortLabel: string,
+  settled: boolean
+): SideMatchSkinsStatus {
+  const teamACount = teamARows.reduce((sum, row) => sum + (row.goodSkinEntries?.length ?? 0), 0);
+  const teamBCount = teamBRows.reduce((sum, row) => sum + (row.goodSkinEntries?.length ?? 0), 0);
+  const winner = teamACount > teamBCount ? "A" : teamBCount > teamACount ? "B" : null;
+  const summary = winner
+    ? `${winner === "A" ? teamAShortLabel : teamBShortLabel} win skins ${Math.max(teamACount, teamBCount)}-${Math.min(teamACount, teamBCount)}`
+    : `Skins tied ${teamACount}-${teamBCount}`;
+  return { teamACount, teamBCount, winner, settled, summary };
+}
+
+function buildPayout(
+  stake: number,
+  front: SideMatchSegmentStatus,
+  back: SideMatchSegmentStatus,
+  total: SideMatchSegmentStatus,
+  skins: SideMatchSkinsStatus
+): SideMatchPayout {
+  const bets: SideMatchBetResult[] = [
+    { key: "front", label: "Front", stake, winner: front.finished ? front.winner : null, settled: front.finished },
+    { key: "back", label: "Back", stake, winner: back.finished ? back.winner : null, settled: back.finished },
+    { key: "total", label: "Total", stake, winner: total.finished ? total.winner : null, settled: total.finished },
+    { key: "skins", label: "Skins", stake, winner: skins.settled ? skins.winner : null, settled: skins.settled }
+  ];
+  let teamAWon = 0;
+  let teamBWon = 0;
+  for (const bet of bets) {
+    if (!bet.settled || !bet.winner) {
+      continue;
+    }
+    if (bet.winner === "A") {
+      teamAWon += bet.stake;
+    } else {
+      teamBWon += bet.stake;
+    }
+  }
+  return { stake, bets, teamAWon, teamBWon, net: teamAWon - teamBWon };
+}
+
 export function deriveSideMatch(
   match: SideMatchRecord,
-  rows: CalculatedRoundRow[]
+  rows: CalculatedRoundRow[],
+  stake: number = DEFAULT_SIDE_MATCH_STAKE
 ): DerivedSideMatch {
   const playerRowsById = new Map(rows.map((row) => [row.playerId, row]));
   const teamARows = match.teamAPlayerIds
@@ -237,6 +314,14 @@ export function deriveSideMatch(
     getHoleResult(playerRowsById, match.teamAPlayerIds, match.teamBPlayerIds, holeIndex)
   );
 
+  const shortA = teamAShortNames.join(" / ");
+  const shortB = teamBShortNames.join(" / ");
+  const front = buildSegmentStatus({ label: "Front", holes: holes.slice(0, 9), teamAShortLabel: shortA, teamBShortLabel: shortB });
+  const back = buildSegmentStatus({ label: "Back", holes: holes.slice(9, 18), teamAShortLabel: shortA, teamBShortLabel: shortB });
+  const total = buildSegmentStatus({ label: "Total", holes, teamAShortLabel: shortA, teamBShortLabel: shortB });
+  const skins = buildSkinsStatus(teamARows, teamBRows, shortA, shortB, total.finished);
+  const payout = buildPayout(stake, front, back, total, skins);
+
   return {
     match,
     title: formatMatchTitle(match.name, teamAFullNames, teamBFullNames),
@@ -245,23 +330,10 @@ export function deriveSideMatch(
     teamAShortLabel: teamAShortNames.join(" and "),
     teamBShortLabel: teamBShortNames.join(" and "),
     holes,
-    front: buildSegmentStatus({
-      label: "Front",
-      holes: holes.slice(0, 9),
-      teamAShortLabel: teamAShortNames.join(" / "),
-      teamBShortLabel: teamBShortNames.join(" / ")
-    }),
-    back: buildSegmentStatus({
-      label: "Back",
-      holes: holes.slice(9, 18),
-      teamAShortLabel: teamAShortNames.join(" / "),
-      teamBShortLabel: teamBShortNames.join(" / ")
-    }),
-    total: buildSegmentStatus({
-      label: "Total",
-      holes,
-      teamAShortLabel: teamAShortNames.join(" / "),
-      teamBShortLabel: teamBShortNames.join(" / ")
-    })
+    front,
+    back,
+    total,
+    skins,
+    payout
   };
 }
