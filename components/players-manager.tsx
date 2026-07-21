@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import React, { useMemo, useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import type { QuotaValidationSummary } from "@/lib/quota-history";
@@ -24,7 +24,7 @@ type PlayerItem = {
   id: string;
   name: string;
   quota: number;
-  defaultTee: Tee;
+  defaultTee?: Tee | null;
   isRegular: boolean;
   isActive: boolean;
   conflictIds: string[];
@@ -198,6 +198,38 @@ function getAdjustmentBadgeClass(value: number | null) {
   return "bg-ink/10 text-ink/70";
 }
 
+function getTeeBadgeClass(tee: Tee) {
+  if (tee === "BLACK") {
+    return "border-transparent bg-[#111827] text-white";
+  }
+
+  if (tee === "GREEN") {
+    return "border-transparent bg-[#166534] text-white";
+  }
+
+  if (tee === "YELLOW") {
+    return "border-[#B45309]/35 bg-[#FACC15] text-[#422006]";
+  }
+
+  return "border-ink/25 bg-white text-ink";
+}
+
+function TeeBadge({ tee, className = "" }: { tee?: Tee | null; className?: string }) {
+  const normalizedTee = normalizeTee(tee);
+
+  return (
+    <span
+      className={classNames(
+        "inline-flex items-center justify-center rounded-full border px-2.5 py-1 text-[11px] font-bold leading-none",
+        getTeeBadgeClass(normalizedTee),
+        className
+      )}
+    >
+      {teeLabels[normalizedTee]}
+    </span>
+  );
+}
+
 function ReferenceSection({
   title,
   subtitle,
@@ -309,8 +341,9 @@ function QuotaAuditWarning({
 
 function PlayerRosterHeader() {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] items-center gap-x-2 border-b border-ink/10 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+    <div className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] items-center gap-x-2 border-b border-ink/10 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45 sm:grid-cols-[minmax(0,1fr)_4.5rem_3rem_3rem_3rem]">
       <span>Player</span>
+      <span className="hidden text-center sm:block">Tee</span>
       <span className="text-center">Quota</span>
       <span className="text-center">Adj</span>
       <span className="text-right">Date</span>
@@ -337,9 +370,13 @@ function PlayerRosterCard({
       <button
         type="button"
         onClick={onToggleHistory}
-        className="grid w-full grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] items-center gap-x-2 px-3 py-1 text-left"
+        className="grid w-full grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] items-center gap-x-2 px-3 py-1 text-left sm:grid-cols-[minmax(0,1fr)_4.5rem_3rem_3rem_3rem]"
       >
-        <p className="min-w-0 truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold leading-5 text-ink">{player.name}</p>
+          <TeeBadge tee={player.defaultTee} className="mt-1 sm:hidden" />
+        </div>
+        <TeeBadge tee={player.defaultTee} className="hidden justify-self-center sm:inline-flex" />
         <span className="justify-self-center rounded-full bg-[#1E3A8A] px-2.5 py-1 text-sm font-bold leading-none text-white">
           {player.quota}
         </span>
