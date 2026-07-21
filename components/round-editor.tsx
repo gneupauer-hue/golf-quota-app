@@ -1504,8 +1504,12 @@ export function RoundEditor({
         onSnapshot={realtimeScoreDisplayEnabled ? handleRealtimeScoreSnapshot : undefined}
       />
     ) : null;
+  // Owner-only Firestore diagnostics are hidden in the normal app view so the
+  // scoring screen looks like a normal app. Flip to true only when debugging the
+  // score mirror. (Real-time sync does NOT depend on this panel.)
+  const showFirebaseScoreDiagnostics = false;
   const firestoreTestWriteDiagnosticPanel =
-    canSeeFirestoreTestWriteDiagnostic && (isLocked || startedAt) ? (
+    showFirebaseScoreDiagnostics && canSeeFirestoreTestWriteDiagnostic && (isLocked || startedAt) ? (
       <SectionCard className="space-y-3 border border-[#D5B154]/30 bg-[#FFF9D8]">
         <div className="flex items-start justify-between gap-3">
           <div>

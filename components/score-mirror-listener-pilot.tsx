@@ -108,10 +108,12 @@ function getStatusTone(status: ListenerStatus) {
 
 export function ScoreMirrorListenerPilot({
   roundId,
-  onSnapshot
+  onSnapshot,
+  showPanel = false
 }: {
   roundId: string | null;
   onSnapshot?: (snapshot: ScoreMirrorListenerSnapshot) => void;
+  showPanel?: boolean;
 }) {
   const { user, memberships, activeClubId } = useFirebaseAuth();
   const [state, setState] = useState<ListenerState>(INITIAL_LISTENER_STATE);
@@ -182,7 +184,9 @@ export function ScoreMirrorListenerPilot({
     };
   }, [activeClubId, roundId, shouldSubscribe]);
 
-  if (!shouldShowDiagnostics) {
+  // The Firestore listener subscription above keeps running regardless of this
+  // return, so hiding the diagnostic card does NOT disable real-time sync.
+  if (!shouldShowDiagnostics || !showPanel) {
     return null;
   }
 
