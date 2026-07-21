@@ -21,6 +21,15 @@ changed. This document is the only file added._
 
 ---
 
+## Current operational reality (confirmed with Gary, 2026-07-21)
+
+The app is used **QUICK-entry only** today: front-nine total, back-nine total, and skins
+(birdie/eagle/ace). **DETAILED hole-by-hole entry is built in the code but not yet used —
+it is coming.** This is decisive for the plan below: the validated real-time path is
+QUICK-only, so it fully covers today's usage with no code change, and the DETAILED
+real-time work becomes a scheduled prerequisite for the DETAILED launch rather than
+optional.
+
 ## 1. End-to-end score flow (exact files & functions)
 
 A golfer changing a score travels two independent paths. **Prisma is written first and
@@ -147,7 +156,10 @@ This already satisfies the main goal for QUICK-entry rounds (proven in 4I-A).
 
 **Checkpoint B — Close the DETAILED-mode gap.** Extend `reconcileRealtimeQuickScoreDisplay`
 (or add a DETAILED sibling) so per-hole remote updates apply cross-phone, and drop the
-`scoringEntryMode === "QUICK"` guard in `handleRealtimeScoreSnapshot`.
+`scoringEntryMode === "QUICK"` guard in `handleRealtimeScoreSnapshot`. **This is now a hard
+prerequisite for the DETAILED-entry launch**, not optional work: DETAILED is planned, and
+until B ships, DETAILED rounds get no cross-phone live updates (manual refresh only). Build
+it *with* the DETAILED entry UI, not before — the reconcile depends on that data shape.
 
 **Checkpoint C — Reconnect / dual-write hardening.** Add a client retry/queue for failed
 `/api/firebase/score-write` ops and a lightweight server reconcile (reuse the repair
@@ -249,7 +261,9 @@ and is explicitly out of scope for now.
 
 **Recommended next implementation slice:** _Checkpoint A_ — enable the three validated
 production flags for real club QUICK rounds (config only, no code), then observe one live
-round. This delivers the main goal for QUICK rounds immediately with lowest risk.
+round. Because the app is QUICK-only today, this delivers the main goal for **all rounds
+you currently play** immediately, with lowest risk. Do **not** build Checkpoint B yet — it
+is premature until the DETAILED entry UI exists; build the two together.
 
 **Exact files likely affected (Checkpoint A):** none in the repo — Vercel environment
 variables only (`FIREBASE_ACTIVE_ROUND_AUTO_PREP_ENABLED`,
