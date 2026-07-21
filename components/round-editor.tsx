@@ -1069,22 +1069,11 @@ export function RoundEditor({
   }, [playersById, round.entries]);
   const roundPlayerQuotasById = useMemo(() => {
     const map = new Map<string, number>();
-    const persistedStartQuotaByPlayerId = new Map(round.entries.map((entry) => [entry.playerId, entry.startQuota]));
     for (const entry of round.entries) {
       map.set(entry.playerId, entry.startQuota ?? getBaseQuotaForPlayer(entry.playerId, playersById, quotaSnapshot));
     }
-    if (!isLocked && !startedAt && !round.completedAt) {
-      for (const row of rows) {
-        map.set(
-          row.playerId,
-          getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota ??
-            persistedStartQuotaByPlayerId.get(row.playerId) ??
-            0
-        );
-      }
-    }
     return map;
-  }, [isLocked, playersById, quotaSnapshot, round.completedAt, round.entries, rows, startedAt]);
+  }, [playersById, quotaSnapshot, round.entries]);
 
   const filteredPlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1132,7 +1121,10 @@ export function RoundEditor({
             team: row.team,
           groupNumber: row.groupNumber,
           teeTime: row.teeTime,
-            startQuota: roundPlayerQuotasById.get(row.playerId) ?? 0,
+            startQuota:
+              !isLocked && !startedAt && !round.completedAt
+                ? getRoundTeeSummary(row, playersById, quotaSnapshot).adjustedQuota
+                : roundPlayerQuotasById.get(row.playerId) ?? 0,
             holeScores: row.holeScores,
             scoringEntryMode,
             quickFrontNine: row.quickFrontNine,
@@ -1152,7 +1144,7 @@ export function RoundEditor({
           birdieHoles: number[];
         }>
     );
-  }, [roundPlayerNamesById, roundPlayerQuotasById, rows, scoringEntryMode]);
+  }, [isLocked, playersById, quotaSnapshot, round.completedAt, roundPlayerNamesById, roundPlayerQuotasById, rows, scoringEntryMode, startedAt]);
 
   const teamStandings = useMemo(() => calculateTeamStandings(calculatedRows), [calculatedRows]);
   const sideGames = useMemo(() => calculateSideGameResults(calculatedRows), [calculatedRows]);
