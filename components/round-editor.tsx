@@ -64,6 +64,7 @@ import {
   teeOptions,
   type Tee
 } from "@/lib/tees";
+import { getRoundSetupTeeButtonClass } from "@/lib/tee-styles";
 import { classNames, formatDateInput, formatRoundNameFromDate, getPreferredRoundName } from "@/lib/utils";
 import type { ScoreMirrorListenerSnapshot } from "@/lib/firebase/score-listener";
 
@@ -4155,8 +4156,8 @@ export function RoundEditor({
                                   type="button"
                                   disabled={Boolean(isLocked || startedAt)}
                                   className={classNames(
-                                    "min-h-9 rounded-full px-2 text-xs font-semibold disabled:opacity-50",
-                                    teeSummary.playingTee === tee ? "bg-pine text-white" : "bg-white text-ink/75"
+                                    "min-h-9 rounded-full border px-2 text-xs font-semibold transition disabled:opacity-50",
+                                    getRoundSetupTeeButtonClass(tee, teeSummary.playingTee === tee)
                                   )}
                                   onClick={() => updatePlayerTee(row.playerId, tee)}
                                 >
@@ -4169,9 +4170,9 @@ export function RoundEditor({
                                 <p className="font-semibold uppercase tracking-[0.14em] text-ink/45">Base</p>
                                 <p className="mt-1 text-sm font-semibold text-ink">{teeSummary.baseQuota}</p>
                               </div>
-                              <div className="rounded-2xl bg-white px-3 py-2">
-                                <p className="font-semibold uppercase tracking-[0.14em] text-ink/45">Tee Adj</p>
-                                <p className="mt-1 text-sm font-semibold text-ink">
+                              <div className="rounded-2xl bg-[#E7F6EC] px-3 py-2 ring-1 ring-[#1B6B3A]/15">
+                                <p className="font-semibold uppercase tracking-[0.14em] text-[#1B6B3A]/70">Tee Adj</p>
+                                <p className="mt-1 text-sm font-semibold text-[#14532D]">
                                   {formatTeeAdjustment(teeSummary.teeAdjustment)}
                                 </p>
                               </div>
