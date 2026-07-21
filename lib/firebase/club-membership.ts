@@ -133,10 +133,33 @@ export function buildMembershipApproval(input: MembershipApprovalInput) {
   };
 }
 
+export const MEMBERSHIP_REMOVED_STATUS = "removed" as const;
+
+/** Set a member to "removed" — they immediately lose scoring access. */
+export function buildMembershipRemoval(input: { removedByUid: string; now: unknown }) {
+  if (!input.removedByUid.trim()) {
+    throw new Error("An owner or admin is required to remove a member.");
+  }
+  return {
+    status: MEMBERSHIP_REMOVED_STATUS,
+    updatedAt: input.now
+  };
+}
+
 export type MembershipLike = {
   role?: ClubRole | string;
   status?: string;
 };
+
+/** The owner can never be removed (prevents locking yourself out). */
+export function assertMemberRemovable(target: MembershipLike | null): void {
+  if (!target) {
+    throw Object.assign(new Error("That member was not found."), { status: 404 });
+  }
+  if (target.role === "owner") {
+    throw Object.assign(new Error("The club owner cannot be removed."), { status: 400 });
+  }
+}
 
 /** Only active owners/admins may approve or manage other members. */
 export function assertCanApproveMembers(membership: MembershipLike | null): void {

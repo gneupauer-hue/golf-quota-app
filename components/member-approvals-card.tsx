@@ -20,6 +20,13 @@ type RosterPlayer = {
   name: string;
 };
 
+type ActiveMember = {
+  uid: string;
+  displayName: string;
+  phoneNumber: string | null;
+  role: string;
+};
+
 function normalizeName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -28,8 +35,10 @@ export function MemberApprovalsCard() {
   const { user, memberships } = useFirebaseAuth();
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
+  const [activeMembers, setActiveMembers] = useState<ActiveMember[]>([]);
   const [links, setLinks] = useState<Record<string, string>>({});
   const [busyUid, setBusyUid] = useState<string | null>(null);
+  const [removingUid, setRemovingUid] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -64,6 +73,37 @@ export function MemberApprovalsCard() {
               phoneNumber: typeof data.phoneNumber === "string" ? data.phoneNumber : null
             };
           })
+        );
+      },
+      (snapshotError) => setError(snapshotError.message)
+    );
+  }, [user, isOwner]);
+
+  useEffect(() => {
+    if (!user || !isOwner) {
+      setActiveMembers([]);
+      return;
+    }
+    const db = getFirebaseDb();
+    const activeQuery = query(
+      collection(db, "clubs", IREM_CLUB_ID, "members"),
+      where("status", "==", "active")
+    );
+    return onSnapshot(
+      activeQuery,
+      (snapshot) => {
+        setActiveMembers(
+          snapshot.docs
+            .map((memberDoc) => {
+              const data = memberDoc.data();
+              return {
+                uid: memberDoc.id,
+                displayName: typeof data.displayName === "string" ? data.displayName : "(no name)",
+                phoneNumber: typeof data.phoneNumber === "string" ? data.phoneNumber : null,
+                role: typeof data.role === "string" ? data.role : "member"
+              };
+            })
+            .sort((left, right) => left.displayName.localeCompare(right.displayName))
         );
       },
       (snapshotError) => setError(snapshotError.message)
@@ -141,6 +181,41 @@ export function MemberApprovalsCard() {
     }
   }
 
+  async function removeMember(member: ActiveMember) {
+    if (member.role === "owner") {
+      return;
+    }
+    setError("");
+    setInfo("");
+    setRemovingUid(member.uid);
+    try {
+      const currentUser = getFirebaseAuth().currentUser;
+      if (!currentUser) {
+        throw new Error("Sign in again.");
+      }
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch("/api/firebase/membership/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({
+          clubId: IREM_CLUB_ID,
+          expectedProjectId: IREM_PROJECT_ID,
+          targetUid: member.uid
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not remove this member.");
+      }
+      setInfo(`${member.displayName} removed.`);
+      // The active-members query drops the row once status flips to removed.
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "Could not remove this member.");
+    } finally {
+      setRemovingUid(null);
+    }
+  }
+
   if (!user || !isOwner) {
     return null;
   }
@@ -194,6 +269,42 @@ export function MemberApprovalsCard() {
           ))}
         </ul>
       )}
+
+      <div className="border-t border-pine/10 pt-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">Current members</p>
+        {activeMembers.length === 0 ? (
+          <p className="mt-2 text-sm text-ink/60">No approved members yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {activeMembers.map((member) => (
+              <li
+                key={member.uid}
+                className="flex items-center justify-between gap-3 rounded-lg border border-pine/15 bg-white px-3 py-2"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-ink">
+                    {member.displayName}
+                    {member.role === "owner" ? " (owner)" : ""}
+                  </p>
+                  <p className="text-xs text-ink/55">{member.phoneNumber ?? "—"}</p>
+                </div>
+                {member.role === "owner" ? (
+                  <span className="text-xs font-semibold text-ink/40">Owner</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-danger/40 px-3 py-1.5 text-sm font-semibold text-danger disabled:opacity-50"
+                    disabled={removingUid === member.uid}
+                    onClick={() => removeMember(member)}
+                  >
+                    {removingUid === member.uid ? "Removing…" : "Remove"}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {info ? <p className="text-sm font-semibold text-[#1B6B3A]">{info}</p> : null}
       {error ? (

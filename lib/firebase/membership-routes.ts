@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { IREM_FIREBASE_PROJECT_ID } from "@/lib/firebase/player-mirror-seed";
 import {
   assertCanApproveMembers,
+  assertMemberRemovable,
   buildMembershipApproval,
+  buildMembershipRemoval,
   buildPendingMembershipDocs,
   normalizeMembershipRequest,
   type MembershipLike,
@@ -42,6 +44,19 @@ export type MembershipApprovalAdapters = {
     clubId: string,
     targetUid: string,
     approval: ReturnType<typeof buildMembershipApproval>
+  ) => Promise<void>;
+  now?: () => unknown;
+};
+
+export type MembershipRemovalAdapters = {
+  verifyIdToken: (idToken: string) => Promise<{ uid: string }>;
+  verifyClub: (clubId: string) => Promise<{ id: string; name?: string | null } | null>;
+  readMembership: (clubId: string, uid: string) => Promise<MembershipLike | null>;
+  readTargetMembership: (clubId: string, targetUid: string) => Promise<MembershipLike | null>;
+  writeRemoval: (
+    clubId: string,
+    targetUid: string,
+    removal: ReturnType<typeof buildMembershipRemoval>
   ) => Promise<void>;
   now?: () => unknown;
 };
@@ -204,6 +219,46 @@ export async function handleMembershipApproval(
   } catch (error) {
     return jsonError(
       error instanceof Error ? error.message : "Could not approve that member.",
+      statusOf(error)
+    );
+  }
+}
+
+/** Owner/admin removes a member (sets status "removed"; owner cannot be removed). */
+export async function handleMembershipRemoval(
+  request: Request,
+  adapters: MembershipRemovalAdapters
+) {
+  try {
+    const body = await parseBody(request);
+    const clubId = requireClubId(body);
+
+    const targetUid = typeof body.targetUid === "string" ? body.targetUid.trim() : "";
+    if (!targetUid) {
+      return jsonError("targetUid is required.", 400);
+    }
+
+    const decoded = await adapters.verifyIdToken(getBearerToken(request));
+    const club = await adapters.verifyClub(clubId);
+    if (!club) {
+      return jsonError(`Club "${clubId}" was not found.`, 404);
+    }
+
+    assertCanApproveMembers(await adapters.readMembership(clubId, decoded.uid));
+
+    const target = await adapters.readTargetMembership(clubId, targetUid);
+    assertMemberRemovable(target);
+
+    const removal = buildMembershipRemoval({
+      removedByUid: decoded.uid,
+      now: adapters.now?.() ?? new Date().toISOString()
+    });
+
+    await adapters.writeRemoval(clubId, targetUid, removal);
+    return NextResponse.json({ ok: true, status: "removed", targetUid });
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : "Could not remove that member.",
       statusOf(error)
     );
   }

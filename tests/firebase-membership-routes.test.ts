@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { IREM_FIREBASE_PROJECT_ID } from "@/lib/firebase/player-mirror-seed";
 import {
   handleMembershipApproval,
+  handleMembershipRemoval,
   handleMembershipRequest
 } from "@/lib/firebase/membership-routes";
 
@@ -132,4 +133,51 @@ test("approval: unknown target request returns 404", async () => {
   adapters.readTargetMembership = async () => null;
   const res = await handleMembershipApproval(makeRequest({ targetUid: "nope" }, { token: "t" }), adapters);
   assert.equal(res.status, 404);
+});
+
+function baseRemovalAdapters() {
+  const removals: Array<{ targetUid: string; status: string }> = [];
+  return {
+    removals,
+    verifyIdToken: async () => ({ uid: "owner-uid" }),
+    verifyClub: async () => ({ id: CLUB_ID, name: "Irem Golf Quota" }),
+    readMembership: async () => ({ status: "active", role: "owner" }) as { status?: string; role?: string } | null,
+    readTargetMembership: async () => ({ status: "active", role: "member" }) as { status?: string; role?: string } | null,
+    writeRemoval: async (_clubId: string, targetUid: string, removal: { status: string }) => {
+      removals.push({ targetUid, status: removal.status });
+    },
+    now: () => "NOW"
+  };
+}
+
+test("removal: owner removes an active member", async () => {
+  const adapters = baseRemovalAdapters();
+  const res = await handleMembershipRemoval(makeRequest({ targetUid: "uid-new" }, { token: "t" }), adapters);
+  assert.equal(res.status, 200);
+  assert.equal(adapters.removals.length, 1);
+  assert.equal(adapters.removals[0].status, "removed");
+});
+
+test("removal: the club owner can never be removed", async () => {
+  const adapters = baseRemovalAdapters();
+  adapters.readTargetMembership = async () => ({ status: "active", role: "owner" });
+  const res = await handleMembershipRemoval(makeRequest({ targetUid: "owner-uid" }, { token: "t" }), adapters);
+  assert.equal(res.status, 400);
+  assert.equal(adapters.removals.length, 0);
+});
+
+test("removal: a non-owner cannot remove members", async () => {
+  const adapters = baseRemovalAdapters();
+  adapters.readMembership = async () => ({ status: "active", role: "member" });
+  const res = await handleMembershipRemoval(makeRequest({ targetUid: "uid-new" }, { token: "t" }), adapters);
+  assert.equal(res.status, 403);
+  assert.equal(adapters.removals.length, 0);
+});
+
+test("removal: unknown target returns 404", async () => {
+  const adapters = baseRemovalAdapters();
+  adapters.readTargetMembership = async () => null;
+  const res = await handleMembershipRemoval(makeRequest({ targetUid: "nope" }, { token: "t" }), adapters);
+  assert.equal(res.status, 404);
+  assert.equal(adapters.removals.length, 0);
 });
