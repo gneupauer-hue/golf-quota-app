@@ -7,6 +7,7 @@ import { classNames } from "@/lib/utils";
 const links = [
   { href: "/", lines: ["Home"] },
   { href: "/current-round", lines: ["Current", "Round"] },
+  { href: "/side-matches", lines: ["Side", "Matches"] },
   { href: "/past-games", lines: ["Past", "Games"] },
   { href: "/players", lines: ["Players"] },
   { href: "/install", lines: ["Install"] },

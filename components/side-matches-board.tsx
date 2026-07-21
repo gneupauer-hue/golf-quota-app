@@ -432,6 +432,52 @@ export function SideMatchesBoard({
                 ))}
               </div>
 
+              <div className="rounded-[22px] bg-canvas px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Skins</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{match.skins.summary}</p>
+                  </div>
+                  <span
+                    className={classNames(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold",
+                      match.skins.winner === "A"
+                        ? "bg-[#FBF7F0] text-pine"
+                        : match.skins.winner === "B"
+                          ? "bg-[#FCE5E2] text-danger"
+                          : "bg-white text-ink"
+                    )}
+                  >
+                    {`${match.skins.teamACount}-${match.skins.teamBCount}`}
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-[22px] bg-ink px-4 py-3 text-white">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/60">
+                    {`Money ($${match.payout.stake} each)`}
+                  </p>
+                  <p className="text-sm font-bold">
+                    {match.payout.net === 0
+                      ? "All square"
+                      : match.payout.net > 0
+                        ? `${match.teamAShortLabel} up $${match.payout.net}`
+                        : `${match.teamBShortLabel} up $${Math.abs(match.payout.net)}`}
+                  </p>
+                </div>
+                <div className="mt-2 grid grid-cols-4 gap-1 text-center">
+                  {match.payout.bets.map((bet) => (
+                    <div key={`${match.match.id}-bet-${bet.key}`} className="rounded-xl bg-white/10 px-2 py-1.5">
+                      <p className="text-[9px] uppercase tracking-[0.1em] text-white/55">{bet.label}</p>
+                      <p className="mt-0.5 text-xs font-bold">
+                        {!bet.settled ? "–" : bet.winner === "A" ? "A" : bet.winner === "B" ? "B" : "Push"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Hole by Hole</p>
                 <div className="overflow-x-auto pb-1">

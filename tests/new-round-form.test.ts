@@ -38,6 +38,14 @@ test("no chosen game date omits roundDate (server defaults to today)", () => {
   assert.equal("roundDate" in buildCreateRoundRequestBody("MATCH_QUOTA", false), false);
 });
 
+test("defaults to QUICK scoring, and hole-by-hole sends DETAILED", () => {
+  assert.equal(buildCreateRoundRequestBody("MATCH_QUOTA", false).scoringEntryMode, "QUICK");
+  assert.equal(
+    buildCreateRoundRequestBody("MATCH_QUOTA", false, undefined, "DETAILED").scoringEntryMode,
+    "DETAILED"
+  );
+});
+
 test("create request remains setup-only and does not include score fields", () => {
   const bodyText = JSON.stringify(buildCreateRoundRequestBody("MATCH_QUOTA", true));
 

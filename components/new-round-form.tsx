@@ -4,16 +4,17 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
-import type { RoundMode } from "@/lib/quota";
+import type { RoundMode, ScoringEntryMode } from "@/lib/quota";
 
 export function buildCreateRoundRequestBody(
   roundMode: RoundMode,
   isTestRound: boolean,
-  roundDate?: string
+  roundDate?: string,
+  scoringEntryMode: ScoringEntryMode = "QUICK"
 ) {
   return {
     roundMode,
-    scoringEntryMode: "QUICK" as const,
+    scoringEntryMode,
     isTestRound,
     ...(roundDate ? { roundDate } : {})
   };
@@ -30,6 +31,7 @@ export function NewRoundForm() {
   const router = useRouter();
   const [roundMode, setRoundMode] = useState<RoundMode>("MATCH_QUOTA");
   const [isTestRound, setIsTestRound] = useState(false);
+  const [entryMode, setEntryMode] = useState<ScoringEntryMode>("QUICK");
   const [gameDate, setGameDate] = useState(todayInputValue());
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -64,6 +66,28 @@ export function NewRoundForm() {
           </button>
         </div>
 
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Scoring</p>
+          <h3 className="mt-1 text-lg font-semibold text-ink">How are scores entered?</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            className={entryMode === "QUICK" ? "club-btn-primary min-h-12 text-sm" : "club-btn-secondary min-h-12 text-sm"}
+            onClick={() => setEntryMode("QUICK")}
+          >
+            Quick (front / back)
+          </button>
+          <button
+            type="button"
+            className={entryMode === "DETAILED" ? "club-btn-primary min-h-12 text-sm" : "club-btn-secondary min-h-12 text-sm"}
+            onClick={() => setEntryMode("DETAILED")}
+          >
+            Hole by hole
+          </button>
+        </div>
+        <p className="text-xs text-ink/60">Hole by hole is required for side matches (records every hole).</p>
 
         <label className="block">
           <span className="mb-2 block text-sm font-semibold">Game date</span>
@@ -105,7 +129,7 @@ export function NewRoundForm() {
                 headers: {
                   "Content-Type": "application/json"
                 },
-                body: JSON.stringify(buildCreateRoundRequestBody(roundMode, isTestRound, gameDate))
+                body: JSON.stringify(buildCreateRoundRequestBody(roundMode, isTestRound, gameDate, entryMode))
               });
 
               const result = await response.json();
