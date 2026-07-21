@@ -6,6 +6,44 @@ import {
   hasValidRoundScoreEditSession,
   ROUND_SCORE_EDIT_COOKIE
 } from "@/lib/round-score-edit-auth";
+import { assertCanEnterScores } from "@/lib/firebase/score-access";
+import { isApprovedScorerRequired } from "@/lib/firebase/score-access-rollout";
+import { IREM_FIREBASE_CLUB_ID } from "@/lib/firebase/active-round-preparation";
+import type { MembershipLike } from "@/lib/firebase/club-membership";
+
+const FIREBASE_SESSION_COOKIE = "firebase_session";
+
+// When the approved-scorer flag is on, only a signed-in owner-approved member may
+// write scores. Fails closed. Prisma remains authoritative for the scores themselves.
+async function requireApprovedScorer(sessionCookie: string | undefined) {
+  const { getFirebaseAdminAuth, getFirebaseAdminDb } = await import("@/lib/firebase/admin");
+  const auth = await getFirebaseAdminAuth();
+  const db = await getFirebaseAdminDb();
+
+  await assertCanEnterScores({
+    clubId: IREM_FIREBASE_CLUB_ID,
+    sessionCookie,
+    adapters: {
+      verifySessionCookie: async (cookie) => {
+        try {
+          const decoded = await auth.verifySessionCookie(cookie, true);
+          return { uid: decoded.uid };
+        } catch {
+          return null;
+        }
+      },
+      readMembership: async (clubId, uid) => {
+        const snapshot = await db
+          .collection("clubs")
+          .doc(clubId)
+          .collection("members")
+          .doc(uid)
+          .get();
+        return snapshot.exists ? ((snapshot.data() as MembershipLike | undefined) ?? null) : null;
+      }
+    }
+  });
+}
 
 function parseOptionalDate(value: unknown) {
   if (value == null || value === "") {
@@ -107,6 +145,11 @@ export async function PATCH(
     }
 
     const cookieStore = await cookies();
+
+    if (isApprovedScorerRequired()) {
+      await requireApprovedScorer(cookieStore.get(FIREBASE_SESSION_COOKIE)?.value);
+    }
+
     const allowLockedScoreEdit = hasValidRoundScoreEditSession(
       cookieStore.get(ROUND_SCORE_EDIT_COOKIE)?.value
     );
@@ -121,9 +164,13 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    const status =
+      error && typeof error === "object" && "status" in error && typeof error.status === "number"
+        ? error.status
+        : 500;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not save scores." },
-      { status: 500 }
+      { status }
     );
   }
 }
