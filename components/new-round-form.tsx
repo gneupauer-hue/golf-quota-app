@@ -31,7 +31,7 @@ export function NewRoundForm() {
   const router = useRouter();
   const [roundMode, setRoundMode] = useState<RoundMode>("MATCH_QUOTA");
   const [isTestRound, setIsTestRound] = useState(false);
-  const [entryMode, setEntryMode] = useState<ScoringEntryMode>("QUICK");
+  const [entryMode, setEntryMode] = useState<ScoringEntryMode>("DETAILED");
   const [gameDate, setGameDate] = useState(todayInputValue());
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -74,20 +74,20 @@ export function NewRoundForm() {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            className={entryMode === "QUICK" ? "club-btn-primary min-h-12 text-sm" : "club-btn-secondary min-h-12 text-sm"}
-            onClick={() => setEntryMode("QUICK")}
-          >
-            Quick (front / back)
-          </button>
-          <button
-            type="button"
             className={entryMode === "DETAILED" ? "club-btn-primary min-h-12 text-sm" : "club-btn-secondary min-h-12 text-sm"}
             onClick={() => setEntryMode("DETAILED")}
           >
             Hole by hole
           </button>
+          <button
+            type="button"
+            className={entryMode === "QUICK" ? "club-btn-primary min-h-12 text-sm" : "club-btn-secondary min-h-12 text-sm"}
+            onClick={() => setEntryMode("QUICK")}
+          >
+            Quick (front / back)
+          </button>
         </div>
-        <p className="text-xs text-ink/60">Hole by hole is required for side matches (records every hole).</p>
+        <p className="text-xs text-ink/60">Hole by hole is the default (needed for side matches and auto birdies/eagles). Quick is front/back totals.</p>
 
         <label className="block">
           <span className="mb-2 block text-sm font-semibold">Game date</span>
