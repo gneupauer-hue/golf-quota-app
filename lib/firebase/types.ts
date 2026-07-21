@@ -1,6 +1,7 @@
 export type ClubRole = "owner" | "admin" | "scorekeeper" | "member";
 export type ClubStatus = "active" | "archived";
-export type MembershipStatus = "active" | "invited" | "removed";
+// "requested" = a phone signup awaiting owner approval; cannot score until "active".
+export type MembershipStatus = "active" | "invited" | "requested" | "removed";
 
 export type FirebaseUserProfile = {
   uid: string;
@@ -30,6 +31,13 @@ export type FirebaseClubMembership = {
   displayName: string | null;
   role: ClubRole;
   status: MembershipStatus;
+  // Multi-user phone signup + approval fields.
+  phoneNumber?: string | null;
+  gameTextConsent?: boolean;
+  linkedPlayerId?: string | null;
+  requestedAt?: unknown;
+  approvedAt?: unknown;
+  approvedByUid?: string | null;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
