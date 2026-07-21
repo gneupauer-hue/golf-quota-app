@@ -36,6 +36,14 @@ type FirebaseAuthContextValue = {
 
 const FirebaseAuthContext = createContext<FirebaseAuthContextValue | null>(null);
 
+// Signed-out or not-yet-approved users legitimately cannot read some Firestore
+// docs. Those permission errors are expected and must not surface as an error
+// banner (that was the confusing "Missing or insufficient permissions." message).
+function isBenignAuthReadError(error: unknown) {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === "permission-denied" || code === "unauthenticated";
+}
+
 export function FirebaseAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [memberships, setMemberships] = useState<FirebaseUserClubMembership[]>([]);
@@ -55,9 +63,12 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           if (!nextUser) {
             setMemberships([]);
             setActiveClubIdState(null);
+            setAuthError("");
             await fetch("/api/firebase/session", { method: "DELETE" });
             return;
           }
+
+          setAuthError("");
 
           const idToken = await nextUser.getIdToken();
           const sessionResponse = await fetch("/api/firebase/session", {
@@ -89,6 +100,9 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           const defaultClubId = userSnapshot.data()?.defaultClubId;
           setActiveClubIdState(typeof defaultClubId === "string" ? defaultClubId : null);
         } catch (error) {
+          if (isBenignAuthReadError(error)) {
+            return;
+          }
           setAuthError(error instanceof Error ? error.message : "Could not sync Firebase account.");
         }
       });
@@ -128,6 +142,10 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
         });
       },
       (error) => {
+        if (isBenignAuthReadError(error)) {
+          setMemberships([]);
+          return;
+        }
         setAuthError(error.message);
       }
     );
