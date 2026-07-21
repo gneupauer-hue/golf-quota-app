@@ -1,5 +1,6 @@
 import { RoundResults } from "@/components/round-results";
 import { SideMatchesBoard } from "@/components/side-matches-board";
+import { DeleteTestRoundButton } from "@/components/delete-test-round-button";
 import { SectionCard } from "@/components/section-card";
 import { getRoundEditorData, getRoundResultsData, getRoundSideMatches } from "@/lib/data";
 
@@ -16,7 +17,7 @@ export default async function RoundResultsPage({
     return null;
   });
   const sideMatches = await getRoundSideMatches(id).catch(() => []);
-  const editorData = sideMatches.length ? await getRoundEditorData(id).catch(() => null) : null;
+  const editorData = await getRoundEditorData(id).catch(() => null);
 
   if (!data) {
     return (
@@ -47,6 +48,7 @@ export default async function RoundResultsPage({
           autoRefresh={false}
         />
       ) : null}
+      {editorData?.round.isTestRound ? <DeleteTestRoundButton roundId={id} /> : null}
     </div>
   );
 }
