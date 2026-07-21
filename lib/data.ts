@@ -680,8 +680,9 @@ export async function getPastGamesList() {
       completedAt: {
         not: null
       },
-      canceledAt: null,
-      isTestRound: false
+      canceledAt: null
+      // Test rounds ARE included here so their results can be reviewed. They stay
+      // excluded from quota history and season stats via those queries' own filters.
     },
     include: {
       entries: {

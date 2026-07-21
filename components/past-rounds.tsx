@@ -55,6 +55,11 @@ export function PastRounds({
                   <p className="text-base font-semibold text-ink">
                     {round.completedAt ? formatDisplayDate(round.completedAt) : "Archived"}
                   </p>
+                  {round.isTestRound ? (
+                    <span className="mt-1 inline-block rounded-full bg-[#FFF1BF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink">
+                      Test Round
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="shrink-0">
