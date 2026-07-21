@@ -108,6 +108,19 @@ test("unfinished back nine leaves back/total/skins unsettled", () => {
   assert.equal(derived.payout.net, 5);
 });
 
+test("supports a 1v1 individual match (one player per side)", () => {
+  const oneVsOne: SideMatchRecord = { ...MATCH, teamAPlayerIds: ["p1"], teamBPlayerIds: ["p3"] };
+  const rows = [
+    makeRow("p1", "Al A", fill(2), skins(2)),
+    makeRow("p3", "Cy B", fill(1), skins(0))
+  ];
+  const derived = deriveSideMatch(oneVsOne, rows);
+  assert.equal(derived.total.winner, "A");
+  assert.equal(derived.skins.teamACount, 2);
+  assert.equal(derived.skins.teamBCount, 0);
+  assert.equal(derived.payout.net, 20);
+});
+
 test("custom stake scales the payouts", () => {
   const rows = [
     makeRow("p1", "Al A", fill(2), skins(1)),

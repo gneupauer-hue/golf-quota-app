@@ -61,7 +61,7 @@ function buildDefaultMatchName(
     .map((playerId) => playerNameById.get(playerId))
     .filter(Boolean);
 
-  return teamA.length === 2 && teamB.length === 2 ? `${teamA.join(" / ")} vs ${teamB.join(" / ")}` : "";
+  return teamA.length >= 1 && teamB.length >= 1 ? `${teamA.join(" / ")} vs ${teamB.join(" / ")}` : "";
 }
 
 export function SideMatchesBoard({
@@ -108,6 +108,10 @@ export function SideMatchesBoard({
     () => sideMatches.map((match) => deriveSideMatch(match, entries)),
     [entries, sideMatches]
   );
+  const sideMatchMoneyDecided = useMemo(
+    () => derivedMatches.reduce((sum, match) => sum + match.payout.teamAWon + match.payout.teamBWon, 0),
+    [derivedMatches]
+  );
 
   useEffect(() => {
     if (readOnly || !round || !autoRefresh) {
@@ -147,14 +151,11 @@ export function SideMatchesBoard({
     setFormState(emptyFormState);
   }
 
-  const selectedPlayerIds = [
-    formState.teamAPlayer1,
-    formState.teamAPlayer2,
-    formState.teamBPlayer1,
-    formState.teamBPlayer2
-  ].filter(Boolean);
+  const teamAIds = [formState.teamAPlayer1, formState.teamAPlayer2].filter(Boolean);
+  const teamBIds = [formState.teamBPlayer1, formState.teamBPlayer2].filter(Boolean);
+  const selectedPlayerIds = [...teamAIds, ...teamBIds];
   const hasDuplicatePlayer = new Set(selectedPlayerIds).size !== selectedPlayerIds.length;
-  const matchReady = selectedPlayerIds.length === 4 && !hasDuplicatePlayer;
+  const matchReady = teamAIds.length >= 1 && teamBIds.length >= 1 && !hasDuplicatePlayer;
 
   async function submitMatch() {
     if (!round) {
@@ -162,14 +163,14 @@ export function SideMatchesBoard({
     }
 
     if (!matchReady) {
-      setMessage(hasDuplicatePlayer ? "Choose four different players." : "Select exactly two players per side.");
+      setMessage(hasDuplicatePlayer ? "Each player can only be in the match once." : "Pick at least one player on each side.");
       return;
     }
 
     const payload = {
       name: formState.name.trim() || buildDefaultMatchName(formState, playerNameById),
-      teamAPlayerIds: [formState.teamAPlayer1, formState.teamAPlayer2],
-      teamBPlayerIds: [formState.teamBPlayer1, formState.teamBPlayer2]
+      teamAPlayerIds: teamAIds,
+      teamBPlayerIds: teamBIds
     };
 
     startTransition(async () => {
@@ -336,9 +337,9 @@ export function SideMatchesBoard({
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               { label: "Team A Player 1", key: "teamAPlayer1" },
-              { label: "Team A Player 2", key: "teamAPlayer2" },
+              { label: "Team A Player 2 (optional)", key: "teamAPlayer2" },
               { label: "Team B Player 1", key: "teamBPlayer1" },
-              { label: "Team B Player 2", key: "teamBPlayer2" }
+              { label: "Team B Player 2 (optional)", key: "teamBPlayer2" }
             ].map((field) => (
               <label key={field.key} className="block">
                 <span className="mb-2 block text-sm font-semibold text-ink">{field.label}</span>
@@ -364,8 +365,9 @@ export function SideMatchesBoard({
           </div>
 
           {hasDuplicatePlayer ? (
-            <p className="text-sm font-medium text-danger">Choose four different players.</p>
+            <p className="text-sm font-medium text-danger">Each player can only be in the match once.</p>
           ) : null}
+          <p className="text-xs text-ink/60">One player per side for a 1v1, or two per side for a 2v2.</p>
 
           <button
             type="button"
@@ -375,6 +377,16 @@ export function SideMatchesBoard({
           >
             {isPending ? "Saving Match..." : editingMatchId ? "Save Match" : "Save Match"}
           </button>
+        </SectionCard>
+      ) : null}
+
+      {derivedMatches.length ? (
+        <SectionCard className="space-y-1 border border-pine/15 bg-[#FBF7F0]">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pine">Side Match Money</p>
+          <p className="text-sm text-ink/70">Settled separately — not part of the round&apos;s game or quotas.</p>
+          <p className="text-lg font-bold text-ink">
+            {`$${sideMatchMoneyDecided} decided so far • ${derivedMatches.length} ${derivedMatches.length === 1 ? "match" : "matches"}`}
+          </p>
         </SectionCard>
       ) : null}
 
@@ -427,6 +439,22 @@ export function SideMatchesBoard({
 
               {expanded ? (
                 <>
+              <div
+                className={classNames(
+                  "rounded-[22px] px-4 py-3",
+                  match.total.winner === "A"
+                    ? "bg-[#EAF6EC]"
+                    : match.total.winner === "B"
+                      ? "bg-[#FCE5E2]"
+                      : "bg-canvas"
+                )}
+              >
+                <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Live Status</p>
+                <p className="mt-1 text-base font-bold text-ink">
+                  {match.total.notStarted ? "Not started yet" : match.total.summary}
+                </p>
+              </div>
+
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-[22px] bg-canvas px-4 py-3">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Team A</p>

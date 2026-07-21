@@ -12,8 +12,13 @@ function validateSideMatchPayload(body: Record<string, unknown>) {
   const teamBPlayerIds = parsePlayerIds(body.teamBPlayerIds);
   const allPlayerIds = [...teamAPlayerIds, ...teamBPlayerIds];
 
-  if (teamAPlayerIds.length !== 2 || teamBPlayerIds.length !== 2) {
-    return { error: "Choose exactly two players per side." };
+  if (
+    teamAPlayerIds.length < 1 ||
+    teamAPlayerIds.length > 2 ||
+    teamBPlayerIds.length < 1 ||
+    teamBPlayerIds.length > 2
+  ) {
+    return { error: "Choose one or two players per side." };
   }
 
   if (new Set(allPlayerIds).size !== allPlayerIds.length) {
