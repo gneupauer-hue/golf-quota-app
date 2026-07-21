@@ -300,3 +300,42 @@ Firestore-as-shadow-mirror design is sound, incrementally validated, and cheap t
 back. It already meets the main goal for QUICK rounds behind flags. No architectural change
 is warranted — the remaining work is finishing and hardening, not redesign. Deliberately
 keep Prisma as posting/final authority for the foreseeable future.
+
+---
+
+## Addendum — go-live session, 2026-07-21
+
+**Outcome: multi-phone real-time QUICK scoring is confirmed working in production.** A score
+saved on a phone propagated to a second device (computer) immediately, with no refresh.
+
+**Flags (confirmed `true` in Vercel Production):**
+`FIREBASE_ACTIVE_ROUND_AUTO_PREP_ENABLED`, `FIREBASE_REALTIME_SCORE_DISPLAY_ENABLED`,
+`FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED`. (A stray `NEXT_PUBLIC_…MIRROR_ENABLED` var
+also exists but is **not read by any code** — inert.)
+
+**What went wrong first, and the workaround used:**
+- The live round showed `SCORE DOCS: 0` — Firestore had no score mirror for the round, so
+  the phone's granular mirror writes had no shell to attach to.
+- The **automatic active-round preparation and the owner/admin "Repair Active Round Realtime
+  Prep" both failed** with `status: repair-needed`, `writesPlanned: 0` (bailed before writing).
+  The round-shell **dry-run was clean** (Status `locked`; would create round + 4 entries,
+  update the stale pointer; **0 extras**), proving the round data was fine and mappable — so
+  the failure is inside the prepare/repair path, not the round data.
+- **Workaround (Phase 3 / 4H manual controls, on the Account page):** ran **Publish Round
+  Shell** (6 writes applied: round + 4 entries + pointer) then **Publish Score Mirror**
+  (4 scores created). `SCORE DOCS` went to 4, seeded values appeared, and live phone→device
+  sync then worked.
+
+**Open bug (next code task, not blocking play):** auto-prep + repair fail on a valid,
+locked, active round. Likely a stale active-round pointer from earlier validation rounds
+(the manual round-shell publish overwrote it), or a `writePreparationBatch` failure in the
+Phase 4I-B prepare path (which was added disabled and only enabled in prod today). Until
+this is root-caused and fixed, **every new round currently needs the manual two-step publish
+(Round Shell → Score Mirror) to get real-time sync** — or a retry of the repair now that the
+pointer has been corrected. Whether the manual step is still needed on the *next* round is
+unverified.
+
+**Follow-up checklist:**
+- Reproduce and fix the prepare/repair failure; confirm auto-prep works hands-free on a fresh round.
+- Add tests around the prepare/repair path (stale pointer, missing shell, batch failure).
+- Confirm whether the corrected pointer alone makes auto-prep succeed on the next round.
