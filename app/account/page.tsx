@@ -1,4 +1,5 @@
 import { FirebaseAccountPanel } from "@/components/firebase-account-panel";
+import { PhoneSignInCard } from "@/components/phone-signin-card";
 import { selectActivePrismaRoundSetup } from "@/lib/firebase/round-mirror-prisma";
 import { prisma } from "@/lib/prisma";
 
@@ -16,5 +17,10 @@ async function getActivePrismaRoundIdForValidation() {
 export default async function AccountPage() {
   const activePrismaRoundId = await getActivePrismaRoundIdForValidation();
 
-  return <FirebaseAccountPanel activePrismaRoundId={activePrismaRoundId} />;
+  return (
+    <div className="space-y-4">
+      <PhoneSignInCard />
+      <FirebaseAccountPanel activePrismaRoundId={activePrismaRoundId} />
+    </div>
+  );
 }
