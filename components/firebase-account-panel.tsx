@@ -1134,6 +1134,12 @@ export function FirebaseAccountPanel({
                   <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
                     Round: <span className="font-bold">{roundPrepRepairResult.roundId ?? "None"}</span>
                   </p>
+                  {roundPrepRepairResult.errorCode ? (
+                    <p className="col-span-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-danger">
+                      Reason: <span className="font-bold">{roundPrepRepairResult.errorCode}</span>
+                      {roundPrepRepairResult.message ? ` — ${roundPrepRepairResult.message}` : ""}
+                    </p>
+                  ) : null}
                   <p className="rounded-lg border border-pine/15 bg-white px-3 py-2">
                     Round created: <span className="font-bold">{roundPrepRoundCounts?.created ?? 0}</span>
                   </p>

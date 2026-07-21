@@ -180,18 +180,13 @@ function validateRoundMirrorInputs(input: {
     seen.add(entry.prismaPlayerId);
   }
 
-  if (input.pointer) {
-    if (
-      !input.pointer.roundId?.trim() ||
-      !input.pointer.prismaRoundId?.trim() ||
-      input.pointer.roundId !== input.pointer.prismaRoundId ||
-      !input.pointer.checksum?.trim()
-    ) {
-      throw Object.assign(new Error("Malformed Firestore active-round pointer."), {
-        code: "malformed-pointer" satisfies ActiveRoundPreparationErrorCode
-      });
-    }
-  }
+  // NOTE: The active-round pointer is a shared singleton. When a NEW round goes
+  // live it legitimately still points at the PREVIOUS round (and older test rounds
+  // may have written it in a partial shape with no prismaRoundId/checksum).
+  // Preparation OVERWRITES the pointer to match the current Prisma round, so a
+  // stale or partially-shaped existing pointer must NOT abort preparation — that
+  // was the bug that forced a manual publish on every new round. The audit below
+  // marks a mismatched pointer "updated" and the batch rewrites it correctly.
 }
 
 function validateExistingScores(

@@ -150,6 +150,36 @@ test("preparation creates shell, entries, pointer, missing baseline score, and r
   assert.equal(writes.length, 1);
 });
 
+test("a stale/partial active-round pointer does NOT block preparation (it is overwritten)", async () => {
+  // Regression: a leftover pointer from a previous round (here missing
+  // prismaRoundId and checksum) used to throw malformed-pointer and abort,
+  // which forced a manual publish on every new round. It must now just be
+  // rewritten to the current round.
+  const writes: Array<{ activePointer?: unknown }> = [];
+  const result = await prepareActiveRoundFirestoreMirror({
+    clubId: "club-1",
+    expectedPrismaRoundId: "round-1",
+    mode: "auto",
+    adapters: makeAdapters({
+      readFirestoreActivePointer: async () => ({
+        roundId: "old-round",
+        prismaRoundId: undefined,
+        checksum: ""
+      }),
+      writePreparationBatch: async (_clubId, _roundId, input) => {
+        writes.push(input);
+        return 5;
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "ready");
+  assert.equal(result.activePointer?.counts.updated, 1);
+  assert.equal(writes.length, 1);
+  assert.ok(writes[0].activePointer, "the corrected pointer should be written");
+});
+
 test("existing valid score documents are preserved and not overwritten", async () => {
   let scoreWrites = 0;
   const baseline = (await import("@/lib/firebase/score-mirror")).mapPrismaScoresToFirebaseMirror(makeScoreRound()).scores[0];
