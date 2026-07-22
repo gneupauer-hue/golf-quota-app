@@ -33,26 +33,45 @@ export async function GET(
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
 
   try {
+    const body = (await request.json().catch(() => ({}))) as { override?: unknown };
+    // Owner override: post despite a quota-audit mismatch (e.g. a pre-existing
+    // history-chain discrepancy). Only the advisory QUOTA_PREVIEW_MISMATCH is
+    // bypassable — missing/incomplete scores and structural errors still block.
+    const override = body?.override === true;
+
     const preflight = await prisma.$transaction(async (tx) => {
       return validateRoundPostingPreflight(tx, id);
     });
 
-    if (!preflight.ok) {
+    const blockingErrors = override
+      ? preflight.errors.filter((issue) => issue.code !== "QUOTA_PREVIEW_MISMATCH")
+      : preflight.errors;
+
+    if (blockingErrors.length > 0) {
       return NextResponse.json(
         {
-          error: formatRoundPostingPreflightError(preflight) ?? "Round cannot be posted yet.",
-          issues: preflight.errors,
+          error:
+            formatRoundPostingPreflightError({ ...preflight, errors: blockingErrors }) ??
+            "Round cannot be posted yet.",
+          issues: blockingErrors,
           warnings: preflight.warnings,
           summary: preflight.summary
         },
         { status: 400 }
       );
+    }
+
+    if (override && preflight.errors.some((issue) => issue.code === "QUOTA_PREVIEW_MISMATCH")) {
+      console.warn("[round-complete] owner override: posting despite quota audit mismatch", {
+        roundId: id,
+        overriddenIssues: preflight.errors.filter((issue) => issue.code === "QUOTA_PREVIEW_MISMATCH")
+      });
     }
 
     console.info("[round-complete] preflight passed", {

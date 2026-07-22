@@ -1014,6 +1014,7 @@ export function RoundEditor({
   const [quotaAdjustmentPreview, setQuotaAdjustmentPreview] =
     useState<QuotaAdjustmentPreview | null>(null);
   const [quotaAdjustmentError, setQuotaAdjustmentError] = useState("");
+  const [canOverridePost, setCanOverridePost] = useState(false);
   const [firestoreTestWriteDiagnostic, setFirestoreTestWriteDiagnostic] =
     useState<FirestoreTestWriteDiagnostic>({
       status: "idle",
@@ -3337,6 +3338,7 @@ export function RoundEditor({
         }
 
         setQuotaAdjustmentError("");
+        setCanOverridePost(false);
         setQuotaAdjustmentPreview({
           warning:
             result.warning ??
@@ -3372,11 +3374,12 @@ export function RoundEditor({
 
   function closeQuotaAdjustmentPreview() {
     setQuotaAdjustmentError("");
+    setCanOverridePost(false);
     setQuotaAdjustmentPreview(null);
     setMessage("Returned to results without posting the round.");
   }
 
-  function approveAndPostRound() {
+  function approveAndPostRound(allowOverride = false) {
     if (!quotaAdjustmentPreview) {
       return;
     }
@@ -3386,42 +3389,52 @@ export function RoundEditor({
       return;
     }
 
-    // The permanent quota adjustment is measured from the BASE quota (before any
-    // tee adjustment). Checking against startQuota (which includes the tee
-    // adjustment) wrongly blocks every player who moved tees. Fall back to
-    // startQuota only when baseQuota isn't provided (older payloads).
-    const invalidPlayers = quotaAdjustmentPreview.rows.filter(
-      (player) => (player.baseQuota ?? player.startQuota) + player.quotaAdjustment !== player.nextQuota
-    );
-
-    if (invalidPlayers.length > 0) {
-      const errorMessage = `Quota approval blocked. Check: ${invalidPlayers
-        .map((player) => player.playerName)
-        .join(", ")}.`;
-      setQuotaAdjustmentError(errorMessage);
-      setMessage(errorMessage);
-      setSaveFailed(errorMessage);
-      return;
-    }
-
-    if (quotaAdjustmentPreview.validation.mismatchCount > 0) {
-      const affectedPlayers = Array.from(
-        new Set(quotaAdjustmentPreview.validation.issues.map((issue) => issue.playerName))
+    if (!allowOverride) {
+      // The permanent quota adjustment is measured from the BASE quota (before any
+      // tee adjustment). Checking against startQuota (which includes the tee
+      // adjustment) wrongly blocks every player who moved tees. Fall back to
+      // startQuota only when baseQuota isn't provided (older payloads).
+      const invalidPlayers = quotaAdjustmentPreview.rows.filter(
+        (player) => (player.baseQuota ?? player.startQuota) + player.quotaAdjustment !== player.nextQuota
       );
-      const errorMessage = `Quota approval blocked. Audit mismatches found for: ${affectedPlayers.join(", ")}.`;
-      setQuotaAdjustmentError(errorMessage);
-      setMessage(errorMessage);
-      setSaveFailed(errorMessage);
-      return;
+
+      if (invalidPlayers.length > 0) {
+        const errorMessage = `Quota approval blocked. Check: ${invalidPlayers
+          .map((player) => player.playerName)
+          .join(", ")}.`;
+        setQuotaAdjustmentError(errorMessage);
+        setMessage(errorMessage);
+        setSaveFailed(errorMessage);
+        setCanOverridePost(true);
+        return;
+      }
+
+      if (quotaAdjustmentPreview.validation.mismatchCount > 0) {
+        const affectedPlayers = Array.from(
+          new Set(quotaAdjustmentPreview.validation.issues.map((issue) => issue.playerName))
+        );
+        const errorMessage = `Quota approval blocked. Audit mismatches found for: ${affectedPlayers.join(", ")}.`;
+        setQuotaAdjustmentError(errorMessage);
+        setMessage(errorMessage);
+        setSaveFailed(errorMessage);
+        setCanOverridePost(true);
+        return;
+      }
     }
 
     startTransition(async () => {
       try {
         setQuotaAdjustmentError("");
         setMessage("");
-        setSaving("Posting round and applying approved quota changes...");
+        setSaving(
+          allowOverride
+            ? "Posting round (owner override)..."
+            : "Posting round and applying approved quota changes..."
+        );
         const response = await fetch(`/api/rounds/${round.id}/complete`, {
-          method: "POST"
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ override: allowOverride })
         });
         const result = await response.json();
 
@@ -3429,6 +3442,7 @@ export function RoundEditor({
           throw new Error(result.error ?? "Could not archive round.");
         }
 
+        setCanOverridePost(false);
         setQuotaAdjustmentPreview(null);
         setMessage(
           quotaAdjustmentPreview.isTestRound
@@ -4995,28 +5009,57 @@ export function RoundEditor({
                 <p className="text-sm text-ink/70">
                   Once approved, these quotas become the starting quotas for the next round.
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-45"
-                    onClick={closeQuotaAdjustmentPreview}
-                    disabled={isPending}
-                  >
-                    Back to Results
-                  </button>
-                  <button
-                    type="button"
-                    className="club-btn-primary min-h-12 disabled:opacity-45"
-                    onClick={approveAndPostRound}
-                    disabled={isPending || quotaAdjustmentPreview.readOnly || quotaAdjustmentPreview.validation.mismatchCount > 0}
-                  >
-                    {quotaAdjustmentPreview.readOnly
-                      ? "Already Posted"
-                      : isPending
-                        ? "Posting Round..."
-                        : "Approve & Post Round"}
-                  </button>
-                </div>
+                {!quotaAdjustmentPreview.readOnly &&
+                (quotaAdjustmentPreview.validation.mismatchCount > 0 || canOverridePost) ? (
+                  <>
+                    <p className="rounded-2xl bg-[#FFF4D6] px-4 py-3 text-sm text-ink/80">
+                      The quota audit flagged a discrepancy (often from an earlier round or a
+                      mid-round group change). The scores above are saved and the math shown is
+                      correct — if these new quotas look right, you can post anyway.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-45"
+                        onClick={closeQuotaAdjustmentPreview}
+                        disabled={isPending}
+                      >
+                        Back to Results
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-12 rounded-2xl bg-danger px-4 text-sm font-semibold text-white disabled:opacity-45"
+                        onClick={() => approveAndPostRound(true)}
+                        disabled={isPending}
+                      >
+                        {isPending ? "Posting..." : "Post Anyway"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-45"
+                      onClick={closeQuotaAdjustmentPreview}
+                      disabled={isPending}
+                    >
+                      Back to Results
+                    </button>
+                    <button
+                      type="button"
+                      className="club-btn-primary min-h-12 disabled:opacity-45"
+                      onClick={() => approveAndPostRound()}
+                      disabled={isPending || quotaAdjustmentPreview.readOnly}
+                    >
+                      {quotaAdjustmentPreview.readOnly
+                        ? "Already Posted"
+                        : isPending
+                          ? "Posting Round..."
+                          : "Approve & Post Round"}
+                    </button>
+                  </div>
+                )}
               </SectionCard>
             </div>
           </div>
