@@ -1005,7 +1005,8 @@ export function RoundEditor({
   const setupAutosaveRowsRef = useRef<RowState[]>(cloneRows(mapEditorEntriesToRows(round.entries)));
   const [refreshState, setRefreshState] = useState<SaveState>({ tone: "idle", message: "" });
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
-  const [isScoreEditUnlocked, setIsScoreEditUnlocked] = useState(false);
+  // Submitted scores are freely editable now (no password), so start unlocked.
+  const [isScoreEditUnlocked, setIsScoreEditUnlocked] = useState(true);
   const [scoreUnlockPassword, setScoreUnlockPassword] = useState("");
   const [scoreUnlockMessage, setScoreUnlockMessage] = useState("");
   const [isScoreUnlockOpen, setIsScoreUnlockOpen] = useState(false);

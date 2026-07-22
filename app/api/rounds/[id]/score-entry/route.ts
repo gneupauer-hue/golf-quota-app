@@ -2,10 +2,6 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { applyScoreEntryPatches, type ScoreEntryPatch } from "@/lib/round-service";
-import {
-  hasValidRoundScoreEditSession,
-  ROUND_SCORE_EDIT_COOKIE
-} from "@/lib/round-score-edit-auth";
 import { assertCanEnterScores } from "@/lib/firebase/score-access";
 import { isApprovedScorerRequired } from "@/lib/firebase/score-access-rollout";
 import { IREM_FIREBASE_CLUB_ID } from "@/lib/firebase/active-round-preparation";
@@ -150,9 +146,10 @@ export async function PATCH(
       await requireApprovedScorer(cookieStore.get(FIREBASE_SESSION_COOKIE)?.value);
     }
 
-    const allowLockedScoreEdit = hasValidRoundScoreEditSession(
-      cookieStore.get(ROUND_SCORE_EDIT_COOKIE)?.value
-    );
+    // Submitted front/back nines are freely editable now — no password. Posted
+    // (completed) rounds remain locked separately in applyScoreEntryPatches, so
+    // this only frees corrections while a round is still live.
+    const allowLockedScoreEdit = true;
 
     await prisma.$transaction(async (tx) => {
       await applyScoreEntryPatches(tx, {
