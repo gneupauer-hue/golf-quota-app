@@ -167,6 +167,7 @@ type QuotaAdjustmentPreviewRow = {
   playerId: string;
   playerName: string;
   startQuota: number;
+  baseQuota?: number;
   totalPoints: number;
   quotaAdjustment: number;
   nextQuota: number;
@@ -3385,8 +3386,12 @@ export function RoundEditor({
       return;
     }
 
+    // The permanent quota adjustment is measured from the BASE quota (before any
+    // tee adjustment). Checking against startQuota (which includes the tee
+    // adjustment) wrongly blocks every player who moved tees. Fall back to
+    // startQuota only when baseQuota isn't provided (older payloads).
     const invalidPlayers = quotaAdjustmentPreview.rows.filter(
-      (player) => player.startQuota + player.quotaAdjustment !== player.nextQuota
+      (player) => (player.baseQuota ?? player.startQuota) + player.quotaAdjustment !== player.nextQuota
     );
 
     if (invalidPlayers.length > 0) {
@@ -4947,6 +4952,11 @@ export function RoundEditor({
                       <div className="rounded-2xl bg-canvas px-3 py-2.5">
                         <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Starting quota</p>
                         <p className="mt-1 font-semibold text-ink">{player.startQuota}</p>
+                        {player.baseQuota != null && player.baseQuota !== player.startQuota ? (
+                          <p className="mt-0.5 text-[11px] text-ink/55">
+                            {`Base ${player.baseQuota} · tee ${formatPlusMinus(player.startQuota - player.baseQuota)}`}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="rounded-2xl bg-canvas px-3 py-2.5">
                         <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Points scored</p>
@@ -4970,7 +4980,7 @@ export function RoundEditor({
                       <div className="rounded-2xl bg-canvas px-3 py-2.5">
                         <p className="text-[10px] uppercase tracking-[0.18em] text-ink/45">Math check</p>
                         <p className="mt-1 font-semibold text-ink">
-                          {`${player.startQuota} ${player.quotaAdjustment >= 0 ? "+" : "-"} ${Math.abs(player.quotaAdjustment)} = ${player.nextQuota}`}
+                          {`${player.baseQuota ?? player.startQuota} ${player.quotaAdjustment >= 0 ? "+" : "-"} ${Math.abs(player.quotaAdjustment)} = ${player.nextQuota}`}
                         </p>
                       </div>
                     </div>

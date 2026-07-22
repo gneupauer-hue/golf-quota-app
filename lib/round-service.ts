@@ -886,6 +886,11 @@ export async function getRoundCompletionPreview(tx: Tx, roundId: string) {
       playerId: row.playerId,
       playerName: row.playerName,
       startQuota: row.startQuota,
+      // baseQuota is the un-tee-adjusted quota. Permanent quota movement is
+      // measured from it, so it MUST be carried to the client guard and the
+      // audit — otherwise tee movers (startQuota = base + tee) look inconsistent
+      // and posting is wrongly blocked.
+      baseQuota: row.baseQuota ?? row.startQuota,
       totalPoints: row.totalPoints,
       quotaAdjustment: row.nextQuota - (row.baseQuota ?? row.startQuota),
       nextQuota: row.nextQuota
