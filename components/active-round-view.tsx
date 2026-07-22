@@ -695,9 +695,11 @@ export function SkinsOnlyRoundView({
   refreshState,
   lastRefreshedAt,
   onOpenEntry,
+  onOpenPlayerEntry,
   onRefresh
 }: SharedProps & {
   onOpenEntry: () => void;
+  onOpenPlayerEntry: (playerId: string) => void;
   onRefresh: () => void;
 }) {
   const lastRefreshedLabel = formatTimeLabel(lastRefreshedAt);
@@ -709,15 +711,45 @@ export function SkinsOnlyRoundView({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Individual Quota + Skins</p>
-            <h3 className="mt-1 text-xl font-semibold">Score entry only</h3>
+            <h3 className="mt-1 text-xl font-semibold">Score entry</h3>
+            <p className="mt-1 text-sm text-ink/65">
+              All together? Use Enter All. Scattered in different groups? Tap a player below to enter just his scores.
+            </p>
           </div>
           <button
             type="button"
             onClick={onOpenEntry}
-            className="min-h-12 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white"
+            className="min-h-12 shrink-0 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white"
           >
-            Enter Scores
+            Enter All
           </button>
+        </div>
+      </SectionCard>
+
+      <SectionCard className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Players</p>
+        <div className="space-y-2">
+          {rows.map((row) => {
+            const completedHoles = row.holeScores.filter((score) => score != null).length;
+            const playerComplete = completedHoles >= 18;
+            return (
+              <div key={row.playerId} className="flex items-center justify-between gap-3 rounded-2xl bg-canvas px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-ink">{row.playerName}</p>
+                  <p className="mt-1 text-xs text-ink/60">
+                    {`${row.totalPoints} points · ${playerComplete ? "Completed" : `Next hole ${Math.min(completedHoles + 1, 18)}`}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPlayerEntry(row.playerId)}
+                  className="shrink-0 rounded-full border border-pine/30 bg-white px-4 py-2 text-sm font-semibold text-pine"
+                >
+                  Enter
+                </button>
+              </div>
+            );
+          })}
         </div>
       </SectionCard>
 

@@ -995,6 +995,9 @@ export function RoundEditor({
   const [activeHoleByTeam, setActiveHoleByTeam] = useState<Partial<Record<TeamCode, number>>>({});
   const [skinsActiveHole, setSkinsActiveHole] = useState(1);
   const [skinsEntryOpen, setSkinsEntryOpen] = useState(false);
+  // When set, individual-mode entry is scoped to a single player (for scattered
+  // players who each post their own scores independently).
+  const [skinsEntryPlayerId, setSkinsEntryPlayerId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ tone: "idle", message: "" });
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [setupAutosaveState, setSetupAutosaveState] = useState<SaveState>({ tone: "idle", message: "" });
@@ -3763,6 +3766,16 @@ export function RoundEditor({
   function openSkinsEntry() {
     const nextHole = getSuggestedHole(calculatedRows);
     setMessage("");
+    setSkinsEntryPlayerId(null);
+    setSkinsEntryOpen(true);
+    setSkinsActiveHole(nextHole);
+  }
+
+  function openSkinsEntryForPlayer(playerId: string) {
+    const playerRows = calculatedRows.filter((row) => row.playerId === playerId);
+    const nextHole = getSuggestedHole(playerRows.length ? playerRows : calculatedRows);
+    setMessage("");
+    setSkinsEntryPlayerId(playerId);
     setSkinsEntryOpen(true);
     setSkinsActiveHole(nextHole);
   }
@@ -3805,17 +3818,33 @@ export function RoundEditor({
     const holeNumber = skinsActiveHole;
     const holeIndex = holeNumber - 1;
 
-    if (!calculatedRows.length) {
+    // When a single player is selected, scope everything to that player so
+    // scattered players can each be saved independently without waiting on others.
+    const scopedStateRows = skinsEntryPlayerId
+      ? rows.filter((row) => row.playerId === skinsEntryPlayerId)
+      : rows;
+    const scopedCalcRows = skinsEntryPlayerId
+      ? calculatedRows.filter((row) => row.playerId === skinsEntryPlayerId)
+      : calculatedRows;
+    const scopedInvalidSequence = scopedStateRows.some(
+      (row) => !hasSequentialHoleEntry(row.holeScores)
+    );
+
+    if (!scopedCalcRows.length) {
       setMessage("No players are in this skins game.");
       return;
     }
 
-    if (calculatedRows.some((row) => row.holeScores[holeIndex] == null)) {
-      setMessage(`Enter a score for every player on hole ${holeNumber}.`);
+    if (scopedCalcRows.some((row) => row.holeScores[holeIndex] == null)) {
+      setMessage(
+        skinsEntryPlayerId
+          ? `Enter a score for hole ${holeNumber}.`
+          : `Enter a score for every player on hole ${holeNumber}.`
+      );
       return;
     }
 
-    if (invalidSequence) {
+    if (scopedInvalidSequence) {
       setMessage("Finish holes in order before saving.");
       setSaveFailed("Save failed. Finish holes in order first.");
       return;
@@ -3827,7 +3856,7 @@ export function RoundEditor({
       startTransition(async () => {
         try {
           setSaving("Saving hole 18...");
-          await persistScoreEntries(rows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
+          await persistScoreEntries(scopedStateRows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
           setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
           setSkinsEntryOpen(false);
           setToast("Hole 18 saved");
@@ -3848,7 +3877,7 @@ export function RoundEditor({
     startTransition(async () => {
       try {
         setSaving(`Saving hole ${holeNumber}...`);
-        await persistScoreEntries(rows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
+        await persistScoreEntries(scopedStateRows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
         setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
         setSkinsActiveHole(nextHole);
         setToast("Hole saved");
@@ -3987,10 +4016,16 @@ export function RoundEditor({
   }
 
   if (skinsEntryOpen && isSkinsOnly) {
+    const entryRows = skinsEntryPlayerId
+      ? calculatedRows.filter((row) => row.playerId === skinsEntryPlayerId)
+      : calculatedRows;
+    const entryPlayerName = skinsEntryPlayerId
+      ? entryRows[0]?.playerName ?? roundPlayerNamesById.get(skinsEntryPlayerId) ?? null
+      : null;
     const canGoBack = skinsActiveHole > 1;
     const canSaveHole =
-      calculatedRows.length > 0 &&
-      calculatedRows.every((row) => row.holeScores[skinsActiveHole - 1] != null);
+      entryRows.length > 0 &&
+      entryRows.every((row) => row.holeScores[skinsActiveHole - 1] != null);
 
     return (
       <>
@@ -3999,7 +4034,8 @@ export function RoundEditor({
         <SkinsOnlyScoreEntry
           isTestRound={isTestRound}
           activeHole={skinsActiveHole}
-          rows={calculatedRows}
+          rows={entryRows}
+          entryPlayerName={entryPlayerName}
           message={message}
           toast={toast}
           saveState={saveState}
@@ -4012,7 +4048,10 @@ export function RoundEditor({
           onPreviousHole={() => setSkinsActiveHole((current) => Math.max(1, current - 1))}
           onSaveHole={saveSkinsHole}
           onSelectHole={(hole) => setSkinsActiveHole(Math.max(1, Math.min(18, hole)))}
-          onBackToRound={() => setSkinsEntryOpen(false)}
+          onBackToRound={() => {
+            setSkinsEntryOpen(false);
+            setSkinsEntryPlayerId(null);
+          }}
           onRefresh={refreshRoundData}
         />
       </>
@@ -4864,6 +4903,7 @@ export function RoundEditor({
           refreshState={refreshState}
           lastRefreshedAt={lastRefreshedAt}
           onOpenEntry={openSkinsEntry}
+          onOpenPlayerEntry={openSkinsEntryForPlayer}
           onRefresh={refreshRoundData}
         />
       ) : (
@@ -5840,7 +5880,8 @@ function SkinsOnlyRoundTab({
   initialBuyInPaidPlayerIds,
   isTestRound,
   onDeleteRound,
-  onOpenEntry
+  onOpenEntry,
+  onOpenPlayerEntry
 }: {
   roundId: string;
   rows: CalculatedRoundRow[];
@@ -5850,6 +5891,7 @@ function SkinsOnlyRoundTab({
   isTestRound: boolean;
   onDeleteRound: () => void;
   onOpenEntry: () => void;
+  onOpenPlayerEntry: (playerId: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -5884,14 +5926,16 @@ function SkinsOnlyRoundTab({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Individual Quota + Skins</p>
             <h3 className="mt-1 text-xl font-semibold">Live skins game</h3>
-            <p className="mt-1 text-sm text-ink/65">Enter hole scores, watch outright skins, and track carryovers.</p>
+            <p className="mt-1 text-sm text-ink/65">
+              Playing together? Use Enter All. Scattered in different groups? Tap a player below to enter just his scores.
+            </p>
           </div>
           <button
             type="button"
             onClick={onOpenEntry}
             className="min-h-12 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white"
           >
-            Enter Scores
+            Enter All
           </button>
         </div>
       </SectionCard>
@@ -5910,23 +5954,26 @@ function SkinsOnlyRoundTab({
             const playerComplete = hasRecordedFinalHole(row.holeScores);
 
             return (
-              <div key={row.playerId} className="flex items-center justify-between rounded-2xl bg-canvas px-4 py-3">
-                <div>
+              <div key={row.playerId} className="flex items-center justify-between gap-3 rounded-2xl bg-canvas px-4 py-3">
+                <div className="min-w-0">
                   <p className="text-base font-semibold">{row.playerName}</p>
-                  <p className="mt-1 text-xs text-ink/60">{`${row.totalPoints} points`}</p>
+                  <p className="mt-1 text-xs text-ink/60">
+                    {`${row.totalPoints} points · ${playerComplete ? "Completed" : `Next hole ${Math.min(completedHoles + 1, 18)}`}`}
+                  </p>
                   {playerComplete ? (
                     <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#FBF7F0] px-3 py-1.5 text-xs font-semibold text-pine">
-                      <span aria-hidden="true">âœ”</span>
+                      <span aria-hidden="true">✔</span>
                       Completed
                     </span>
                   ) : null}
                 </div>
-                <div className="text-right">
-                  <p className="text-lg font-semibold">{row.totalPoints}</p>
-                  <p className="mt-1 text-xs text-ink/60">
-                    {playerComplete ? "Completed" : `Next Hole ${Math.min(completedHoles + 1, 18)}`}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPlayerEntry(row.playerId)}
+                  className="shrink-0 rounded-full border border-pine/30 bg-white px-4 py-2 text-sm font-semibold text-pine"
+                >
+                  Enter
+                </button>
               </div>
             );
           })}
@@ -5940,6 +5987,7 @@ function SkinsOnlyScoreEntry({
   isTestRound,
   activeHole,
   rows,
+  entryPlayerName,
   message,
   toast,
   saveState,
@@ -5958,6 +6006,7 @@ function SkinsOnlyScoreEntry({
   isTestRound: boolean;
   activeHole: number;
   rows: CalculatedRoundRow[];
+  entryPlayerName?: string | null;
   message: string;
   toast: string;
   saveState: SaveState;
@@ -5987,7 +6036,12 @@ function SkinsOnlyScoreEntry({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Live Scoring</p>
-              <h3 className="mt-1 text-xl font-semibold">Individual Quota + Skins</h3>
+              <h3 className="mt-1 text-xl font-semibold">
+                {entryPlayerName ?? "Individual Quota + Skins"}
+              </h3>
+              {entryPlayerName ? (
+                <p className="mt-0.5 text-xs text-ink/60">Entering just this player&apos;s scores</p>
+              ) : null}
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white">
                   {`Hole ${activeHole} of 18`}
