@@ -5071,7 +5071,21 @@ function TeamScoreEntry({
   onBackToTeams: () => void;
   onRefresh: () => void;
 }) {
+  const firstIncompleteHole = (() => {
+    for (let index = 0; index < 18; index += 1) {
+      if (!rows.every((row) => row.holeScores[index] != null)) {
+        return index + 1;
+      }
+    }
+    return 18;
+  })();
+
   function handleHoleButtonClick(holeNumber: number) {
+    // Sequential entry: earlier holes can be reviewed/edited, but you can't jump
+    // ahead to a hole before the current one is finished for every player.
+    if (holeNumber > firstIncompleteHole) {
+      return;
+    }
     onSelectHole(team, holeNumber);
   }
 
@@ -5151,7 +5165,8 @@ function TeamScoreEntry({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Live Scoring</p>
-            <h2 className="mt-1 text-xl font-semibold">{title}</h2>`r`n            <p className="mt-1 text-sm text-ink/65">{subtitle}</p>
+            <h2 className="mt-1 text-xl font-semibold">{title}</h2>
+            <p className="mt-1 text-sm text-ink/65">{subtitle}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white">
                 {`Hole ${activeHole} of 18`}
@@ -5217,6 +5232,7 @@ function TeamScoreEntry({
               key={holeNumber}
               data-hole={holeNumber}
               type="button"
+              disabled={holeNumber > firstIncompleteHole}
               onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -5230,13 +5246,20 @@ function TeamScoreEntry({
                 "touch-manipulation min-h-[3rem] rounded-[18px] px-3 text-sm font-semibold transition-all duration-200",
                 holeNumber === activeHole
                   ? "min-w-[4rem] scale-[1.04] bg-ink px-4 text-base text-white shadow-card"
-                  : "min-w-[3rem] bg-canvas text-ink/70"
+                  : holeNumber > firstIncompleteHole
+                    ? "min-w-[3rem] bg-canvas text-ink/25"
+                    : "min-w-[3rem] bg-canvas text-ink/70"
               )}
             >
               {holeNumber}
             </button>
           ))}
         </div>
+        {!canSaveHole ? (
+          <p className="text-xs font-semibold text-ink/55">
+            {`Enter every player's score on hole ${activeHole} to open the next hole.`}
+          </p>
+        ) : null}
       </SectionCard>
 
       <div className="relative z-10 space-y-2">
