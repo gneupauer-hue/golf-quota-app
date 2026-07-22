@@ -94,6 +94,26 @@ test("season stats count birdies, eagles, and hole-in-ones from recorded skin en
   assert.equal(player?.hios, 1);
 });
 
+test("season stats derive birdies/eagles/aces from hole points for hole-by-hole rounds", () => {
+  const holeScores = Array<number | null>(18).fill(2);
+  holeScores[0] = 4; // birdie
+  holeScores[3] = 4; // birdie
+  holeScores[8] = 6; // eagle
+  holeScores[13] = 8; // ace
+
+  const data = stats([
+    round(
+      [entry(1, { scoringEntryMode: "DETAILED", holeScores, birdieHolesCsv: "" }), entry(2)],
+      { scoringEntryMode: "DETAILED" }
+    )
+  ]);
+
+  const player = data.players.find((row) => row.playerId === "p1");
+  assert.equal(player?.birdies, 2, "hole-by-hole birdies must count in season totals");
+  assert.equal(player?.eagles, 1);
+  assert.equal(player?.hios, 1);
+});
+
 test("season stats count rounds played per player", () => {
   const data = stats([
     datedRound(1, [entry(1), entry(2)]),

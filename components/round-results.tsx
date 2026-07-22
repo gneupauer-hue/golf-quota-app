@@ -680,36 +680,6 @@ export function RoundResults({ data }: { data: ResultsData }) {
         ← See All Results
       </Link>
 
-      <SectionCard className="border-[#7A1E2C]/20 bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#7A1E2C]">
-              Finalized Round Corrections
-            </p>
-            <p className="mt-1 text-sm font-semibold text-ink/65">
-              Edit only when a finalized score or skin was entered incorrectly.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={openRoundEditMode}
-            className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#7A1E2C] px-4 py-2 text-sm font-extrabold text-white shadow-sm"
-          >
-            Edit Round
-          </button>
-        </div>
-        {roundEditMessage ? (
-          <p
-            className={classNames(
-              "mt-3 rounded-2xl px-3 py-2 text-sm font-semibold",
-              roundEditMessage.includes("saved") ? "bg-[#ECFDF3] text-pine" : "bg-[#FEE2E2] text-[#991B1B]"
-            )}
-          >
-            {roundEditMessage}
-          </p>
-        ) : null}
-      </SectionCard>
-
       {isTestRound ? (
         <SectionCard className="border-[#7A1E2C]/30 bg-[#FBF7F0]">
           <div className="space-y-3">
@@ -1111,6 +1081,36 @@ export function RoundResults({ data }: { data: ResultsData }) {
       </CollapsibleSection>
 
       <QuotaAuditWarning quotaAudit={data.quotaAudit} />
+
+      <SectionCard className="border-[#7A1E2C]/20 bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#7A1E2C]">
+              Finalized Round Corrections
+            </p>
+            <p className="mt-1 text-sm font-semibold text-ink/65">
+              Edit only when a finalized score or skin was entered incorrectly.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openRoundEditMode}
+            className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#7A1E2C] px-4 py-2 text-sm font-extrabold text-white shadow-sm"
+          >
+            Edit Round
+          </button>
+        </div>
+        {roundEditMessage ? (
+          <p
+            className={classNames(
+              "mt-3 rounded-2xl px-3 py-2 text-sm font-semibold",
+              roundEditMessage.includes("saved") ? "bg-[#ECFDF3] text-pine" : "bg-[#FEE2E2] text-[#991B1B]"
+            )}
+          >
+            {roundEditMessage}
+          </p>
+        ) : null}
+      </SectionCard>
 
       {isRoundEditOpen ? (
         <div className="fixed inset-0 z-50 flex items-end bg-ink/45 px-3 pb-3 pt-6 sm:items-center sm:justify-center sm:p-4">

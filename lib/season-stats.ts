@@ -14,6 +14,39 @@ import { getSeasonConfig } from "@/lib/season";
 export const ENABLE_SEASON_STATS = true;
 export const SEASON_STATS_MIN_RATE_ROUNDS = 3;
 
+// Season birdie/eagle/ace counts. Quick-entry rounds store these as manual
+// good-skin entries (birdieHolesCsv). Hole-by-hole rounds leave that field empty
+// and instead record the result in the per-hole points, where 4 = birdie,
+// 6 = eagle, 8 = ace. Prefer the stored entries when present; otherwise derive
+// from the hole points so hole-by-hole rounds are counted too.
+export function countGoodSkinsForEntry(
+  birdieHolesCsv: string | null | undefined,
+  holeScores: Array<number | null> | null | undefined
+): { birdies: number; eagles: number; hios: number } {
+  const stored = parseGoodSkinEntriesInput(birdieHolesCsv ?? "");
+  if (stored.length > 0) {
+    let birdies = 0;
+    let eagles = 0;
+    let hios = 0;
+    for (const skin of stored) {
+      if (skin.type === "eagle") eagles += 1;
+      else if (skin.type === "ace") hios += 1;
+      else birdies += 1;
+    }
+    return { birdies, eagles, hios };
+  }
+
+  let birdies = 0;
+  let eagles = 0;
+  let hios = 0;
+  for (const score of holeScores ?? []) {
+    if (score === 4) birdies += 1;
+    else if (score === 6) eagles += 1;
+    else if (score === 8) hios += 1;
+  }
+  return { birdies, eagles, hios };
+}
+
 export type SeasonStatsEntryInput = {
   playerId: string;
   playerName: string;
@@ -237,8 +270,10 @@ export function calculateSeasonStatsFromRounds(
         Number((payout?.front ?? 0) > 0) +
         Number((payout?.back ?? 0) > 0) +
         Number((payout?.total ?? 0) > 0);
-      const recordedSkins = parseGoodSkinEntriesInput(
-        round.entries.find((entry) => entry.playerId === row.playerId)?.birdieHolesCsv ?? ""
+      const seasonEntry = round.entries.find((entry) => entry.playerId === row.playerId);
+      const goodSkins = countGoodSkinsForEntry(
+        seasonEntry?.birdieHolesCsv,
+        seasonEntry?.holeScores ?? row.holeScores
       );
 
       stats.roundsPlayed += 1;
@@ -249,15 +284,9 @@ export function calculateSeasonStatsFromRounds(
       stats.teamEvents += teamEventCount;
       stats.teamCashRounds += Number(teamEventCount > 0);
 
-      for (const skin of recordedSkins) {
-        if (skin.type === "eagle") {
-          stats.eagles += 1;
-        } else if (skin.type === "ace") {
-          stats.hios += 1;
-        } else {
-          stats.birdies += 1;
-        }
-      }
+      stats.birdies += goodSkins.birdies;
+      stats.eagles += goodSkins.eagles;
+      stats.hios += goodSkins.hios;
     }
   }
 
