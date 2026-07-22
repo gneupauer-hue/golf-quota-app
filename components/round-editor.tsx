@@ -975,7 +975,7 @@ export function RoundEditor({
   const [isPending, startTransition] = useTransition();
   const [gameMode, setGameMode] = useState<RoundMode>(round.roundMode ?? "MATCH_QUOTA");
   const [scoringEntryMode, setScoringEntryMode] = useState<ScoringEntryMode>(
-    round.scoringEntryMode ?? "QUICK"
+    round.scoringEntryMode ?? "DETAILED"
   );
   const [setupTeamCount, setSetupTeamCount] = useState<number | null>(null);
   const [setupFormatKey, setSetupFormatKey] = useState<string | null>(null);
@@ -1722,7 +1722,10 @@ export function RoundEditor({
     setLockedAt(round.lockedAt);
     setStartedAt(round.startedAt);
     setGameMode(round.roundMode ?? "MATCH_QUOTA");
-    setScoringEntryMode("QUICK");
+    // Respect the round's stored entry mode on resync. Previously this
+    // unconditionally forced "QUICK", which silently reverted hole-by-hole
+    // every time server data synced (mount, realtime update, refresh).
+    setScoringEntryMode(round.scoringEntryMode ?? "DETAILED");
     setActiveHoleByTeam((current) => {
       const nextState: Partial<Record<TeamCode, number>> = {};
 
@@ -1763,7 +1766,7 @@ export function RoundEditor({
         backSubmittedAt: row.backSubmittedAt
       }))
     });
-  }, [roundPlayerNamesById, roundPlayerQuotasById, round.buyInPaidPlayerIds, round.entries, round.id, round.lockedAt, round.roundDate, round.roundMode, round.startedAt, round.teamCount]);
+  }, [roundPlayerNamesById, roundPlayerQuotasById, round.buyInPaidPlayerIds, round.entries, round.id, round.lockedAt, round.roundDate, round.roundMode, round.scoringEntryMode, round.startedAt, round.teamCount]);
 
   useEffect(() => {
     if (!selectedTeam) {
@@ -1958,19 +1961,19 @@ export function RoundEditor({
   function switchToHoleByHole() {
     startTransition(async () => {
       try {
+        setSaveFailed("");
         setMessage("Switching to hole-by-hole…");
-        await persistRound(
-          rows,
-          lockedAt,
-          startedAt,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          false,
-          false,
-          "DETAILED"
-        );
+        // Dedicated single-field endpoint: only flips scoringEntryMode, so it
+        // can't fail on unrelated round/entry data the way a full save can.
+        const response = await fetch(`/api/rounds/${round.id}/scoring-mode`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "DETAILED" })
+        });
+        const result = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not switch to hole-by-hole.");
+        }
         // Full reload so the editor re-mounts fresh in hole-by-hole mode.
         window.location.reload();
       } catch (error) {
@@ -4056,7 +4059,7 @@ export function RoundEditor({
                   )}
                   onClick={() => {
                     setGameMode("MATCH_QUOTA");
-                    setScoringEntryMode("QUICK");
+                    setScoringEntryMode("DETAILED");
                     setRows([]);
                     setSavedRows([]);
                     setSearch("");
@@ -4076,7 +4079,7 @@ export function RoundEditor({
                   )}
                   onClick={() => {
                     setGameMode("SKINS_ONLY");
-                    setScoringEntryMode("QUICK");
+                    setScoringEntryMode("DETAILED");
                     setRows([]);
                     setSavedRows([]);
                     setSearch("");
