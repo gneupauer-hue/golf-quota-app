@@ -2,8 +2,10 @@ import { FieldValue } from "firebase-admin/firestore";
 import { handleMembershipApproval } from "@/lib/firebase/membership-routes";
 import type { MembershipLike } from "@/lib/firebase/club-membership";
 import { getOwnerNotifyAddress, isEmailNotificationConfigured, sendEmail } from "@/lib/email/resend";
+import { isSmsConfigured, sendSms } from "@/lib/sms/twilio";
 
 const MEMBERS_URL = "https://golf-quota-app-three.vercel.app/account";
+const APP_URL = "https://golf-quota-app-three.vercel.app";
 
 export async function POST(request: Request) {
   const { getFirebaseAdminAuth, getFirebaseAdminDb } = await import("@/lib/firebase/admin");
@@ -37,6 +39,19 @@ export async function POST(request: Request) {
       });
     },
     onMembershipApproved: async ({ fullName, phoneNumber }) => {
+      // Text the newly-approved member (best-effort) so they know they're in.
+      if (isSmsConfigured() && phoneNumber) {
+        try {
+          await sendSms({
+            to: phoneNumber,
+            body: `You're approved for the Irem golf app — you can enter scores now. ${APP_URL}`
+          });
+        } catch {
+          // ignore SMS failures
+        }
+      }
+
+      // Email the owner a record of the approval.
       const to = getOwnerNotifyAddress();
       if (!isEmailNotificationConfigured() || !to) {
         return; // Email not set up — skip silently.

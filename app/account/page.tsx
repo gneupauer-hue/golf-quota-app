@@ -1,6 +1,7 @@
 import { FirebaseAccountPanel } from "@/components/firebase-account-panel";
 import { PhoneSignInCard } from "@/components/phone-signin-card";
 import { MemberApprovalsCard } from "@/components/member-approvals-card";
+import { GameAnnounceCard } from "@/components/game-announce-card";
 import { AppVersionBadge } from "@/components/app-version-badge";
 import { selectActivePrismaRoundSetup } from "@/lib/firebase/round-mirror-prisma";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,7 @@ export default async function AccountPage() {
     <div className="space-y-4">
       <PhoneSignInCard />
       <MemberApprovalsCard />
+      <GameAnnounceCard />
       <FirebaseAccountPanel activePrismaRoundId={activePrismaRoundId} />
       <AppVersionBadge />
     </div>
