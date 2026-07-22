@@ -1016,6 +1016,9 @@ export function RoundEditor({
     useState<QuotaAdjustmentPreview | null>(null);
   const [quotaAdjustmentError, setQuotaAdjustmentError] = useState("");
   const [canOverridePost, setCanOverridePost] = useState(false);
+  const [isEditingGroups, setIsEditingGroups] = useState(false);
+  const [groupDraft, setGroupDraft] = useState<RowState[] | null>(null);
+  const [groupEditError, setGroupEditError] = useState("");
   const [firestoreTestWriteDiagnostic, setFirestoreTestWriteDiagnostic] =
     useState<FirestoreTestWriteDiagnostic>({
       status: "idle",
@@ -1982,6 +1985,44 @@ export function RoundEditor({
       } catch (error) {
         setSaveFailed(error instanceof Error ? error.message : "Could not switch to hole-by-hole.");
         setMessage(error instanceof Error ? error.message : "Could not switch to hole-by-hole.");
+      }
+    });
+  }
+
+  function openGroupEditor() {
+    setGroupEditError("");
+    setGroupDraft(cloneRows(rows));
+    setIsEditingGroups(true);
+  }
+
+  function cancelGroupEditor() {
+    setGroupDraft(null);
+    setIsEditingGroups(false);
+    setGroupEditError("");
+  }
+
+  function setDraftTeam(playerId: string, team: TeamCode) {
+    setGroupDraft((current) =>
+      (current ?? []).map((row) => (row.playerId === playerId ? { ...row, team } : row))
+    );
+  }
+
+  function saveGroupEdits() {
+    if (!groupDraft) {
+      return;
+    }
+    startTransition(async () => {
+      try {
+        setGroupEditError("");
+        setMessage("Saving groups…");
+        // Reassigns teams on the started round. Holes are per-player and are
+        // re-sent unchanged, so no scores are lost.
+        await persistRound(groupDraft, lockedAt, startedAt);
+        window.location.reload();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Could not save groups.";
+        setGroupEditError(errorMessage);
+        setMessage(errorMessage);
       }
     });
   }
@@ -4869,6 +4910,79 @@ export function RoundEditor({
           </button>
           {toast === "Copied to clipboard" ? (
             <p className="rounded-2xl bg-[#FBF7F0] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
+          ) : null}
+        </SectionCard>
+      ) : null}
+
+      {(isLocked || startedAt) && !isSkinsOnly ? (
+        <SectionCard className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Groups</p>
+              <h3 className="mt-1 text-lg font-semibold text-ink">Teams &amp; groups</h3>
+              <p className="mt-1 text-sm text-ink/65">
+                Someone show up late or swap in? Move players between teams — scores already entered are kept.
+              </p>
+            </div>
+            {!isEditingGroups ? (
+              <button
+                type="button"
+                className="shrink-0 rounded-full border border-pine/30 bg-canvas px-4 py-2 text-sm font-semibold text-pine"
+                onClick={openGroupEditor}
+              >
+                Edit Groups
+              </button>
+            ) : null}
+          </div>
+
+          {isEditingGroups && groupDraft ? (
+            <div className="space-y-2.5">
+              {groupDraft.map((row) => (
+                <div key={row.playerId} className="rounded-2xl border border-mist bg-card px-3 py-2.5">
+                  <p className="mb-2 text-sm font-semibold text-ink">
+                    {roundPlayerNamesById.get(row.playerId) ?? "Player"}
+                  </p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {teamOptions.slice(0, round.teamCount ?? teamOptions.length).map((team) => (
+                      <button
+                        key={team}
+                        type="button"
+                        className={classNames(
+                          "min-h-10 rounded-xl border text-sm font-semibold",
+                          row.team === team
+                            ? "border-pine bg-pine text-white"
+                            : "border-ink/10 bg-canvas text-ink"
+                        )}
+                        onClick={() => setDraftTeam(row.playerId, team)}
+                      >
+                        {`Team ${team}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {groupEditError ? (
+                <p className="rounded-2xl bg-[#FCE5E2] px-4 py-2 text-sm font-semibold text-danger">{groupEditError}</p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="min-h-12 rounded-2xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink disabled:opacity-45"
+                  onClick={cancelGroupEditor}
+                  disabled={isPending}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="club-btn-primary min-h-12 disabled:opacity-45"
+                  onClick={saveGroupEdits}
+                  disabled={isPending}
+                >
+                  {isPending ? "Saving…" : "Save Groups"}
+                </button>
+              </div>
+            </div>
           ) : null}
         </SectionCard>
       ) : null}
