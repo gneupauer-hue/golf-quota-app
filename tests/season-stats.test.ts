@@ -115,6 +115,31 @@ test("season stats derive birdies/eagles/aces from hole points for hole-by-hole 
   assert.equal(player?.hios, 0);
 });
 
+test("season stats use hole points, not a stale quick CSV, once a round has hole scores", () => {
+  const holeScores = Array<number | null>(18).fill(2);
+  holeScores[0] = 4; // birdie
+  holeScores[1] = 6; // eagle
+
+  const data = stats([
+    round(
+      [
+        // Round started in quick mode (stale CSV) then switched to hole-by-hole.
+        entry(1, {
+          scoringEntryMode: "DETAILED",
+          holeScores,
+          birdieHolesCsv: "5:birdie,9:birdie,14:birdie"
+        }),
+        entry(2)
+      ],
+      { scoringEntryMode: "DETAILED" }
+    )
+  ]);
+
+  const player = data.players.find((row) => row.playerId === "p1");
+  assert.equal(player?.birdies, 1, "counts the 1 birdie from holes, not 3 from the stale CSV");
+  assert.equal(player?.eagles, 1);
+});
+
 test("season stats record a per-round breakdown for each player", () => {
   const holeScores = Array<number | null>(18).fill(2);
   holeScores[0] = 4; // birdie in round 1

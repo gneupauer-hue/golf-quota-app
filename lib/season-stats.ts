@@ -23,8 +23,14 @@ export function countGoodSkinsForEntry(
   birdieHolesCsv: string | null | undefined,
   holeScores: Array<number | null> | null | undefined
 ): { birdies: number; eagles: number; albatrosses: number; hios: number } {
-  const stored = parseGoodSkinEntriesInput(birdieHolesCsv ?? "");
-  if (stored.length > 0) {
+  // If the round has per-hole data it is the authoritative record — derive from
+  // the hole points and ignore any birdieHolesCsv (which can be stale, e.g. a
+  // round entered in quick mode and later switched to hole-by-hole). Only fall
+  // back to the manual CSV when there are no hole scores (true quick entry).
+  const hasHoleData = (holeScores ?? []).some((score) => score != null);
+
+  if (!hasHoleData) {
+    const stored = parseGoodSkinEntriesInput(birdieHolesCsv ?? "");
     let birdies = 0;
     let eagles = 0;
     let hios = 0;

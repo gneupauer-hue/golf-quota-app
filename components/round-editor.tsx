@@ -3871,7 +3871,9 @@ export function RoundEditor({
         try {
           setSaving("Saving hole 18...");
           await persistScoreEntries(scopedStateRows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
-          setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+          // Only mark the saved player(s) as saved — don't clobber other players'
+          // mirror baseline (matches the team-save path).
+          setSavedRows((current) => mergeSavedRowState(current, scopedStateRows));
           setSkinsEntryOpen(false);
           setToast("Hole 18 saved");
           setMessage("Hole 18 saved. Submit each player's back nine from the round status list.");
@@ -3892,7 +3894,7 @@ export function RoundEditor({
       try {
         setSaving(`Saving hole ${holeNumber}...`);
         await persistScoreEntries(scopedStateRows, { holeIndexes: [holeIndex], previousRows: previousRowsForSave });
-        setSavedRows(rows.map((row) => ({ ...row, holeScores: [...row.holeScores] })));
+        setSavedRows((current) => mergeSavedRowState(current, scopedStateRows));
         setSkinsActiveHole(nextHole);
         setToast("Hole saved");
         setMessage("");
@@ -3926,7 +3928,10 @@ export function RoundEditor({
       return;
     }
 
-    if (invalidSequence) {
+    // Only this group's sequence matters — a gap in a different group (another
+    // phone) must not block a valid group from saving.
+    const groupInvalidSequence = groupStateRows.some((row) => !hasSequentialHoleEntry(row.holeScores));
+    if (groupInvalidSequence) {
       setMessage("Finish holes in order before saving.");
       setSaveFailed("Save failed. Finish holes in order first.");
       return;
