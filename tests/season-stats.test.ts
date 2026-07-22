@@ -99,7 +99,7 @@ test("season stats derive birdies/eagles/aces from hole points for hole-by-hole 
   holeScores[0] = 4; // birdie
   holeScores[3] = 4; // birdie
   holeScores[8] = 6; // eagle
-  holeScores[13] = 8; // ace
+  holeScores[13] = 8; // albatross (double eagle)
 
   const data = stats([
     round(
@@ -111,7 +111,8 @@ test("season stats derive birdies/eagles/aces from hole points for hole-by-hole 
   const player = data.players.find((row) => row.playerId === "p1");
   assert.equal(player?.birdies, 2, "hole-by-hole birdies must count in season totals");
   assert.equal(player?.eagles, 1);
-  assert.equal(player?.hios, 1);
+  assert.equal(player?.albatrosses, 1, "an 8 counts as an albatross, not a hole-in-one");
+  assert.equal(player?.hios, 0);
 });
 
 test("season stats count rounds played per player", () => {

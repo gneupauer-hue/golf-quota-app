@@ -98,8 +98,8 @@ function validateOperationVersion(value: number | undefined) {
 }
 
 function validateOperationHoleScore(value: number | null) {
-  if (value !== null && ![-1, 0, 1, 2, 4, 6].includes(value)) {
-    throw new Error("Hole operation values must be one of -1, 0, 1, 2, 4, or 6.");
+  if (value !== null && ![-1, 0, 1, 2, 4, 6, 8].includes(value)) {
+    throw new Error("Hole operation values must be one of -1, 0, 1, 2, 4, 6, or 8.");
   }
 }
 

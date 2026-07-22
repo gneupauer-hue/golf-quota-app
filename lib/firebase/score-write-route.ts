@@ -86,7 +86,7 @@ export type ScoreWriteRouteAdapters = {
   createOperationId?: () => string;
 };
 
-const VALID_HOLE_SCORES = new Set([-1, 0, 1, 2, 4, 6]);
+const VALID_HOLE_SCORES = new Set([-1, 0, 1, 2, 4, 6, 8]);
 const VALID_SKIN_TYPES = new Set(["birdie", "eagle", "ace"]);
 export const FIREBASE_REGULAR_ROUND_SCORE_MIRROR_FLAG = "FIREBASE_REGULAR_ROUND_SCORE_MIRROR_ENABLED";
 
@@ -153,7 +153,7 @@ function validateQuickScore(value: unknown, label: string) {
 
 function validateHoleScore(value: unknown) {
   if (value !== null && (typeof value !== "number" || !VALID_HOLE_SCORES.has(value))) {
-    throw Object.assign(new Error("Hole score must be one of -1, 0, 1, 2, 4, 6, or null."), {
+    throw Object.assign(new Error("Hole score must be one of -1, 0, 1, 2, 4, 6, 8, or null."), {
       status: 400
     });
   }

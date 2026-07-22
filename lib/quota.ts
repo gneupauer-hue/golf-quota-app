@@ -6,7 +6,7 @@ export type ScoringRule = {
 export type RoundMode = "MATCH_QUOTA" | "SKINS_ONLY";
 export type ScoringEntryMode = "DETAILED" | "QUICK";
 
-export const holeScoreValues = [-1, 0, 1, 2, 4, 6] as const;
+export const holeScoreValues = [-1, 0, 1, 2, 4, 6, 8] as const;
 export const teamOptions = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"] as const;
 export const holeFieldNames = [
   "hole1",

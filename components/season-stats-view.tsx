@@ -122,6 +122,11 @@ export function SeasonStatsView({ data }: { data: SeasonStatsData }) {
           value={(row) => `${row.eagles}`}
         />
         <LeaderboardSection
+          title="Albatrosses"
+          rows={data.leaderboards.albatrosses}
+          value={(row) => `${row.albatrosses}`}
+        />
+        <LeaderboardSection
           title="Hole-in-Ones"
           rows={data.leaderboards.hios}
           value={(row) => `${row.hios}`}

@@ -3,14 +3,17 @@
 import type { ChangeEvent, MouseEvent } from "react";
 import { classNames } from "@/lib/utils";
 
-// Order requested by the owner: 6, 4, 2, 1, 0, -1.
+// Golf term first (how players think), points shown small, ordered best to worst
+// like a scorecard. Albatross (8) is a double eagle — a 2 on a par 5 or a 1 on a
+// par 4 (a par-4 hole-in-one).
 const scoreOptions = [
-  { value: 6, label: "6 · Eagle" },
-  { value: 4, label: "4 · Birdie" },
-  { value: 2, label: "2 · Par" },
-  { value: 1, label: "1 · Bogey" },
-  { value: 0, label: "0 · Double+" },
-  { value: -1, label: "-1 · Triple+" }
+  { value: 8, label: "Albatross · 8" },
+  { value: 6, label: "Eagle · 6" },
+  { value: 4, label: "Birdie · 4" },
+  { value: 2, label: "Par · 2" },
+  { value: 1, label: "Bogey · 1" },
+  { value: 0, label: "Double bogey · 0" },
+  { value: -1, label: "Triple+ · -1" }
 ] as const;
 
 // A native <select> is deliberate: unlike tap buttons, a native picker can't be

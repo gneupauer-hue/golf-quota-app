@@ -351,7 +351,7 @@ function validateHoleScores(holes: Array<number | null>) {
 
   for (const value of holes) {
     if (value !== null && !holeScoreValues.includes(value as (typeof holeScoreValues)[number])) {
-      throw new Error("Hole values must be one of -1, 0, 1, 2, 4, or 6.");
+      throw new Error("Hole values must be one of -1, 0, 1, 2, 4, 6, or 8.");
     }
   }
 

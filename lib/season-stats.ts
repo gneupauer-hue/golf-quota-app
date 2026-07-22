@@ -22,7 +22,7 @@ export const SEASON_STATS_MIN_RATE_ROUNDS = 3;
 export function countGoodSkinsForEntry(
   birdieHolesCsv: string | null | undefined,
   holeScores: Array<number | null> | null | undefined
-): { birdies: number; eagles: number; hios: number } {
+): { birdies: number; eagles: number; albatrosses: number; hios: number } {
   const stored = parseGoodSkinEntriesInput(birdieHolesCsv ?? "");
   if (stored.length > 0) {
     let birdies = 0;
@@ -33,18 +33,21 @@ export function countGoodSkinsForEntry(
       else if (skin.type === "ace") hios += 1;
       else birdies += 1;
     }
-    return { birdies, eagles, hios };
+    // Quick-entry good skins are birdie/eagle/ace only — no albatross type.
+    return { birdies, eagles, albatrosses: 0, hios };
   }
 
+  // Hole-by-hole points: 4 = birdie, 6 = eagle, 8 = albatross (double eagle).
+  // A hole-in-one isn't derivable from points alone, so aces aren't counted here.
   let birdies = 0;
   let eagles = 0;
-  let hios = 0;
+  let albatrosses = 0;
   for (const score of holeScores ?? []) {
     if (score === 4) birdies += 1;
     else if (score === 6) eagles += 1;
-    else if (score === 8) hios += 1;
+    else if (score === 8) albatrosses += 1;
   }
-  return { birdies, eagles, hios };
+  return { birdies, eagles, albatrosses, hios: 0 };
 }
 
 export type SeasonStatsEntryInput = {
@@ -80,6 +83,7 @@ export type SeasonStatsPlayerRow = {
   birdies: number;
   birdiesPerRound: number;
   eagles: number;
+  albatrosses: number;
   hios: number;
   paidSkins: number;
   paidSkinsPerRound: number;
@@ -107,6 +111,7 @@ export type SeasonStatsData = {
     moneyWon: SeasonStatsPlayerRow[];
     birdies: SeasonStatsPlayerRow[];
     eagles: SeasonStatsPlayerRow[];
+    albatrosses: SeasonStatsPlayerRow[];
     hios: SeasonStatsPlayerRow[];
     paidSkins: SeasonStatsPlayerRow[];
     individualQuota: SeasonStatsPlayerRow[];
@@ -140,6 +145,7 @@ function createEmptyPlayer(playerId: string, playerName: string): SeasonStatsPla
     birdies: 0,
     birdiesPerRound: 0,
     eagles: 0,
+    albatrosses: 0,
     hios: 0,
     paidSkins: 0,
     paidSkinsPerRound: 0,
@@ -286,6 +292,7 @@ export function calculateSeasonStatsFromRounds(
 
       stats.birdies += goodSkins.birdies;
       stats.eagles += goodSkins.eagles;
+      stats.albatrosses += goodSkins.albatrosses;
       stats.hios += goodSkins.hios;
     }
   }
@@ -312,6 +319,7 @@ export function calculateSeasonStatsFromRounds(
   const moneyWon = sortLeaderboard(players, (row) => row.moneyWon);
   const birdies = sortLeaderboard(players, (row) => row.birdies);
   const eagles = sortLeaderboard(players, (row) => row.eagles);
+  const albatrosses = sortLeaderboard(players, (row) => row.albatrosses);
   const hios = sortLeaderboard(players, (row) => row.hios);
   const paidSkins = sortLeaderboard(players, (row) => row.paidSkins);
   const individualQuota = sortLeaderboard(players, (row) => row.indyCashes);
@@ -339,6 +347,7 @@ export function calculateSeasonStatsFromRounds(
       moneyWon,
       birdies,
       eagles,
+      albatrosses,
       hios,
       paidSkins,
       individualQuota,

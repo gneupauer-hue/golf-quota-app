@@ -242,7 +242,7 @@ export async function PUT(
         )
       ) {
         return NextResponse.json(
-          { error: "Hole values must be one of -1, 0, 1, 2, 4, or 6." },
+          { error: "Hole values must be one of -1, 0, 1, 2, 4, 6, or 8." },
           { status: 400 }
         );
       }

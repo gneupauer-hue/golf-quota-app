@@ -43,7 +43,7 @@ type SubscribeToScoreMirrorCollectionOptions = {
 };
 
 const SCORE_HOLE_KEYS = Array.from({ length: 18 }, (_, index) => String(index + 1)) as FirebaseScoreHoleNumber[];
-const VALID_HOLE_VALUES = new Set([-1, 0, 1, 2, 4, 6]);
+const VALID_HOLE_VALUES = new Set([-1, 0, 1, 2, 4, 6, 8]);
 const VALID_ROUND_MODES = new Set<FirebaseRoundMirrorMode>(["MATCH_QUOTA", "SKINS_ONLY"]);
 const VALID_SCORING_ENTRY_MODES = new Set<FirebaseRoundScoringEntryMode>(["QUICK", "DETAILED"]);
 const VALID_SKIN_TYPES = new Set(["birdie", "eagle", "ace"]);
