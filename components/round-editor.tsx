@@ -5350,6 +5350,26 @@ function TeamScoreEntry({
   const isFinalHole = activeHole === 18;
   const lastSavedLabel = formatTimeLabel(lastSavedAt);
   const lastRefreshedLabel = formatTimeLabel(lastRefreshedAt);
+
+  // Auto-advance once every player's score for the hole is in — save and jump to
+  // the next hole with no extra tap. Skips holes 9 and 18 (those trigger the
+  // front/back-nine submit confirmations, which must stay a deliberate tap), and
+  // only fires into an empty next hole so reviewing an earlier hole never yanks
+  // you forward.
+  const autoAdvancedHoleRef = useRef<number | null>(null);
+  const canAutoAdvanceHole = activeHole !== 9 && activeHole < 18;
+  const nextHoleIsEmpty =
+    canAutoAdvanceHole && rows.length > 0 && rows.every((row) => row.holeScores[activeHole] == null);
+  useEffect(() => {
+    if (canSaveHole && !isPending && nextHoleIsEmpty && autoAdvancedHoleRef.current !== activeHole) {
+      autoAdvancedHoleRef.current = activeHole;
+      onSaveHole(team);
+    }
+    if (!canSaveHole) {
+      autoAdvancedHoleRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSaveHole, isPending, nextHoleIsEmpty, activeHole, team]);
   const holeLocked = currentHoleLockState !== "none" && !isScoreEditUnlocked;
   const teamFrontCompletedHoles = countCompletedSegmentHoles(rows, 0, 9);
   const teamBackCompletedHoles = countCompletedSegmentHoles(rows, 9, 18);
@@ -6029,6 +6049,25 @@ function SkinsOnlyScoreEntry({
   const activeHoleIndex = activeHole - 1;
   const isFinalHole = activeHole === 18;
   const lastRefreshedLabel = formatTimeLabel(lastRefreshedAt);
+
+  // Auto-advance: when every score for the active hole is in, save and move to
+  // the next hole automatically — but ONLY when the next hole is still empty, so
+  // going back to review/fix an earlier hole never yanks you forward. The final
+  // hole is left as a manual save (it closes the entry screen).
+  const autoAdvancedHoleRef = useRef<number | null>(null);
+  const nextHoleIsEmpty =
+    activeHole < 18 && rows.length > 0 && rows.every((row) => row.holeScores[activeHole] == null);
+  useEffect(() => {
+    if (canSaveHole && !isPending && nextHoleIsEmpty && autoAdvancedHoleRef.current !== activeHole) {
+      autoAdvancedHoleRef.current = activeHole;
+      onSaveHole();
+    }
+    if (!canSaveHole) {
+      autoAdvancedHoleRef.current = null;
+    }
+    // onSaveHole is stable enough for this guard-driven effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSaveHole, isPending, nextHoleIsEmpty, activeHole]);
 
     return (
       <div className="space-y-3 pb-28">
