@@ -11,7 +11,7 @@ import { DeleteTestRoundButton } from "@/components/delete-test-round-button";
 import type { SideMatchRecord } from "@/lib/side-matches";
 import { PageTitle } from "@/components/page-title";
 import { RoundUtilityActions } from "@/components/round-utility-actions";
-import { ScoreButtonGroup } from "@/components/score-button-group";
+import { ScoreDropdown } from "@/components/score-dropdown";
 import { ScoreMirrorListenerPilot } from "@/components/score-mirror-listener-pilot";
 import { SectionCard } from "@/components/section-card";
 import {
@@ -3442,6 +3442,9 @@ export function RoundEditor({
         const errorMessage = error instanceof Error ? error.message : "Could not archive round.";
         setMessage(errorMessage);
         setSaveFailed(errorMessage);
+        // Also surface it INSIDE the quota modal — otherwise a failed post looks
+        // like "nothing happened" because message/saveFailed render behind it.
+        setQuotaAdjustmentError(errorMessage);
       }
     });
   }
@@ -5341,8 +5344,7 @@ function TeamScoreEntry({
                   {currentScore ?? "-"}
                 </span>
               </div>
-              <ScoreButtonGroup
-                compact
+              <ScoreDropdown
                 value={row.holeScores[activeHoleIndex]}
                 onSelect={(value) => onUpdateHole(row.playerId, activeHoleIndex, value)}
               />
@@ -5910,7 +5912,7 @@ function SkinsOnlyScoreEntry({
                     {row.holeScores[activeHoleIndex] ?? "-"}
                   </span>
                 </div>
-                <ScoreButtonGroup compact value={row.holeScores[activeHoleIndex]} onSelect={(value) => onUpdateHole(row.playerId, activeHoleIndex, value)} />
+                <ScoreDropdown value={row.holeScores[activeHoleIndex]} onSelect={(value) => onUpdateHole(row.playerId, activeHoleIndex, value)} />
               </div>
             );
           })}
