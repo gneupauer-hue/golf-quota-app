@@ -1906,7 +1906,8 @@ export function RoundEditor({
     nextRoundDate = roundDate,
     nextNotes = round.notes,
       forceComplete = false,
-      mergeEntries = false
+      mergeEntries = false,
+      nextScoringEntryMode = scoringEntryMode
     ) {
       const resolvedTeamCount =
         gameMode === "SKINS_ONLY"
@@ -1919,7 +1920,7 @@ export function RoundEditor({
         roundName: nextRoundName,
         roundDate: nextRoundDate,
         roundMode: gameMode,
-        scoringEntryMode,
+        scoringEntryMode: nextScoringEntryMode,
         isTestRound,
         notes: nextNotes,
         teamCount: resolvedTeamCount,
@@ -1952,6 +1953,21 @@ export function RoundEditor({
       throw new Error(result.error ?? "Could not save round.");
     }
     return result;
+  }
+
+  function switchToHoleByHole() {
+    startTransition(async () => {
+      try {
+        setMessage("Switching to hole-by-hole…");
+        setScoringEntryMode("DETAILED");
+        await persistRound(rows, lockedAt, startedAt, undefined, undefined, undefined, undefined, false, false, "DETAILED");
+        router.refresh();
+        setMessage("Now scoring hole by hole — enter hole 1 for all players, then Save.");
+      } catch (error) {
+        setScoringEntryMode("QUICK");
+        setMessage(error instanceof Error ? error.message : "Could not switch to hole-by-hole.");
+      }
+    });
   }
 
   function buildScoreEntryPayload(
@@ -4728,6 +4744,22 @@ export function RoundEditor({
         </>
       ) : isQuickEntryMode ? (
         <>
+        <SectionCard className="space-y-2 border border-pine/20 bg-[#FFF9D8]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Scoring</p>
+            <p className="mt-1 text-sm text-ink/75">
+              This round is on quick (front/back) entry. Switch to hole-by-hole to enter each hole one at a time (needed for side matches).
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={switchToHoleByHole}
+            className="min-h-12 w-full rounded-2xl bg-pine px-4 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {isPending ? "Switching…" : "Switch to Hole-by-Hole Entry"}
+          </button>
+        </SectionCard>
         {groupChatText ? (
           <SectionCard className="space-y-3">
             <div>
