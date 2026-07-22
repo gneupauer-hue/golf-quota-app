@@ -11,9 +11,14 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const preview = await prisma.$transaction(async (tx) => {
-      return getRoundCompletionPreview(tx, id);
-    });
+    const preview = await prisma.$transaction(
+      async (tx) => {
+        return getRoundCompletionPreview(tx, id);
+      },
+      // The quota audit reads every player's full season history; the default
+      // 5s interactive-transaction timeout is now too tight as the season grows.
+      { timeout: 30000, maxWait: 10000 }
+    );
 
     return NextResponse.json({
       ok: true,
@@ -45,9 +50,12 @@ export async function POST(
     // bypassable — missing/incomplete scores and structural errors still block.
     const override = body?.override === true;
 
-    const preflight = await prisma.$transaction(async (tx) => {
-      return validateRoundPostingPreflight(tx, id);
-    });
+    const preflight = await prisma.$transaction(
+      async (tx) => {
+        return validateRoundPostingPreflight(tx, id);
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
 
     const blockingErrors = override
       ? preflight.errors.filter((issue) => issue.code !== "QUOTA_PREVIEW_MISMATCH")
@@ -80,18 +88,22 @@ export async function POST(
       backupSnapshot: preflight.backupSnapshot
     });
 
-    const finalizedRound = await prisma.$transaction(async (tx) => {
-      await finalizeRound(tx, id);
+    const finalizedRound = await prisma.$transaction(
+      async (tx) => {
+        await finalizeRound(tx, id);
 
-      return tx.round.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          completedAt: true,
-          canceledAt: true
-        }
-      });
-    });
+        return tx.round.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            completedAt: true,
+            canceledAt: true
+          }
+        });
+      },
+      // finalizeRound also recomputes historical quota state — give it room.
+      { timeout: 30000, maxWait: 10000 }
+    );
 
     if (!finalizedRound || !finalizedRound.completedAt || finalizedRound.canceledAt) {
       throw new Error("Round finalization did not complete successfully.");
