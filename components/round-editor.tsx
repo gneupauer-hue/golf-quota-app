@@ -1959,12 +1959,22 @@ export function RoundEditor({
     startTransition(async () => {
       try {
         setMessage("Switching to hole-by-hole…");
-        setScoringEntryMode("DETAILED");
-        await persistRound(rows, lockedAt, startedAt, undefined, undefined, undefined, undefined, false, false, "DETAILED");
-        router.refresh();
-        setMessage("Now scoring hole by hole — enter hole 1 for all players, then Save.");
+        await persistRound(
+          rows,
+          lockedAt,
+          startedAt,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          false,
+          false,
+          "DETAILED"
+        );
+        // Full reload so the editor re-mounts fresh in hole-by-hole mode.
+        window.location.reload();
       } catch (error) {
-        setScoringEntryMode("QUICK");
+        setSaveFailed(error instanceof Error ? error.message : "Could not switch to hole-by-hole.");
         setMessage(error instanceof Error ? error.message : "Could not switch to hole-by-hole.");
       }
     });
