@@ -125,7 +125,7 @@ function toIsoStringOrNull(value: Date | string | null | undefined, label: strin
 
 function validateHoleScore(value: number | null, label: string) {
   if (value !== null && !VALID_HOLE_SCORE_VALUES.has(value)) {
-    throw new Error(`${label} must be one of -1, 0, 1, 2, 4, or 6.`);
+    throw new Error(`${label} must be one of -1, 0, 1, 2, 4, 6, or 8.`);
   }
 }
 

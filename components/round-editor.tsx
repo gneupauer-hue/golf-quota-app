@@ -2018,9 +2018,23 @@ export function RoundEditor({
       try {
         setGroupEditError("");
         setMessage("Saving groups…");
-        // Reassigns teams on the started round. Holes are per-player and are
-        // re-sent unchanged, so no scores are lost.
-        await persistRound(groupDraft, lockedAt, startedAt);
+        // Team-only update: never touches hole scores, so it can't overwrite
+        // scores another phone is entering while the groups editor is open.
+        const response = await fetch(`/api/rounds/${round.id}/teams`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teams: groupDraft.map((row) => ({
+              playerId: row.playerId,
+              team: row.team,
+              groupNumber: row.groupNumber
+            }))
+          })
+        });
+        const result = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not save groups.");
+        }
         window.location.reload();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Could not save groups.";
