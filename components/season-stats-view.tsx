@@ -40,16 +40,44 @@ function LeaderCard({
   );
 }
 
+type BreakdownItem = { label: string; value: string };
+
+function roundLabel(contribution: SeasonStatsPlayerRow["roundContributions"][number]) {
+  if (contribution.roundName?.trim()) {
+    return contribution.roundName;
+  }
+  const date = contribution.roundDate instanceof Date ? contribution.roundDate : new Date(contribution.roundDate);
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// Build the per-round breakdown for one stat: valueFor returns the displayed
+// value for a round, or null to omit that round.
+function roundBreakdown(
+  row: SeasonStatsPlayerRow,
+  valueFor: (contribution: SeasonStatsPlayerRow["roundContributions"][number]) => string | null
+): BreakdownItem[] {
+  return row.roundContributions
+    .slice()
+    .sort((left, right) => new Date(left.roundDate).getTime() - new Date(right.roundDate).getTime())
+    .map((contribution) => {
+      const value = valueFor(contribution);
+      return value == null ? null : { label: roundLabel(contribution), value };
+    })
+    .filter((item): item is BreakdownItem => item !== null);
+}
+
 function LeaderboardSection({
   title,
   rows,
   value,
-  note
+  note,
+  breakdown
 }: {
   title: string;
   rows: SeasonStatsPlayerRow[];
   value: (row: SeasonStatsPlayerRow) => string;
   note?: string;
+  breakdown?: (row: SeasonStatsPlayerRow) => BreakdownItem[];
 }) {
   return (
     <SectionCard className="space-y-2 p-3">
@@ -59,16 +87,42 @@ function LeaderboardSection({
       </div>
       {rows.length ? (
         <div className="divide-y divide-maroon/10">
-          {rows.map((row, index) => (
-            <div
-              key={row.playerId}
-              className="grid grid-cols-[2rem_1fr_auto] items-center gap-2 py-2 text-sm"
-            >
-              <span className="font-bold text-maroon">{index + 1}.</span>
-              <span className="min-w-0 truncate font-semibold text-ink">{row.playerName}</span>
-              <span className="text-right font-bold text-ink">{value(row)}</span>
-            </div>
-          ))}
+          {rows.map((row, index) => {
+            const items = breakdown ? breakdown(row) : [];
+            if (items.length) {
+              return (
+                <details key={row.playerId} className="group py-1">
+                  <summary className="grid cursor-pointer list-none grid-cols-[2rem_1fr_auto_1rem] items-center gap-2 py-1 text-sm [&::-webkit-details-marker]:hidden">
+                    <span className="font-bold text-maroon">{index + 1}.</span>
+                    <span className="min-w-0 truncate font-semibold text-ink">{row.playerName}</span>
+                    <span className="text-right font-bold text-ink">{value(row)}</span>
+                    <span className="text-right text-xs text-ink/40 transition-transform group-open:rotate-90" aria-hidden="true">
+                      ▸
+                    </span>
+                  </summary>
+                  <div className="mb-1 mt-1 space-y-1 rounded-xl bg-canvas px-3 py-2">
+                    {items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="min-w-0 truncate text-ink/70">{item.label}</span>
+                        <span className="font-semibold text-ink/85">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            }
+            return (
+              <div
+                key={row.playerId}
+                className="grid grid-cols-[2rem_1fr_auto_1rem] items-center gap-2 py-2 text-sm"
+              >
+                <span className="font-bold text-maroon">{index + 1}.</span>
+                <span className="min-w-0 truncate font-semibold text-ink">{row.playerName}</span>
+                <span className="text-right font-bold text-ink">{value(row)}</span>
+                <span aria-hidden="true" />
+              </div>
+            );
+          })}
         </div>
       ) : (
         <p className="py-2 text-sm font-medium text-ink/65">No season stats yet.</p>
@@ -110,41 +164,51 @@ export function SeasonStatsView({ data }: { data: SeasonStatsData }) {
           title="Money Won"
           rows={data.leaderboards.moneyWon}
           value={(row) => formatMoney(row.moneyWon)}
+          breakdown={(row) => roundBreakdown(row, (c) => (c.moneyWon > 0 ? formatMoney(c.moneyWon) : null))}
         />
         <LeaderboardSection
           title="Birdies"
           rows={data.leaderboards.birdies}
           value={(row) => `${row.birdies}`}
+          breakdown={(row) => roundBreakdown(row, (c) => (c.birdies > 0 ? `${c.birdies}` : null))}
         />
         <LeaderboardSection
           title="Eagles"
           rows={data.leaderboards.eagles}
           value={(row) => `${row.eagles}`}
+          breakdown={(row) => roundBreakdown(row, (c) => (c.eagles > 0 ? `${c.eagles}` : null))}
         />
         <LeaderboardSection
           title="Albatrosses"
           rows={data.leaderboards.albatrosses}
           value={(row) => `${row.albatrosses}`}
+          breakdown={(row) => roundBreakdown(row, (c) => (c.albatrosses > 0 ? `${c.albatrosses}` : null))}
         />
         <LeaderboardSection
           title="Hole-in-Ones"
           rows={data.leaderboards.hios}
           value={(row) => `${row.hios}`}
+          breakdown={(row) => roundBreakdown(row, (c) => (c.hios > 0 ? `${c.hios}` : null))}
         />
         <LeaderboardSection
           title="Paid Skins"
           rows={data.leaderboards.paidSkins}
           value={(row) => `${row.paidSkins}`}
+          breakdown={(row) => roundBreakdown(row, (c) => (c.paidSkins > 0 ? `${c.paidSkins}` : null))}
         />
         <LeaderboardSection
           title="Individual Quota"
           rows={data.leaderboards.individualQuota}
           value={(row) => `${row.indyWins} wins / ${row.indyCashes} cashes`}
+          breakdown={(row) =>
+            roundBreakdown(row, (c) => (c.indyCashes > 0 ? (c.indyWins > 0 ? "Win" : "Cash") : null))
+          }
         />
         <LeaderboardSection
           title="Team Events"
           rows={data.leaderboards.teamEvents}
           value={(row) => `${row.teamEvents}`}
+          breakdown={(row) => roundBreakdown(row, (c) => (c.teamEvents > 0 ? `${c.teamEvents}` : null))}
         />
       </div>
 
@@ -184,6 +248,7 @@ export function SeasonStatsView({ data }: { data: SeasonStatsData }) {
           title="Rounds Played"
           rows={data.leaderboards.roundsPlayed}
           value={(row) => `${row.roundsPlayed}`}
+          breakdown={(row) => roundBreakdown(row, () => "Played")}
         />
       </div>
     </div>

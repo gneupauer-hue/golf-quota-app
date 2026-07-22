@@ -93,6 +93,22 @@ export type SeasonStatsPlayerRow = {
   teamEvents: number;
   teamCashRounds: number;
   teamCashRate: number;
+  roundContributions: SeasonStatsRoundContribution[];
+};
+
+export type SeasonStatsRoundContribution = {
+  roundId: string;
+  roundName: string;
+  roundDate: Date;
+  birdies: number;
+  eagles: number;
+  albatrosses: number;
+  hios: number;
+  paidSkins: number;
+  moneyWon: number;
+  indyCashes: number;
+  indyWins: number;
+  teamEvents: number;
 };
 
 export type SeasonStatsData = {
@@ -154,7 +170,8 @@ function createEmptyPlayer(playerId: string, playerName: string): SeasonStatsPla
     indyCashRate: 0,
     teamEvents: 0,
     teamCashRounds: 0,
-    teamCashRate: 0
+    teamCashRate: 0,
+    roundContributions: []
   };
 }
 
@@ -294,6 +311,21 @@ export function calculateSeasonStatsFromRounds(
       stats.eagles += goodSkins.eagles;
       stats.albatrosses += goodSkins.albatrosses;
       stats.hios += goodSkins.hios;
+
+      stats.roundContributions.push({
+        roundId: round.id,
+        roundName: round.roundName,
+        roundDate: round.roundDate,
+        birdies: goodSkins.birdies,
+        eagles: goodSkins.eagles,
+        albatrosses: goodSkins.albatrosses,
+        hios: goodSkins.hios,
+        paidSkins: paidSkinsByPlayer.get(row.playerId) ?? 0,
+        moneyWon: payout?.projectedTotal ?? 0,
+        indyCashes: Number((indyPayout?.payout ?? 0) > 0),
+        indyWins: Number((indyPayout?.payout ?? 0) > 0 && indyPayout?.rank === 1),
+        teamEvents: teamEventCount
+      });
     }
   }
 

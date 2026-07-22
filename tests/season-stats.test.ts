@@ -115,6 +115,23 @@ test("season stats derive birdies/eagles/aces from hole points for hole-by-hole 
   assert.equal(player?.hios, 0);
 });
 
+test("season stats record a per-round breakdown for each player", () => {
+  const holeScores = Array<number | null>(18).fill(2);
+  holeScores[0] = 4; // birdie in round 1
+
+  const data = stats([
+    datedRound(1, [entry(1, { scoringEntryMode: "DETAILED", holeScores }), entry(2)], {
+      scoringEntryMode: "DETAILED"
+    }),
+    datedRound(2, [entry(1)])
+  ]);
+
+  const player = data.players.find((row) => row.playerId === "p1");
+  assert.equal(player?.roundContributions.length, 2, "one contribution row per round played");
+  const round1 = player?.roundContributions.find((c) => c.roundId === "round-1");
+  assert.equal(round1?.birdies, 1, "round 1 birdie is attributed to that round");
+});
+
 test("season stats count rounds played per player", () => {
   const data = stats([
     datedRound(1, [entry(1), entry(2)]),
