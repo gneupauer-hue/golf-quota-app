@@ -4773,25 +4773,6 @@ export function RoundEditor({
             {isPending ? "Switching…" : "Switch to Hole-by-Hole Entry"}
           </button>
         </SectionCard>
-        {groupChatText ? (
-          <SectionCard className="space-y-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Teams</p>
-              <h3 className="mt-1 text-lg font-semibold text-ink">Group chat</h3>
-              <p className="mt-1 text-sm text-ink/65">Forgot to share the teams before starting? Copy them here.</p>
-            </div>
-            <button
-              type="button"
-              className="min-h-12 w-full rounded-full bg-pine px-4 text-sm font-semibold text-white"
-              onClick={copyTeamsForGroupChat}
-            >
-              Copy Teams for Group Chat
-            </button>
-            {toast === "Copied to clipboard" ? (
-              <p className="rounded-2xl bg-[#FBF7F0] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
-            ) : null}
-          </SectionCard>
-        ) : null}
         <QuickEntryRoundView
           rows={quickEntryRows}
           saveState={saveState}
@@ -4848,6 +4829,26 @@ export function RoundEditor({
           onRefresh={refreshRoundData}
         />
       )}
+
+      {(isLocked || startedAt) && groupChatText ? (
+        <SectionCard className="space-y-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ink/50">Teams</p>
+            <h3 className="mt-1 text-lg font-semibold text-ink">Group chat</h3>
+            <p className="mt-1 text-sm text-ink/65">Copy the teams to paste into the group chat.</p>
+          </div>
+          <button
+            type="button"
+            className="min-h-12 w-full rounded-full bg-pine px-4 text-sm font-semibold text-white"
+            onClick={copyTeamsForGroupChat}
+          >
+            Copy Teams for Group Chat
+          </button>
+          {toast === "Copied to clipboard" ? (
+            <p className="rounded-2xl bg-[#FBF7F0] px-4 py-2 text-sm font-semibold text-pine">Copied to clipboard</p>
+          ) : null}
+        </SectionCard>
+      ) : null}
 
       {isLocked || startedAt ? (
         <SideMatchesBoard
