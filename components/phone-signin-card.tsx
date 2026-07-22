@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase/client";
 import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 import { SectionCard } from "@/components/section-card";
@@ -80,6 +80,30 @@ export function PhoneSignInCard() {
       cancelled = true;
     };
   }, [user, isActiveMember]);
+
+  // While a member is waiting on the "Request sent" screen, watch their
+  // membership doc live so it flips to "approved" the instant the owner approves
+  // them — no need to reopen the app or ask "did you approve me yet?".
+  useEffect(() => {
+    if (!user || step !== "pending") {
+      return;
+    }
+    const memberRef = doc(getFirebaseDb(), "clubs", IREM_CLUB_ID, "members", user.uid);
+    const unsubscribe = onSnapshot(
+      memberRef,
+      (snapshot) => {
+        const status = snapshot.exists() ? (snapshot.data()?.status as string | undefined) : undefined;
+        if (status === "active") {
+          setInfo("You're approved! You can enter scores now.");
+          setStep("approved");
+        }
+      },
+      () => {
+        // Ignore listener errors; the next app open still resolves the state.
+      }
+    );
+    return () => unsubscribe();
+  }, [user, step]);
 
   function ensureVerifier() {
     if (!verifierRef.current && recaptchaContainerRef.current) {
@@ -173,9 +197,17 @@ export function PhoneSignInCard() {
   const primaryButtonClass =
     "min-h-12 w-full rounded-xl bg-pine px-4 font-semibold text-white disabled:opacity-50";
 
-  // An approved member doesn't need a sign-in card at all.
+  // Approved members see a clear confirmation instead of a vanished card, so they
+  // never have to ask "did you approve me yet?".
   if (step === "approved") {
-    return <div ref={recaptchaContainerRef} />;
+    return (
+      <SectionCard className="space-y-1.5 border border-pine/25 bg-[#EAF6EC]">
+        <div ref={recaptchaContainerRef} />
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1B6B3A]">Members</p>
+        <h3 className="text-lg font-semibold text-[#1B6B3A]">You&apos;re approved ✓</h3>
+        <p className="text-sm text-ink/70">You can enter scores during rounds.</p>
+      </SectionCard>
+    );
   }
 
   return (

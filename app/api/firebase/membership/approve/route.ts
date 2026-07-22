@@ -1,6 +1,9 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { handleMembershipApproval } from "@/lib/firebase/membership-routes";
 import type { MembershipLike } from "@/lib/firebase/club-membership";
+import { getOwnerNotifyAddress, isEmailNotificationConfigured, sendEmail } from "@/lib/email/resend";
+
+const MEMBERS_URL = "https://golf-quota-app-three.vercel.app/account";
 
 export async function POST(request: Request) {
   const { getFirebaseAdminAuth, getFirebaseAdminDb } = await import("@/lib/firebase/admin");
@@ -31,6 +34,19 @@ export async function POST(request: Request) {
       await db.runTransaction(async (transaction) => {
         transaction.set(memberRef, approval, { merge: true });
         transaction.set(userMembershipRef, approval, { merge: true });
+      });
+    },
+    onMembershipApproved: async ({ fullName, phoneNumber }) => {
+      const to = getOwnerNotifyAddress();
+      if (!isEmailNotificationConfigured() || !to) {
+        return; // Email not set up — skip silently.
+      }
+      await sendEmail({
+        to,
+        subject: `Irem golf member approved: ${fullName}`,
+        text:
+          `${fullName} (${phoneNumber ?? "no phone on file"}) was approved and can now enter scores.\n\n` +
+          `If this wasn't expected, you can remove them here: ${MEMBERS_URL}`
       });
     },
     now: () => FieldValue.serverTimestamp()

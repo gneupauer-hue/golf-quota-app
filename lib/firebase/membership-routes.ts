@@ -45,6 +45,8 @@ export type MembershipApprovalAdapters = {
     targetUid: string,
     approval: ReturnType<typeof buildMembershipApproval>
   ) => Promise<void>;
+  // Best-effort owner notification after an approval (e.g. email). Never blocks.
+  onMembershipApproved?: (info: { fullName: string; phoneNumber: string | null }) => Promise<void>;
   now?: () => unknown;
 };
 
@@ -215,6 +217,19 @@ export async function handleMembershipApproval(
     });
 
     await adapters.writeApproval(clubId, targetUid, approval);
+
+    // Notify the owner (best-effort) that the approval went through — a record so
+    // they can revoke if anything looks off. Never blocks or fails the approval.
+    const targetInfo = target as { displayName?: unknown; phoneNumber?: unknown };
+    try {
+      await adapters.onMembershipApproved?.({
+        fullName: typeof targetInfo.displayName === "string" ? targetInfo.displayName : "A member",
+        phoneNumber: typeof targetInfo.phoneNumber === "string" ? targetInfo.phoneNumber : null
+      });
+    } catch {
+      // ignore notification failures
+    }
+
     return NextResponse.json({ ok: true, status: "active", targetUid });
   } catch (error) {
     return jsonError(
