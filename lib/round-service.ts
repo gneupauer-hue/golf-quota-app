@@ -576,7 +576,13 @@ async function buildQuotaValidationSummary(
     }>;
   }
 ): Promise<CompletionPreviewValidation> {
+  // Posting this round only needs to validate the players IN this round — the
+  // quota audit is per-player and independent. Scoping to these players (instead
+  // of the whole roster's all-time history) is what keeps posting from timing
+  // out as the season grows.
+  const roundPlayerIds = args.previewRows.map((row) => row.playerId);
   const players = await tx.player.findMany({
+    where: { id: { in: roundPlayerIds } },
     orderBy: { name: "asc" },
     select: {
       id: true,
