@@ -37,6 +37,7 @@ export function GamesBoard() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const [showCreate, setShowCreate] = useState(false);
   const [course, setCourse] = useState("Irem");
@@ -204,6 +205,18 @@ export function GamesBoard() {
     }
   }
 
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
   if (!user) {
     return (
       <div className="space-y-3">
@@ -308,15 +321,35 @@ export function GamesBoard() {
       {games.map((game) => {
         const canManage = isOwner || game.createdByUid === uid;
         const isEditing = editingId === game.id;
+        const expanded = expandedIds.has(game.id);
         return (
           <SectionCard key={game.id} className="space-y-3">
-            <div>
-              <p className="text-lg font-semibold text-ink">{game.course}</p>
-              <p className="mt-0.5 text-sm font-semibold text-pine">
-                {`${formatGameDate(game.date)} at ${formatGameTime(game.time)}`}
-              </p>
-              {game.note ? <p className="mt-1 text-sm text-ink/65">{game.note}</p> : null}
-            </div>
+            <button
+              type="button"
+              className="flex w-full items-start justify-between gap-3 text-left"
+              onClick={() => toggleExpanded(game.id)}
+            >
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-ink">{game.course}</p>
+                <p className="mt-0.5 text-sm font-semibold text-pine">
+                  {`${formatGameDate(game.date)} at ${formatGameTime(game.time)}`}
+                </p>
+                <p className="mt-1 text-xs text-ink/55">
+                  {`${game.going.length} in`}
+                  {game.youAreIn ? " · you're in ✓" : ""}
+                </p>
+              </div>
+              <span
+                className={`shrink-0 text-lg text-ink/40 transition-transform ${expanded ? "rotate-90" : ""}`}
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+            </button>
+
+            {expanded ? (
+              <>
+            {game.note ? <p className="text-sm text-ink/65">{game.note}</p> : null}
 
             <div className="rounded-2xl bg-canvas px-3 py-2.5">
               <p className="text-sm font-semibold text-ink">
@@ -397,6 +430,8 @@ export function GamesBoard() {
                   </button>
                 </div>
               </div>
+            ) : null}
+              </>
             ) : null}
           </SectionCard>
         );
