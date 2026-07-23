@@ -1,6 +1,7 @@
 import { FirebaseAccountPanel } from "@/components/firebase-account-panel";
 import { PhoneSignInCard } from "@/components/phone-signin-card";
 import { MemberApprovalsCard } from "@/components/member-approvals-card";
+import Link from "next/link";
 import { GameAnnounceCard } from "@/components/game-announce-card";
 import { AppVersionBadge } from "@/components/app-version-badge";
 import { selectActivePrismaRoundSetup } from "@/lib/firebase/round-mirror-prisma";
@@ -26,6 +27,12 @@ export default async function AccountPage() {
       <MemberApprovalsCard />
       <GameAnnounceCard />
       <FirebaseAccountPanel activePrismaRoundId={activePrismaRoundId} />
+      <Link
+        href="/install"
+        className="block rounded-2xl border border-ink/10 bg-canvas px-4 py-3 text-sm font-semibold text-pine"
+      >
+        Add this app to your phone&apos;s home screen →
+      </Link>
       <AppVersionBadge />
     </div>
   );

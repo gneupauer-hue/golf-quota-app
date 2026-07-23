@@ -10,7 +10,6 @@ const links = [
   { href: "/current-round", lines: ["Current", "Round"] },
   { href: "/past-games", lines: ["Past", "Games"] },
   { href: "/players", lines: ["Players"] },
-  { href: "/install", lines: ["Install"] },
   { href: "/account", lines: ["Account"] },
 ];
 
