@@ -5,7 +5,7 @@ import { getFirebaseAuth } from "@/lib/firebase/client";
 import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 import { SectionCard } from "@/components/section-card";
 import { PageTitle } from "@/components/page-title";
-import { formatGameDate, formatGameTime } from "@/lib/games/game-core";
+import { buildGoogleCalendarUrl, formatGameDate, formatGameTime } from "@/lib/games/game-core";
 
 type Game = {
   id: string;
@@ -415,6 +415,15 @@ export function GamesBoard() {
             >
               {busyId === game.id ? "Saving…" : game.youAreIn ? "You're in ✓ (tap to drop out)" : "I'm in"}
             </button>
+
+            <a
+              href={buildGoogleCalendarUrl(game)}
+              target="_blank"
+              rel="noreferrer"
+              className="block min-h-11 rounded-xl border border-ink/10 bg-canvas px-4 py-3 text-center text-sm font-semibold text-pine"
+            >
+              Add to calendar
+            </a>
 
             {canManage && !isEditing ? (
               <>

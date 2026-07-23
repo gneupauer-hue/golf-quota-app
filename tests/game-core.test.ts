@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildGameChangedText,
+  buildGoogleCalendarUrl,
   buildNewGameText,
   describeGameChanges,
   formatGameDate,
@@ -88,6 +89,15 @@ test("games sort by date then tee time", () => {
     { ...base, id: "a", date: "2026-07-25", time: "08:00" }
   ];
   assert.deepEqual(sortGamesByStart(games).map((game) => game.id), ["a", "c", "b"]);
+});
+
+test("google calendar link carries the game details and a 4-hour window", () => {
+  const url = buildGoogleCalendarUrl({ course: "Irem", date: "2026-07-25", time: "12:30" });
+  assert.match(url, /calendar\.google\.com/);
+  assert.match(url, /Golf/);
+  assert.match(url, /Irem/);
+  // 12:30 start -> 16:30 end, same day.
+  assert.match(url, /dates=20260725T123000%2F20260725T163000/);
 });
 
 test("formatGameLabel reads naturally", () => {

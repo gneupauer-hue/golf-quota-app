@@ -128,6 +128,31 @@ export function buildGameChangedText(
   return `Golf game update — ${formatGameLabel(after)}: ${changes.join("; ")}. ${appUrl}`;
 }
 
+/**
+ * A Google Calendar "add event" link. Works from any phone browser and pre-fills
+ * the event; a golfer just taps Save. Assumes a ~4-hour round. Times are floating
+ * wall-clock interpreted in the club's timezone via ctz.
+ */
+export function buildGoogleCalendarUrl(game: GameInput, timezone = "America/New_York"): string {
+  const [year, month, day] = game.date.split("-").map((part) => Number(part));
+  const [hour, minute] = game.time.split(":").map((part) => Number(part));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const start = new Date(year, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0);
+  const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+  const stamp = (date: Date) =>
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}T${pad(date.getHours())}${pad(date.getMinutes())}00`;
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `Golf — ${game.course}`,
+    dates: `${stamp(start)}/${stamp(end)}`,
+    location: game.course,
+    ctz: timezone,
+    details: game.note ? game.note : "Golf game"
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 /** Upcoming games first; a game is "past" the day after it is played. */
 export function isUpcoming(game: GameInput, now: Date): boolean {
   const played = toLocalDate(game.date);
