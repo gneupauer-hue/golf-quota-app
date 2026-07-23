@@ -6,6 +6,7 @@ import { classNames } from "@/lib/utils";
 
 const links = [
   { href: "/", lines: ["Home"] },
+  { href: "/games", lines: ["Games"] },
   { href: "/current-round", lines: ["Current", "Round"] },
   { href: "/past-games", lines: ["Past", "Games"] },
   { href: "/players", lines: ["Players"] },
@@ -19,6 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === "/" ||
     pathname === "/round-setup" ||
     pathname === "/current-round" ||
+    pathname === "/games" ||
     pathname === "/account" ||
     pathname === "/install" ||
     pathname.startsWith("/side-matches") ||
