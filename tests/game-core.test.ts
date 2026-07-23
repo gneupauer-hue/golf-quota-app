@@ -4,6 +4,7 @@ import {
   buildGameChangedText,
   buildGoogleCalendarUrl,
   buildNewGameText,
+  guestQuotaFromHandicap,
   describeGameChanges,
   formatGameDate,
   formatGameLabel,
@@ -98,6 +99,16 @@ test("google calendar link carries the game details and a 4-hour window", () => 
   assert.match(url, /Irem/);
   // 12:30 start -> 16:30 end, same day.
   assert.match(url, /dates=20260725T123000%2F20260725T163000/);
+});
+
+test("guest quota: 36 - handicap + 1 bump, then tee adjustment", () => {
+  // 10 handicap on Green -> 36-10+1 = 27, no tee adjustment.
+  assert.equal(guestQuotaFromHandicap(10, "GREEN"), 27);
+  // Same guest on the Yellows (+2) -> 29; on the Blacks (-2) -> 25.
+  assert.equal(guestQuotaFromHandicap(10, "YELLOW"), 29);
+  assert.equal(guestQuotaFromHandicap(10, "BLACK"), 25);
+  // A scratch (0) guest on Green -> 37.
+  assert.equal(guestQuotaFromHandicap(0, "GREEN"), 37);
 });
 
 test("formatGameLabel reads naturally", () => {

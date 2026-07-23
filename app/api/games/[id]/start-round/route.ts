@@ -62,6 +62,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .map((rsvp: { displayName?: unknown }) => String(rsvp.displayName ?? "").trim())
       .filter(Boolean);
 
+    // Guests added to this game — materialized into non-regular roster players.
+    const guestSnapshot = await me.db
+      .collection("clubs")
+      .doc(IREM_CLUB_ID)
+      .collection("games")
+      .doc(id)
+      .collection("guests")
+      .get();
+    const guests = guestSnapshot.docs
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((doc: any) => doc.data() as Record<string, unknown>)
+      .map((data: Record<string, unknown>) => ({
+        name: String(data.name ?? "").trim(),
+        tee: String(data.tee ?? "GREEN"),
+        quota: Number(data.quota ?? 0)
+      }))
+      .filter((guest: { name: string; quota: number }) => guest.name && guest.quota > 0);
+
     const roster = await prisma.player.findMany({
       where: { isActive: true },
       select: { id: true, name: true, defaultTee: true }
@@ -104,7 +122,43 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           }
         });
 
-        if (matched.length) {
+        // Upsert each guest as a non-regular player. Their quota already includes
+        // the tee adjustment, so defaultTee = playingTee keeps it exactly.
+        const guestEntries: Array<{ playerId: string; tee: string }> = [];
+        for (const guest of guests) {
+          const existing = await tx.player.findFirst({ where: { name: guest.name } });
+          const player =
+            existing ??
+            (await tx.player.create({
+              data: {
+                name: guest.name,
+                startingQuota: guest.quota,
+                currentQuota: guest.quota,
+                quota: guest.quota,
+                defaultTee: guest.tee,
+                isRegular: false,
+                isActive: true
+              }
+            }));
+          guestEntries.push({ playerId: player.id, tee: guest.tee });
+        }
+
+        const entries = [
+          ...matched.map((player) => ({
+            playerId: player.id,
+            team: null as null,
+            playingTee: player.defaultTee,
+            holes: Array<number | null>(18).fill(null)
+          })),
+          ...guestEntries.map((guest) => ({
+            playerId: guest.playerId,
+            team: null as null,
+            playingTee: guest.tee,
+            holes: Array<number | null>(18).fill(null)
+          }))
+        ];
+
+        if (entries.length) {
           await createOrReplaceRoundEntries(tx, {
             roundId: round.id,
             roundName: round.roundName,
@@ -113,12 +167,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             scoringEntryMode,
             replaceMissingEntries: true,
             updateRoundMetadata: false,
-            entries: matched.map((player) => ({
-              playerId: player.id,
-              team: null,
-              playingTee: player.defaultTee,
-              holes: Array<number | null>(18).fill(null)
-            }))
+            entries
           });
         }
 
@@ -131,6 +180,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ok: true,
       roundId,
       matched: matched.map((player) => player.name),
+      guests: guests.map((guest: { name: string }) => guest.name),
       unmatched
     });
   } catch (error) {

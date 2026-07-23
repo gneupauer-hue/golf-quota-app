@@ -55,6 +55,26 @@ export async function GET(request: Request) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       games.map(async (game: any) => {
         const rsvps = await readRsvps(me.db, game.id);
+        const guestSnapshot = await me.db
+          .collection("clubs")
+          .doc(IREM_CLUB_ID)
+          .collection("games")
+          .doc(game.id)
+          .collection("guests")
+          .get();
+        const guests = guestSnapshot.docs
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((doc: any) => {
+            const data = doc.data() as Record<string, unknown>;
+            return {
+              id: doc.id,
+              name: String(data.name ?? ""),
+              handicap: Number(data.handicap ?? 0),
+              tee: String(data.tee ?? "GREEN"),
+              quota: Number(data.quota ?? 0),
+              phone: typeof data.phone === "string" ? data.phone : null
+            };
+          });
         return {
           id: game.id,
           course: String(game.course ?? ""),
@@ -64,7 +84,11 @@ export async function GET(request: Request) {
           createdByUid: String(game.createdByUid ?? ""),
           createdByName: String(game.createdByName ?? ""),
           createdAt: String(game.createdAt ?? ""),
-          going: rsvps.map((rsvp) => rsvp.displayName),
+          going: [
+            ...rsvps.map((rsvp) => rsvp.displayName),
+            ...guests.map((guest: { name: string }) => `${guest.name} (guest)`)
+          ],
+          guests,
           youAreIn: rsvps.some((rsvp) => rsvp.uid === me.uid)
         };
       })

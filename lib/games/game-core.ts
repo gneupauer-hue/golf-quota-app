@@ -22,6 +22,26 @@ export type GameRecord = GameInput & {
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+export type GameGuest = {
+  id: string;
+  name: string;
+  handicap: number;
+  tee: string;
+  quota: number;
+  phone: string | null;
+};
+
+// Guest quota = 36 - handicap, +1 "guest bump" (guests round their handicaps
+// down), then the club's tee adjustment (±2 per set) relative to the Green base.
+// The owner can still override the number when adding the guest.
+export function guestQuotaFromHandicap(handicap: number, tee: string): number {
+  const base = 36 - Math.round(handicap) + 1;
+  const rank: Record<string, number> = { BLACK: 0, GREEN: 1, YELLOW: 2, WHITE: 3 };
+  const teeKey = tee.toUpperCase();
+  const teeAdjustment = ((rank[teeKey] ?? 1) - rank.GREEN) * 2;
+  return base + teeAdjustment;
+}
+
 export function normalizeGameInput(input: {
   course?: unknown;
   date?: unknown;

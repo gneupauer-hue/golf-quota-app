@@ -5,7 +5,21 @@ import { getFirebaseAuth } from "@/lib/firebase/client";
 import { useFirebaseAuth } from "@/components/firebase-auth-provider";
 import { SectionCard } from "@/components/section-card";
 import { PageTitle } from "@/components/page-title";
-import { buildGoogleCalendarUrl, formatGameDate, formatGameTime } from "@/lib/games/game-core";
+import {
+  buildGoogleCalendarUrl,
+  formatGameDate,
+  formatGameTime,
+  guestQuotaFromHandicap
+} from "@/lib/games/game-core";
+
+type GuestRow = {
+  id: string;
+  name: string;
+  handicap: number;
+  tee: string;
+  quota: number;
+  phone: string | null;
+};
 
 type Game = {
   id: string;
@@ -16,8 +30,11 @@ type Game = {
   createdByUid: string;
   createdByName: string;
   going: string[];
+  guests: GuestRow[];
   youAreIn: boolean;
 };
+
+const TEE_OPTIONS = ["BLACK", "GREEN", "YELLOW", "WHITE"] as const;
 
 function todayInputValue() {
   const now = new Date();
@@ -38,6 +55,11 @@ export function GamesBoard() {
   const [info, setInfo] = useState("");
   const [busyId, setBusyId] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [guestGameId, setGuestGameId] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [guestHandicap, setGuestHandicap] = useState("");
+  const [guestTee, setGuestTee] = useState("GREEN");
+  const [guestPhone, setGuestPhone] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
   const [course, setCourse] = useState("Irem");
@@ -111,6 +133,12 @@ export function GamesBoard() {
       if (!response.ok) {
         throw new Error(data.error ?? "Could not save your RSVP.");
       }
+      const nowGoing = !game.youAreIn;
+      setInfo(
+        nowGoing
+          ? `You're in for ${game.course} — ${formatGameDate(game.date)} at ${formatGameTime(game.time)}. ✓`
+          : `You're out of the ${game.course} game.`
+      );
       await load();
     } catch (rsvpError) {
       setError(rsvpError instanceof Error ? rsvpError.message : "Could not save your RSVP.");
@@ -247,6 +275,66 @@ export function GamesBoard() {
       window.location.href = "/current-round";
     } catch (startError) {
       setError(startError instanceof Error ? startError.message : "Could not start the round.");
+      setBusyId("");
+    }
+  }
+
+  function openGuestForm(gameId: string) {
+    setGuestGameId(gameId);
+    setGuestName("");
+    setGuestHandicap("");
+    setGuestTee("GREEN");
+    setGuestPhone("");
+    setError("");
+    setInfo("");
+  }
+
+  async function addGuest(game: Game) {
+    const handicap = Number(guestHandicap);
+    if (guestName.trim().length < 2) {
+      setError("Enter the guest's name.");
+      return;
+    }
+    if (!Number.isFinite(handicap)) {
+      setError("Enter the guest's handicap.");
+      return;
+    }
+    setBusyId(game.id);
+    setError("");
+    setInfo("");
+    try {
+      const response = await authedFetch(`/api/games/${game.id}/guests`, {
+        method: "POST",
+        body: JSON.stringify({ name: guestName, handicap, tee: guestTee, phone: guestPhone })
+      });
+      const data = (await response.json()) as { error?: string; quota?: number };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not add the guest.");
+      }
+      setInfo(`Added ${guestName.trim()} as a guest (quota ${data.quota}).`);
+      setGuestGameId("");
+      await load();
+    } catch (guestError) {
+      setError(guestError instanceof Error ? guestError.message : "Could not add the guest.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function removeGuest(game: Game, guest: GuestRow) {
+    setBusyId(game.id);
+    try {
+      const response = await authedFetch(`/api/games/${game.id}/guests?guestId=${guest.id}`, {
+        method: "DELETE"
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not remove the guest.");
+      }
+      await load();
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "Could not remove the guest.");
+    } finally {
       setBusyId("");
     }
   }
@@ -424,6 +512,97 @@ export function GamesBoard() {
             >
               Add to calendar
             </a>
+
+            {game.guests.length ? (
+              <div className="rounded-2xl border border-ink/10 bg-canvas px-3 py-2.5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/45">Guests</p>
+                {game.guests.map((guest) => (
+                  <div key={guest.id} className="mt-1.5 flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 text-ink/80">
+                      {`${guest.name} · quota ${guest.quota} · ${guest.tee.toLowerCase()}`}
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-semibold text-danger"
+                      onClick={() => removeGuest(game, guest)}
+                      disabled={busyId === game.id}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {guestGameId === game.id ? (
+              <div className="space-y-2 rounded-2xl border border-pine/20 bg-white px-3 py-3">
+                <p className="text-sm font-semibold text-ink">Add a guest</p>
+                <input
+                  className={inputClass}
+                  placeholder="Guest's name"
+                  value={guestName}
+                  onChange={(event) => setGuestName(event.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className={inputClass}
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Handicap"
+                    value={guestHandicap}
+                    onChange={(event) => setGuestHandicap(event.target.value)}
+                  />
+                  <select
+                    className={inputClass}
+                    value={guestTee}
+                    onChange={(event) => setGuestTee(event.target.value)}
+                  >
+                    {TEE_OPTIONS.map((tee) => (
+                      <option key={tee} value={tee}>
+                        {`${tee[0]}${tee.slice(1).toLowerCase()} tees`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <input
+                  className={inputClass}
+                  type="tel"
+                  placeholder="Phone (optional, for texts)"
+                  value={guestPhone}
+                  onChange={(event) => setGuestPhone(event.target.value)}
+                />
+                {guestHandicap.trim() !== "" && Number.isFinite(Number(guestHandicap)) ? (
+                  <p className="text-sm font-semibold text-pine">
+                    {`Quota: ${guestQuotaFromHandicap(Number(guestHandicap), guestTee)}`}
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-xl border border-ink/10 bg-canvas px-4 text-sm font-semibold text-ink"
+                    onClick={() => setGuestGameId("")}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-xl bg-pine px-4 text-sm font-semibold text-white disabled:opacity-50"
+                    onClick={() => addGuest(game)}
+                    disabled={busyId === game.id}
+                  >
+                    {busyId === game.id ? "Adding…" : "Add guest"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="min-h-11 w-full rounded-xl border border-pine/25 bg-white px-4 text-sm font-semibold text-pine"
+                onClick={() => openGuestForm(game.id)}
+              >
+                Add a guest
+              </button>
+            )}
 
             {canManage && !isEditing ? (
               <>
