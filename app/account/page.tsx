@@ -1,5 +1,6 @@
 import { FirebaseAccountPanel } from "@/components/firebase-account-panel";
 import { PhoneSignInCard } from "@/components/phone-signin-card";
+import { MemberNameCard } from "@/components/member-name-card";
 import { MemberApprovalsCard } from "@/components/member-approvals-card";
 import Link from "next/link";
 import { GameAnnounceCard } from "@/components/game-announce-card";
@@ -24,6 +25,7 @@ export default async function AccountPage() {
   return (
     <div className="space-y-4">
       <PhoneSignInCard />
+      <MemberNameCard />
       <MemberApprovalsCard />
       <GameAnnounceCard />
       <FirebaseAccountPanel activePrismaRoundId={activePrismaRoundId} />

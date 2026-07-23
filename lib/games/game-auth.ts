@@ -6,6 +6,16 @@
 export const IREM_CLUB_ID = "eO5PwRmRZrQJW0VbEp0B";
 export const APP_URL = "https://golf-quota-app-three.vercel.app/games";
 
+/** First non-empty string from the candidates, else "Member". */
+export function pickName(candidates: Array<unknown>): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+  return "Member";
+}
+
 export type ActiveMemberContext = {
   uid: string;
   displayName: string;
@@ -37,7 +47,9 @@ export async function requireActiveMember(
     .doc(decoded.uid)
     .get();
   const member = snapshot.exists
-    ? (snapshot.data() as { displayName?: unknown; role?: unknown; status?: unknown } | undefined)
+    ? (snapshot.data() as
+        | { displayName?: unknown; fullName?: unknown; role?: unknown; status?: unknown }
+        | undefined)
     : null;
 
   if (!member || member.status !== "active") {
@@ -46,10 +58,18 @@ export async function requireActiveMember(
     });
   }
 
+  const decodedName = (decoded as { name?: unknown }).name;
+  const displayName = pickName([
+    member.displayName,
+    member.fullName,
+    decodedName,
+    decoded.phone_number
+  ]);
+
   const role = typeof member.role === "string" ? member.role : "member";
   return {
     uid: decoded.uid,
-    displayName: typeof member.displayName === "string" ? member.displayName : "Member",
+    displayName,
     role,
     isOwner: role === "owner" || role === "admin",
     db

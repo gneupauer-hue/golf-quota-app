@@ -52,6 +52,7 @@ test("new game text names the course, date, and time", () => {
   assert.match(text, /New golf game/);
   assert.match(text, /Irem/);
   assert.match(text, /12:30 PM/);
+  assert.match(text, /Open the Irem app/);
   assert.match(text, /golf-quota-app-three/);
 });
 

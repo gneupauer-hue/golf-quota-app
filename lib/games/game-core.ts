@@ -91,7 +91,10 @@ export function formatGameLabel(game: GameInput): string {
 
 export function buildNewGameText(game: GameInput, appUrl: string): string {
   const note = game.note ? ` ${game.note}` : "";
-  return `New golf game: ${formatGameLabel(game)}.${note} Tap to say you're in: ${appUrl}`;
+  return (
+    `New golf game — ${formatGameLabel(game)}.${note} ` +
+    `Open the Irem app to say you're in, see who's playing, keep score, and view stats: ${appUrl}`
+  );
 }
 
 /** Human-readable list of what changed between two versions of a game. */

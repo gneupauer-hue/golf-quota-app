@@ -319,12 +319,21 @@ export function GamesBoard() {
             </div>
 
             <div className="rounded-2xl bg-canvas px-3 py-2.5">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/45">
-                {`In (${game.going.length})`}
+              <p className="text-sm font-semibold text-ink">
+                {`${game.going.length} ${game.going.length === 1 ? "player" : "players"} in`}
               </p>
-              <p className="mt-1 text-sm text-ink/80">
-                {game.going.length ? game.going.join(", ") : "Nobody yet — be the first."}
-              </p>
+              {game.going.length ? (
+                <ul className="mt-2 space-y-1">
+                  {game.going.map((name, index) => (
+                    <li key={`${game.id}-going-${index}`} className="flex items-baseline gap-2 text-sm text-ink/80">
+                      <span className="text-xs font-semibold text-ink/40">{index + 1}.</span>
+                      <span>{name}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-sm text-ink/60">Nobody yet — be the first.</p>
+              )}
             </div>
 
             <button
