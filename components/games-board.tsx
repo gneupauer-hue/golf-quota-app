@@ -217,6 +217,40 @@ export function GamesBoard() {
     });
   }
 
+  async function startRoundFromGame(game: Game) {
+    if (
+      !window.confirm(
+        `Start a scoring round from this game with the ${game.going.length} player(s) who are in?`
+      )
+    ) {
+      return;
+    }
+    setBusyId(game.id);
+    setError("");
+    setInfo("");
+    try {
+      const response = await authedFetch(`/api/games/${game.id}/start-round`, { method: "POST" });
+      const data = (await response.json()) as {
+        error?: string;
+        matched?: string[];
+        unmatched?: string[];
+      };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not start the round.");
+      }
+      if (data.unmatched && data.unmatched.length) {
+        window.alert(
+          `Round started with ${data.matched?.length ?? 0} player(s).\n\n` +
+            `Not on your roster — add them as guests in setup:\n${data.unmatched.join(", ")}`
+        );
+      }
+      window.location.href = "/current-round";
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : "Could not start the round.");
+      setBusyId("");
+    }
+  }
+
   if (!user) {
     return (
       <div className="space-y-3">
@@ -383,6 +417,15 @@ export function GamesBoard() {
             </button>
 
             {canManage && !isEditing ? (
+              <>
+              <button
+                type="button"
+                className="min-h-12 w-full rounded-xl bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50"
+                onClick={() => startRoundFromGame(game)}
+                disabled={busyId === game.id}
+              >
+                {busyId === game.id ? "Starting…" : "Start round from this game →"}
+              </button>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -400,6 +443,7 @@ export function GamesBoard() {
                   Cancel game
                 </button>
               </div>
+              </>
             ) : null}
 
             {isEditing ? (
